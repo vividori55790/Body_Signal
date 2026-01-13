@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Body Signal</string>
+    <string name="title_activity_main">Body Signal</string>
+    <string name="package_name">com.bodysignal.app</string>
+    <string name="custom_url_scheme">com.bodysignal.app</string>
+</resources>
