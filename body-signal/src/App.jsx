@@ -7,6 +7,7 @@ import HistoryPage from './pages/History';
 import SettingsPage from './pages/Settings';
 import CalendarPage from './pages/CalendarPage';
 
+import ConditionDetailPage from './pages/ConditionDetail';
 import { MOCK_CONDITIONS, MOCK_LOGS } from './mockData';
 
 function App() {
@@ -87,6 +88,7 @@ function App() {
            <Route path="/entry" element={<EntryForm activeConditions={conditions} onSave={handleSaveEntry} />} />
            <Route path="/calendar" element={<CalendarPage logs={logs} conditions={conditions} />} />
            <Route path="/history" element={<HistoryPage logs={logs} conditions={conditions} />} />
+           <Route path="/condition/:id" element={<ConditionDetailPage conditions={conditions} logs={logs} />} />
            <Route path="/settings" element={<SettingsPage onReset={handleReset} onExport={handleExport} />} />
            <Route path="*" element={<Navigate to="/" replace />} />
         </Route>

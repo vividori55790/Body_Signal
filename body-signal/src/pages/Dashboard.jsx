@@ -197,7 +197,7 @@ const Dashboard = ({ conditions, logs }) => {
                     key={c.id} 
                     condition={c} 
                     logs={logs} 
-                    onClick={() => navigate('/entry')} 
+                    onClick={() => navigate(`/condition/${c.id}`)} 
                  />
              ))}
         </section>
