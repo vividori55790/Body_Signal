@@ -1,8 +1,10 @@
 import React, { useMemo, useState } from 'react';
 import { format, isToday, isYesterday, startOfWeek, endOfWeek, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, getDay, addMonths, subMonths } from 'date-fns';
+import { useNavigate } from 'react-router-dom';
 import { ClipboardList, Pill, ChevronDown, ChevronRight, ChevronLeft, Activity, ArrowUpRight, ArrowDownRight, Minus, Calendar as CalendarIcon, List as ListIcon } from 'lucide-react';
 
 const HistoryItem = ({ log, previousLog, condition }) => {
+    const navigate = useNavigate();
     const [expanded, setExpanded] = useState(false);
     const isNewType = !previousLog; 
     let statusColor = 'bg-slate-100 text-slate-600';
@@ -22,10 +24,22 @@ const HistoryItem = ({ log, previousLog, condition }) => {
         }
     }
 
+    const handleNavigate = (e) => {
+        e.stopPropagation();
+        if (condition?.id) {
+            navigate(`/condition/${condition.id}`);
+        }
+    };
+
+    const handleToggle = (e) => {
+        e.stopPropagation();
+        setExpanded(!expanded);
+    };
+
     return (
         <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden transition-all">
-            <div onClick={() => setExpanded(!expanded)} className={`p-4 flex justify-between items-center cursor-pointer hover:bg-slate-50 ${expanded ? 'bg-slate-50' : ''}`}>
-                <div className="flex items-center gap-3">
+            <div className={`flex justify-between items-stretch ${expanded ? 'bg-slate-50' : ''}`}>
+                <div onClick={handleNavigate} className="flex-1 p-4 flex items-center gap-3 cursor-pointer hover:bg-slate-50 transition-colors">
                     <div className={`p-2 rounded-full border ${statusColor}`}><StatusIcon size={16} strokeWidth={3} /></div>
                     <div>
                         <div className="flex items-center gap-2">
@@ -35,7 +49,7 @@ const HistoryItem = ({ log, previousLog, condition }) => {
                         <div className="text-xs text-slate-500">{condition?.bodyPart} • {format(new Date(log.date), 'h:mm a')}</div>
                     </div>
                 </div>
-                <div className="flex items-center gap-4">
+                <div onClick={handleToggle} className="flex items-center gap-4 p-4 pl-2 cursor-pointer hover:bg-slate-100 transition-colors border-l border-transparent hover:border-slate-100">
                      <div className="text-right"><div className="font-black text-lg text-slate-700">{log.intensity}</div><div className="text-[10px] text-slate-400 uppercase">Level</div></div>
                      {expanded ? <ChevronDown size={16} className="text-slate-400" /> : <ChevronRight size={16} className="text-slate-400" />}
                 </div>

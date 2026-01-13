@@ -1,14 +1,30 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Calendar, Activity, TrendingUp, AlertCircle, Clock, Edit3 } from 'lucide-react';
+import { ArrowLeft, Calendar, Activity, TrendingUp, AlertCircle, Clock, Edit3, PlusCircle, X, Save, Pill } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { format } from 'date-fns';
 
-const ConditionDetailPage = ({ conditions, logs }) => {
+const ConditionDetailPage = ({ conditions, logs, onUpdateCondition }) => {
     const { id } = useParams();
     const navigate = useNavigate();
 
     const condition = conditions.find(c => c.id === id);
+
+    const [isEditing, setIsEditing] = useState(false);
+    const [editLabel, setEditLabel] = useState('');
+    const [editBodyPart, setEditBodyPart] = useState('');
+
+    useEffect(() => {
+        if (condition) {
+            setEditLabel(condition.label);
+            setEditBodyPart(condition.bodyPart);
+        }
+    }, [condition]);
+
+    const handleSaveEdit = () => {
+        onUpdateCondition(id, { label: editLabel, bodyPart: editBodyPart });
+        setIsEditing(false);
+    };
     
     // Sort logs descending for history list, ascending for chart
     const conditionLogs = useMemo(() => {
@@ -57,10 +73,54 @@ const ConditionDetailPage = ({ conditions, logs }) => {
                     <h1 className="font-bold text-slate-800">{condition.label}</h1>
                     <p className="text-xs text-slate-500 font-medium uppercase tracking-wide">{condition.bodyPart}</p>
                 </div>
-                <button className="p-2 -mr-2 text-slate-400 hover:text-primary rounded-full">
+                <button 
+                    onClick={() => setIsEditing(true)}
+                    className="p-2 -mr-2 text-slate-400 hover:text-primary rounded-full transition-colors"
+                >
                     <Edit3 size={20} />
                 </button>
             </div>
+
+            {/* Edit Modal */}
+            {isEditing && (
+                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
+                    <div className="bg-white rounded-2xl w-full max-w-sm p-6 space-y-4 shadow-2xl">
+                        <div className="flex justify-between items-center">
+                            <h3 className="font-bold text-lg text-slate-800">Edit Condition</h3>
+                            <button onClick={() => setIsEditing(false)} className="text-slate-400 hover:text-slate-600"><X size={20} /></button>
+                        </div>
+                        
+                        <div className="space-y-3">
+                            <div>
+                                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Condition Name</label>
+                                <input 
+                                    type="text" 
+                                    value={editLabel}
+                                    onChange={(e) => setEditLabel(e.target.value)}
+                                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-300 font-bold text-slate-700"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Body Part</label>
+                                <input 
+                                    type="text" 
+                                    value={editBodyPart}
+                                    onChange={(e) => setEditBodyPart(e.target.value)}
+                                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-300 font-bold text-slate-700"
+                                />
+                            </div>
+                        </div>
+
+                        <button 
+                            onClick={handleSaveEdit}
+                            className="w-full py-3 bg-slate-800 text-white rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-slate-700 transition-colors"
+                        >
+                            <Save size={18} />
+                            Save Changes
+                        </button>
+                    </div>
+                </div>
+            )}
 
             <div className="p-4 space-y-6">
                 {/* Key Stats Cards */}
@@ -164,20 +224,40 @@ const ConditionDetailPage = ({ conditions, logs }) => {
 
                 {/* Recent Logs List (Detailed) */}
                 <div>
-                    <h3 className="font-bold text-slate-700 mb-3 px-1">Recent Logs</h3>
+                     <div className="flex justify-between items-center mb-3 px-1">
+                        <h3 className="font-bold text-slate-700">Recent Logs</h3>
+                        <button 
+                            onClick={() => navigate('/entry', { state: { selectedConditionId: id } })}
+                            className="text-xs bg-slate-800 text-white px-3 py-1.5 rounded-full font-bold flex items-center gap-1 hover:bg-slate-700 active:scale-95 transition-all shadow-sm"
+                        >
+                            <PlusCircle size={14} />
+                            Quick Log
+                        </button>
+                    </div>
                     <div className="space-y-3">
                         {conditionLogs.slice(0, 5).map(log => (
-                            <div key={log.id} className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex justify-between items-center">
-                                <div>
-                                    <div className="text-sm font-bold text-slate-700">{format(new Date(log.date), 'PPP')}</div>
-                                    <div className="text-xs text-slate-400">{format(new Date(log.date), 'p')}</div>
-                                    {log.notes && (
-                                        <div className="mt-2 text-xs text-slate-600 bg-slate-50 p-2 rounded border border-slate-100">
-                                            "{log.notes}"
-                                        </div>
-                                    )}
+                            <div key={log.id} className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex justify-between items-start">
+                                <div className="flex-1 mr-4">
+                                    <div className="flex items-center gap-2 mb-1">
+                                        <div className="text-sm font-bold text-slate-700">{format(new Date(log.date), 'PPP')}</div>
+                                        <div className="text-xs text-slate-400 font-medium">{format(new Date(log.date), 'p')}</div>
+                                    </div>
+                                    
+                                    <div className="space-y-2 mt-2">
+                                        {log.medication && (
+                                            <div className="flex items-center gap-1.5 text-xs font-bold text-slate-600 bg-blue-50 px-2 py-1 rounded w-fit border border-blue-100">
+                                                <Pill size={13} className="text-blue-500" />
+                                                <span className="text-blue-700">{log.medication}</span>
+                                            </div>
+                                        )}
+                                        {log.notes && (
+                                            <div className="text-xs text-slate-600 italic bg-slate-50 p-2.5 rounded-lg border border-slate-100 leading-relaxed">
+                                                "{log.notes}"
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
-                                <div className={`flex flex-col items-center justify-center w-10 h-10 rounded-lg ${
+                                <div className={`flex flex-col items-center justify-center w-10 h-10 rounded-lg shrink-0 ${
                                     log.intensity >= 8 ? 'bg-rose-100 text-rose-600' :
                                     log.intensity >= 5 ? 'bg-amber-100 text-amber-600' : 'bg-emerald-100 text-emerald-600'
                                 }`}>

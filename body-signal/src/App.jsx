@@ -80,6 +80,12 @@ function App() {
       document.body.removeChild(link);
   };
 
+  const handleUpdateCondition = (id, updatedData) => {
+      setConditions(prev => prev.map(c => 
+          c.id === id ? { ...c, ...updatedData } : c
+      ));
+  };
+
   return (
     <BrowserRouter>
       <Routes>
@@ -88,7 +94,7 @@ function App() {
            <Route path="/entry" element={<EntryForm activeConditions={conditions} onSave={handleSaveEntry} />} />
            <Route path="/calendar" element={<CalendarPage logs={logs} conditions={conditions} />} />
            <Route path="/history" element={<HistoryPage logs={logs} conditions={conditions} />} />
-           <Route path="/condition/:id" element={<ConditionDetailPage conditions={conditions} logs={logs} />} />
+           <Route path="/condition/:id" element={<ConditionDetailPage conditions={conditions} logs={logs} onUpdateCondition={handleUpdateCondition} />} />
            <Route path="/settings" element={<SettingsPage onReset={handleReset} onExport={handleExport} />} />
            <Route path="*" element={<Navigate to="/" replace />} />
         </Route>

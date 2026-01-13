@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
 import { Plus, ArrowLeft } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 
 const EntryForm = ({ activeConditions, onSave }) => {
   const navigate = useNavigate();
+  const location = useLocation();
   
   // State
   const [mode, setMode] = useState('existing'); // 'existing' | 'new'
-  const [selectedConditionId, setSelectedConditionId] = useState('');
+  const [selectedConditionId, setSelectedConditionId] = useState(location.state?.selectedConditionId || '');
   
   // New Condition Fields
   const [newLabel, setNewLabel] = useState('');
