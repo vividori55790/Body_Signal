@@ -1,13 +1,51 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Download, Trash2, Shield, Bell, Moon, Lock, Cloud, Globe, User, ChevronRight } from 'lucide-react';
 
 const SettingsPage = ({ onExport, onReset, isDarkMode, toggleTheme }) => {
   // UI toggles only (no functionality except Dark Mode)
   
-  const [notifications, setNotifications] = useState(true);
+  const [notifications, setNotifications] = useState(false);
   const [appLock, setAppLock] = useState(false);
   const [cloudSync, setCloudSync] = useState(false);
   const [language, setLanguage] = useState('en');
+
+  // Initialize Notification State
+  useEffect(() => {
+      const savedNoti = localStorage.getItem('bs-noti') === 'true';
+      if (savedNoti && 'Notification' in window && Notification.permission === 'granted') {
+          setNotifications(true);
+      }
+  }, []);
+
+  const handleNotification = async (enabled) => {
+      if (enabled) {
+          if (!("Notification" in window)) {
+              alert("This browser does not support system notifications.");
+              return;
+          }
+
+          let permission = Notification.permission;
+          if (permission !== 'granted') {
+              permission = await Notification.requestPermission();
+          }
+
+          if (permission === 'granted') {
+              setNotifications(true);
+              localStorage.setItem('bs-noti', 'true');
+              new Notification("Body Signal", { 
+                  body: "Daily reminders enabled! We'll notify you at 8:00 PM.",
+                  icon: "/pwa-192x192.png" 
+              });
+          } else {
+              setNotifications(false);
+              localStorage.setItem('bs-noti', 'false');
+              alert("Notification permission is required for reminders.");
+          }
+      } else {
+          setNotifications(false);
+          localStorage.setItem('bs-noti', 'false');
+      }
+  };
 
   // Custom Switch Component for better aesthetics
   const Switch = ({ checked, onChange }) => (
@@ -74,7 +112,7 @@ const SettingsPage = ({ onExport, onReset, isDarkMode, toggleTheme }) => {
                     label="Daily Reminders" 
                     subLabel="Notifications at 8:00 PM" 
                     value={notifications} 
-                    setValue={setNotifications} 
+                    setValue={handleNotification} 
                 />
                  <SettingItem 
                     icon={Globe} 
