@@ -3,8 +3,8 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Layout from './components/Layout';
 import Dashboard from './pages/Dashboard';
 import EntryForm from './pages/EntryForm';
-import HistoryPage from './pages/History';
 import SettingsPage from './pages/Settings';
+import HistoryPage from './pages/History';
 import CalendarPage from './pages/CalendarPage';
 
 import ConditionDetailPage from './pages/ConditionDetail';
