@@ -4,10 +4,44 @@
 
 @layer base {
   html {
-    @apply h-full bg-slate-50 text-slate-800 antialiased;
+    @apply h-full bg-slate-50 text-slate-800 antialiased transition-colors duration-300;
     -webkit-tap-highlight-color: transparent;
+  }
+  html.dark {
+    @apply bg-slate-950 text-slate-100;
   }
   body {
     @apply min-h-full overflow-y-auto;
   }
+}
+
+/* Dark Mode Overrides */
+html.dark .bg-white {
+    @apply bg-slate-800 border-slate-700 text-slate-100;
+}
+html.dark .bg-bg,
+html.dark .bg-slate-50,
+html.dark .bg-slate-100,
+html.dark .bg-surface {
+    @apply bg-slate-950 border-slate-800;
+}
+html.dark .text-slate-800,
+html.dark .text-slate-700,
+html.dark .text-primary {
+    @apply text-slate-100;
+}
+html.dark .text-slate-600, 
+html.dark .text-slate-500,
+html.dark .text-secondary {
+    @apply text-slate-400;
+}
+html.dark .border-slate-200, 
+html.dark .border-slate-100, 
+html.dark .border-border {
+    @apply border-slate-700;
+}
+html.dark input, 
+html.dark select, 
+html.dark textarea {
+    @apply bg-slate-900 border-slate-700 text-slate-100;
 }

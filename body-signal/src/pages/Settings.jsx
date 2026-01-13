@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { Download, Trash2, Shield, Bell, Moon, Lock, Cloud, Globe, User, ChevronRight } from 'lucide-react';
 
-const SettingsPage = ({ onExport, onReset }) => {
-  // UI toggles only (no functionality)
-  const [darkMode, setDarkMode] = useState(false);
+const SettingsPage = ({ onExport, onReset, isDarkMode, toggleTheme }) => {
+  // UI toggles only (no functionality except Dark Mode)
+  
   const [notifications, setNotifications] = useState(true);
   const [appLock, setAppLock] = useState(false);
   const [cloudSync, setCloudSync] = useState(false);
@@ -66,8 +66,8 @@ const SettingsPage = ({ onExport, onReset }) => {
                     icon={Moon} 
                     label="Dark Mode" 
                     subLabel="Easy on the eyes" 
-                    value={darkMode} 
-                    setValue={setDarkMode} 
+                    value={isDarkMode} 
+                    setValue={toggleTheme} 
                 />
                 <SettingItem 
                     icon={Bell} 

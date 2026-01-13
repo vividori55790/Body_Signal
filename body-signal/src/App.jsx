@@ -38,6 +38,26 @@ function App() {
       localStorage.setItem('bs-logs', JSON.stringify(logs));
   }, [conditions, logs]);
 
+  // Dark Mode
+  const [isDarkMode, setIsDarkMode] = useState(() => {
+      if (typeof window !== 'undefined') {
+          return localStorage.getItem('bs-theme') === 'dark';
+      }
+      return false;
+  });
+
+  useEffect(() => {
+      if (isDarkMode) {
+          document.documentElement.classList.add('dark');
+          localStorage.setItem('bs-theme', 'dark');
+      } else {
+          document.documentElement.classList.remove('dark');
+          localStorage.setItem('bs-theme', 'light');
+      }
+  }, [isDarkMode]);
+
+  const toggleTheme = () => setIsDarkMode(prev => !prev);
+
   // Handlers
   const handleSaveEntry = (payload) => {
       const { isNewCondition, conditionData, logData } = payload;
@@ -95,7 +115,7 @@ function App() {
            <Route path="/calendar" element={<CalendarPage logs={logs} conditions={conditions} />} />
            <Route path="/history" element={<HistoryPage logs={logs} conditions={conditions} />} />
            <Route path="/condition/:id" element={<ConditionDetailPage conditions={conditions} logs={logs} onUpdateCondition={handleUpdateCondition} />} />
-           <Route path="/settings" element={<SettingsPage onReset={handleReset} onExport={handleExport} />} />
+            <Route path="/settings" element={<SettingsPage onReset={handleReset} onExport={handleExport} isDarkMode={isDarkMode} toggleTheme={toggleTheme} />} />
            <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>
