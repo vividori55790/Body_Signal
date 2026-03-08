@@ -9,7 +9,7 @@ on:
 jobs:
   build-android:
     runs-on: ubuntu-latest
-    
+
     defaults:
       run:
         working-directory: ./body-signal
@@ -21,7 +21,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: "22"
 
       - name: Install Dependencies
         run: npm install
@@ -32,8 +32,8 @@ jobs:
       - name: Setup Java
         uses: actions/setup-java@v3
         with:
-          distribution: 'zulu'
-          java-version: '17'
+          distribution: "zulu"
+          java-version: "17"
 
       # 💡 새로 추가된 핵심 부분: gradlew에 미리 실행 권한 부여
       - name: Make gradlew executable
