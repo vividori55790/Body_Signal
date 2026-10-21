@@ -221,8 +221,8 @@ const SettingsPage = ({ onExport, onImport, onExportCalendar, onExportCsv, onRes
                             <Cloud size={20} />
                         </div>
                         <div>
-                            <div className="font-bold text-slate-700 text-sm">Google Calendar</div>
-                            <div className="text-[10px] text-slate-400">Not configured; use calendar export below</div>
+                            <div className="font-bold text-slate-700 text-sm">Calendar integration</div>
+                            <div className="text-[10px] text-slate-400">Cloud calendar sync is not configured; use local export below</div>
                         </div>
                     </div>
                     <span className="text-[10px] font-bold uppercase text-slate-400">Unavailable</span>
