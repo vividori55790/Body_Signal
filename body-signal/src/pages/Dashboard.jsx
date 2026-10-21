@@ -6,7 +6,7 @@ import { useNavigate } from 'react-router-dom';
 import { LineChart, Line, ResponsiveContainer, YAxis } from 'recharts';
 
 
-const DetailedConditionCard = ({ condition, logs, onUpdateCondition, onSave }) => {
+const DetailedConditionCard = ({ condition, logs, onUpdateCondition, onSave, isArchived = false }) => {
     const [isExpanded, setIsExpanded] = useState(false);
     
     // Inline Form State
@@ -143,11 +143,14 @@ const DetailedConditionCard = ({ condition, logs, onUpdateCondition, onSave }) =
                          <div className="text-xs text-slate-500 font-bold">
                             Avg: {avgIntensity}
                          </div>
-                        <button 
-                            onClick={(e) => { e.stopPropagation(); onUpdateCondition(condition.id, { isArchived: true }); }}
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onUpdateCondition(condition.id, { isArchived: !isArchived });
+                            }}
                             className="flex items-center gap-2 px-3 py-1.5 bg-green-100 text-green-700 rounded-lg text-sm font-bold hover:bg-green-200 transition-colors"
                         >
-                            <CheckCircle size={16} /> Mark as Cured
+                            <CheckCircle size={16} /> {isArchived ? 'Restore condition' : 'Archive condition'}
                         </button>
                     </div>
 
@@ -232,8 +235,9 @@ const AddLogCard = ({ onClick }) => (
 const Dashboard = ({ conditions, logs, onUpdateCondition, onSave }) => {
   const navigate = useNavigate();
   const [filter, setFilter] = useState('All');
-
+  const [showArchived, setShowArchived] = useState(false);
   const activeConditions = conditions.filter(c => !c.isArchived);
+  const archivedConditions = conditions.filter(c => c.isArchived);
   const recentLogs = logs.filter(l => {
       const d = new Date(l.date);
       const now = new Date();
@@ -397,6 +401,32 @@ const Dashboard = ({ conditions, logs, onUpdateCondition, onSave }) => {
                  />
              ))}
         </section>
+
+        {archivedConditions.length > 0 && (
+            <section className="space-y-3">
+                <button
+                    type="button"
+                    onClick={() => setShowArchived((current) => !current)}
+                    className="text-sm font-bold text-slate-500 underline underline-offset-4"
+                >
+                    {showArchived ? 'Hide' : 'Show'} archived conditions ({archivedConditions.length})
+                </button>
+                {showArchived && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        {archivedConditions.map((condition) => (
+                            <DetailedConditionCard
+                                key={condition.id}
+                                condition={condition}
+                                logs={logs}
+                                onUpdateCondition={onUpdateCondition}
+                                onSave={onSave}
+                                isArchived
+                            />
+                        ))}
+                    </div>
+                )}
+            </section>
+        )}
 
     </div>
   );
