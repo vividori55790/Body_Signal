@@ -19,6 +19,7 @@ function App() {
   const [theme, setTheme] = useState('light'); // Changed from isDarkMode to theme
   const [isUnlocked, setIsUnlocked] = useState(false); // Added
   const [pendingSyncCount, setPendingSyncCount] = useState(0);
+  const [dataLoadError, setDataLoadError] = useState('');
 
   // Initialize Data, Theme, and Lock State
   useEffect(() => {
@@ -26,10 +27,14 @@ function App() {
     const pinEnabled = localStorage.getItem('bs-pin-enabled') === 'true';
     setIsUnlocked(!pinEnabled);
 
-    const savedData = loadData();
-    setConditions(savedData.conditions);
-    setLogs(savedData.logs);
-    setPendingSyncCount(getPendingSyncCount());
+    try {
+      const savedData = loadData();
+      setConditions(savedData.conditions);
+      setLogs(savedData.logs);
+      setPendingSyncCount(getPendingSyncCount());
+    } catch (error) {
+      setDataLoadError(error.message);
+    }
 
     // Theme loading
     const savedTheme = localStorage.getItem("bs-theme");
@@ -42,11 +47,11 @@ function App() {
 
   // Persistence for conditions and logs (now combined into 'bs-data-v2')
   useEffect(() => {
-    if (isUnlocked) { // Only save if unlocked, to prevent saving empty data if locked
+    if (isUnlocked && !dataLoadError) { // Do not overwrite data that failed validation.
       saveData({ conditions, logs });
       setPendingSyncCount(getPendingSyncCount());
     }
-  }, [conditions, logs, isUnlocked]);
+  }, [conditions, logs, isUnlocked, dataLoadError]);
 
   // Theme application
   useEffect(() => {
@@ -110,6 +115,31 @@ function App() {
     localStorage.removeItem("bs-pin-enabled"); // Reset pin state
     window.location.reload();
   };
+
+  if (dataLoadError) {
+    return (
+      <main className="min-h-screen bg-slate-950 px-6 py-16 text-white">
+        <div className="mx-auto max-w-md rounded-2xl border border-rose-900 bg-slate-900 p-6 shadow-xl">
+          <h1 className="text-xl font-bold">Local data needs attention</h1>
+          <p className="mt-3 text-sm leading-6 text-slate-300">
+            Body Signal could not validate its local records, so it did not overwrite them with empty data.
+          </p>
+          <p className="mt-3 text-xs text-rose-300">{dataLoadError}</p>
+          <button
+            type="button"
+            onClick={() => {
+              if (window.confirm("Clear the unreadable local data and start fresh?")) {
+                handleReset();
+              }
+            }}
+            className="mt-6 rounded-lg bg-rose-500 px-4 py-2 text-sm font-bold text-white"
+          >
+            Clear local data
+          </button>
+        </div>
+      </main>
+    );
+  }
 
   const handleExport = () => {
     const dataStr = JSON.stringify(createBackup({ conditions, logs }), null, 2);

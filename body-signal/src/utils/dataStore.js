@@ -60,12 +60,20 @@ export const loadData = () => {
       return emptyData();
     }
 
-    const parsed = JSON.parse(stored);
+    let parsed;
+    try {
+      parsed = JSON.parse(stored);
+    } catch {
+      throw new Error("Local Body Signal data is not valid JSON.");
+    }
     const data = normalizeData(parsed?.data || parsed);
-    return data || emptyData();
+    if (!data) {
+      throw new Error("Local Body Signal data failed validation.");
+    }
+    return data;
   } catch (error) {
     console.error("Failed to load local Body Signal data.", error);
-    return emptyData();
+    throw error;
   }
 };
 
