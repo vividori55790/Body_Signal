@@ -10,7 +10,7 @@ import LockScreen from './components/LockScreen'; // Added
 import { syncEventToGoogleCalendar, getLinkedGoogleAccount } from './utils/googleSync'; // Added
 
 import ConditionDetailPage from "./pages/ConditionDetail";
-import { MOCK_CONDITIONS, MOCK_LOGS } from "./mockData";
+import { clearData, createBackup, loadData, parseBackup, saveData } from "./utils/dataStore";
 
 function App() {
   // Centralized State
@@ -25,16 +25,9 @@ function App() {
     const pinEnabled = localStorage.getItem('bs-pin-enabled') === 'true';
     setIsUnlocked(!pinEnabled);
 
-    // Data loading
-    const savedData = localStorage.getItem('bs-data-v2');
-    if (savedData) {
-      const parsedData = JSON.parse(savedData);
-      setConditions(parsedData.conditions.length > 0 ? parsedData.conditions : MOCK_CONDITIONS);
-      setLogs(parsedData.logs.length > 0 ? parsedData.logs : MOCK_LOGS);
-    } else {
-      setConditions(MOCK_CONDITIONS);
-      setLogs(MOCK_LOGS);
-    }
+    const savedData = loadData();
+    setConditions(savedData.conditions);
+    setLogs(savedData.logs);
 
     // Theme loading
     const savedTheme = localStorage.getItem("bs-theme");
@@ -48,7 +41,7 @@ function App() {
   // Persistence for conditions and logs (now combined into 'bs-data-v2')
   useEffect(() => {
     if (isUnlocked) { // Only save if unlocked, to prevent saving empty data if locked
-      localStorage.setItem("bs-data-v2", JSON.stringify({ conditions, logs }));
+      saveData({ conditions, logs });
     }
   }, [conditions, logs, isUnlocked]);
 
@@ -105,14 +98,14 @@ function App() {
   };
 
   const handleReset = () => {
-    localStorage.removeItem("bs-data-v2"); // Changed to new key
+    clearData();
     localStorage.removeItem("bs-theme"); // Reset theme as well
     localStorage.removeItem("bs-pin-enabled"); // Reset pin state
     window.location.reload();
   };
 
   const handleExport = () => {
-    const dataStr = JSON.stringify({ conditions, logs }, null, 2);
+    const dataStr = JSON.stringify(createBackup({ conditions, logs }), null, 2);
     const blob = new Blob([dataStr], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -121,6 +114,50 @@ function App() {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleImport = async (file) => {
+    const contents = await file.text();
+    const importedData = parseBackup(contents);
+    setConditions(importedData.conditions);
+    setLogs(importedData.logs);
+  };
+
+  const handleExportCalendar = () => {
+    if (logs.length === 0) {
+      window.alert("No logs to export.");
+      return;
+    }
+
+    let icsContent = "BEGIN:VCALENDAR\nVERSION:2.0\nPRODID:-//Body Signal//EN\n";
+    const pad = (value) => (value < 10 ? `0${value}` : value);
+    const formatDate = (date) => (
+      `${date.getUTCFullYear()}${pad(date.getUTCMonth() + 1)}${pad(date.getUTCDate())}`
+      + `T${pad(date.getUTCHours())}${pad(date.getUTCMinutes())}${pad(date.getUTCSeconds())}Z`
+    );
+
+    logs.forEach((log) => {
+      const condition = conditions.find((item) => item.id === log.conditionId);
+      if (!condition) return;
+
+      const start = new Date(log.date);
+      const end = new Date(start.getTime() + 30 * 60 * 1000);
+      const summary = `Level ${log.intensity} ${condition.label}`;
+      const description = `Notes: ${log.notes || "None"}\\nMedication: ${log.medication || "None"}`;
+
+      icsContent += `BEGIN:VEVENT\nDTSTART:${formatDate(start)}\nDTEND:${formatDate(end)}\n`;
+      icsContent += `SUMMARY:${summary}\nDESCRIPTION:${description}\nEND:VEVENT\n`;
+    });
+
+    icsContent += "END:VCALENDAR";
+    const blob = new Blob([icsContent], { type: "text/calendar;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "body_signal_history.ics";
+    link.click();
+    URL.revokeObjectURL(url);
   };
 
   const handleUpdateCondition = (id, updatedData) => {
@@ -181,6 +218,8 @@ function App() {
               <SettingsPage
                 onReset={handleReset}
                 onExport={handleExport}
+                onImport={handleImport}
+                onExportCalendar={handleExportCalendar}
                 isDarkMode={theme === 'dark'}
                 toggleTheme={toggleTheme}
               />

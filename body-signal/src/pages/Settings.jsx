@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Download, Trash2, Shield, Bell, Moon, Lock, Cloud, Globe, User, ChevronRight, Calendar, Fingerprint } from 'lucide-react';
+import { Download, Trash2, Shield, Bell, Moon, Lock, Cloud, Globe, User, ChevronRight, Calendar, Fingerprint, Upload } from 'lucide-react';
 import { initiateGoogleLogin, getLinkedGoogleAccount, unlinkGoogleAccount } from '../utils/googleSync';
 
-const SettingsPage = ({ onExport, onReset, isDarkMode, toggleTheme }) => {
+const SettingsPage = ({ onExport, onImport, onExportCalendar, onReset, isDarkMode, toggleTheme }) => {
   // UI toggles only (no functionality except Dark Mode)
   
   const [notifications, setNotifications] = useState(false);
@@ -50,6 +50,7 @@ const SettingsPage = ({ onExport, onReset, isDarkMode, toggleTheme }) => {
 
   const [biometric, setBiometric] = useState(false);
   const [googleAccount, setGoogleAccount] = useState(null);
+  const [importError, setImportError] = useState('');
 
   useEffect(() => {
      setAppLock(localStorage.getItem('bs-pin-enabled') === 'true');
@@ -108,6 +109,24 @@ const SettingsPage = ({ onExport, onReset, isDarkMode, toggleTheme }) => {
           unlinkGoogleAccount();
           setGoogleAccount(null);
           alert('Google Account unlinked.');
+      }
+  };
+
+  const handleImport = async (event) => {
+      const [file] = event.target.files;
+      event.target.value = '';
+      if (!file) return;
+
+      try {
+          if (!window.confirm('Importing a backup will replace the current local data. Continue?')) {
+              return;
+          }
+          await onImport(file);
+          setImportError('');
+          alert('Backup imported successfully.');
+      } catch (error) {
+          console.error('Failed to import backup.', error);
+          setImportError(error.message || 'Could not import this backup.');
       }
   };
 
@@ -249,48 +268,22 @@ const SettingsPage = ({ onExport, onReset, isDarkMode, toggleTheme }) => {
                     </div>
                     <ChevronRight size={16} className="text-slate-300" />
                 </button>
+                <label className="w-full text-left p-4 flex items-center justify-between hover:bg-slate-50 active:bg-slate-100 transition-colors cursor-pointer border-t border-slate-50">
+                    <div className="flex items-center gap-3">
+                        <div className="p-2 bg-amber-50 text-amber-600 rounded-lg">
+                            <Upload size={20} />
+                        </div>
+                        <div>
+                            <div className="font-bold text-slate-700 text-sm">Import Backup</div>
+                            <div className="text-[10px] text-slate-400">Restore a Body Signal JSON backup</div>
+                        </div>
+                    </div>
+                    <input type="file" accept="application/json,.json" onChange={handleImport} className="hidden" />
+                    <ChevronRight size={16} className="text-slate-300" />
+                </label>
+                {importError && <p className="px-4 pb-3 text-xs font-medium text-rose-600">{importError}</p>}
                 <button 
-                  onClick={() => {
-                        // Assuming you have access to `logs` and `conditions` here, 
-                        // but since SettingsPage doesn't receive them directly right now, 
-                        // we need to trigger an event or read from localStorage directly for a quick export.
-                        const storedLogs = JSON.parse(localStorage.getItem('bs-logs') || '[]');
-                        const storedConds = JSON.parse(localStorage.getItem('bs-conditions') || '[]');
-                        
-                        if (storedLogs.length === 0) {
-                            alert('No logs to export.');
-                            return;
-                        }
-
-                        let icsContent = "BEGIN:VCALENDAR\nVERSION:2.0\nPRODID:-//Body Signal//EN\n";
-                        
-                        storedLogs.forEach(log => {
-                            const cond = storedConds.find(c => c.id === log.conditionId);
-                            if (!cond) return;
-                            
-                            const d = new Date(log.date);
-                            const pad = (n) => n < 10 ? '0'+n : n;
-                            const fmt = (dateObj) => `${dateObj.getUTCFullYear()}${pad(dateObj.getUTCMonth()+1)}${pad(dateObj.getUTCDate())}T${pad(dateObj.getUTCHours())}${pad(dateObj.getUTCMinutes())}${pad(dateObj.getUTCSeconds())}Z`;
-                            
-                            const startStr = fmt(d);
-                            const endStr = fmt(new Date(d.getTime() + 30 * 60000));
-                            
-                            const summary = `Level ${log.intensity} ${cond.label}`;
-                            const desc = `Notes: ${log.notes || 'None'}\\nMedication: ${log.medication || 'None'}`;
-                            
-                            icsContent += `BEGIN:VEVENT\nDTSTART:${startStr}\nDTEND:${endStr}\nSUMMARY:${summary}\nDESCRIPTION:${desc}\nEND:VEVENT\n`;
-                        });
-                        
-                        icsContent += "END:VCALENDAR";
-                        
-                        const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
-                        const url = URL.createObjectURL(blob);
-                        const a = document.createElement('a');
-                        a.href = url;
-                        a.download = 'body_signal_history.ics';
-                        a.click();
-                        URL.revokeObjectURL(url);
-                  }}
+                  onClick={onExportCalendar}
                   className="w-full text-left p-4 flex items-center justify-between hover:bg-slate-50 active:bg-slate-100 transition-colors border-t border-slate-50"
                 >
                     <div className="flex items-center gap-3">

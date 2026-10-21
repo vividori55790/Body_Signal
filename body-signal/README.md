@@ -1,4 +1,12 @@
-# React + Vite
+# Body Signal
+
+Body Signal is a personal health-signal tracking app built with React, Vite, and Capacitor.
+
+## Product roadmap
+
+The commercialization plan for taking the current MVP to a deployable subscription product is documented in [docs/COMMERCIALIZATION_ROADMAP_KO.md](docs/COMMERCIALIZATION_ROADMAP_KO.md).
+
+## Local development
 
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
