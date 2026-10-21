@@ -90,7 +90,7 @@ const SettingsPage = ({ onExport, onImport, onExportCalendar, onExportCsv, onRes
            <p className="text-slate-500 text-sm">App configuration</p>
        </header>
 
-        {/* Section: Account Mock */}
+        {/* Local profile; account sync is not available in this release. */}
         <section>
             <div className="bg-white rounded-xl border border-slate-200 p-4 flex items-center justify-between shadow-sm">
                  <div className="flex items-center gap-4">
@@ -98,11 +98,11 @@ const SettingsPage = ({ onExport, onImport, onExportCalendar, onExportCsv, onRes
                          <User size={24} />
                      </div>
                      <div>
-                         <h3 className="font-bold text-slate-800">User Profile</h3>
-                         <p className="text-xs text-slate-500">Free Plan</p>
+                         <h3 className="font-bold text-slate-800">Local profile</h3>
+                         <p className="text-xs text-slate-500">No account or login required</p>
                      </div>
                  </div>
-                 <button className="text-slate-400 hover:text-slate-600"><ChevronRight size={20}/></button>
+                 <span className="text-[10px] font-bold uppercase text-slate-400">Offline</span>
             </div>
         </section>
 

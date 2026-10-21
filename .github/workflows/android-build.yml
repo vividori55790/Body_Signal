@@ -48,10 +48,32 @@ jobs:
           cd android
           ./gradlew assembleDebug
 
-      - name: Build unsigned release APK
+      - name: Build release APK
         run: |
           cd android
           ./gradlew assembleRelease
+
+      - name: Sign release APK for device testing
+        env:
+          KEYSTORE_PASSWORD: body-signal-ci
+        run: |
+          keytool -genkeypair -v \
+            -keystore body-signal-ci.jks \
+            -alias body-signal-ci \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 365 \
+            -storepass "$KEYSTORE_PASSWORD" \
+            -keypass "$KEYSTORE_PASSWORD" \
+            -dname "CN=Body Signal CI, OU=Testing, O=Body Signal, C=US"
+          APKSIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner | sort -V | tail -n 1)
+          "$APKSIGNER" sign \
+            --ks body-signal-ci.jks \
+            --ks-key-alias body-signal-ci \
+            --ks-pass env:KEYSTORE_PASSWORD \
+            --key-pass env:KEYSTORE_PASSWORD \
+            --out body-signal/android/app/build/outputs/apk/release/app-release-signed.apk \
+            body-signal/android/app/build/outputs/apk/release/app-release-unsigned.apk
 
       - name: Upload installable debug APK
         uses: actions/upload-artifact@v4
@@ -61,10 +83,10 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-      - name: Upload unsigned release APK
+      - name: Upload signed release APK for device testing
         uses: actions/upload-artifact@v4
         with:
-          name: body-signal-release-apk-unsigned
-          path: body-signal/android/app/build/outputs/apk/release/app-release-unsigned.apk
+          name: body-signal-release-apk-signed
+          path: body-signal/android/app/build/outputs/apk/release/app-release-signed.apk
           if-no-files-found: error
           retention-days: 14

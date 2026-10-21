@@ -143,7 +143,7 @@ function App() {
   }
 
   const handleExport = () => {
-    const dataStr = JSON.stringify(createBackup({ conditions, logs }), null, 2);
+    const dataStr = JSON.stringify(createBackup({ conditions, logs, diaryEntries }), null, 2);
     const blob = new Blob([dataStr], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
