@@ -98,3 +98,19 @@ Before submitting:
 
 The local build requires an Android SDK. CI uses Node 22, Java 17, and the
 Gradle wrapper; do not commit a keystore or a signed APK.
+## Installing a phone test build
+
+The `Android APK Build` GitHub Actions workflow publishes two different
+artifacts:
+
+- `body-signal-debug-apk`: installable debug build for local testing.
+- `body-signal-release-apk-signed`: installable release-mode build signed by
+  an ephemeral CI key for local testing.
+
+Download an artifact from a successful workflow run, extract the APK, and
+install it on an Android device after enabling installation from the app used
+to open the file. The CI signing key is intentionally not retained, so this
+build must be uninstalled before switching to a different CI-signed build.
+
+`body-signal-fdroid-release-unsigned` is only a source-build verification
+artifact. It is unsigned by design and is not a direct-install package.
