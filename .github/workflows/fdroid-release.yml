@@ -29,6 +29,9 @@ jobs:
       - name: Run data integrity tests
         run: npm run test:data
 
+      - name: Lint source
+        run: npm run lint
+
       - name: Build web assets
         run: npm run build
 
