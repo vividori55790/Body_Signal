@@ -7,7 +7,8 @@ globalThis.localStorage = {
   removeItem: (key) => storage.delete(key),
 };
 
-const { acknowledgeSyncItem, clearData, createBackup, getNextSyncItem, getPendingSyncCount, parseBackup, saveData } = await import("../src/utils/dataStore.js");
+const { clearData, createBackup, getNextSyncItem, getPendingSyncCount, parseBackup, saveData } = await import("../src/utils/dataStore.js");
+const { drainSyncQueue } = await import("../src/utils/syncQueue.js");
 
 const condition = {
   id: "condition-1",
@@ -38,7 +39,11 @@ assert.equal(getPendingSyncCount(), 1);
 const queued = getNextSyncItem();
 assert.equal(queued.type, "snapshot");
 assert.deepEqual(queued.data, data);
-acknowledgeSyncItem(queued.id);
+const failedDrain = await drainSyncQueue(async () => ({ ok: false, error: "offline" }));
+assert.deepEqual(failedDrain, { processed: 0, blocked: true, error: "offline" });
+assert.equal(getPendingSyncCount(), 1);
+const successfulDrain = await drainSyncQueue(async () => ({ ok: true }));
+assert.deepEqual(successfulDrain, { processed: 1 });
 assert.equal(getPendingSyncCount(), 0);
 
 clearData();
