@@ -32,7 +32,8 @@ git remote add origin https://github.com/<YOUR-USERNAME>/body-signal.git
 git push -u origin main
 ```
 
-Once pushed, go to the **Actions** tab in your GitHub repository to see the build progress. After about 3-5 minutes, you can download the `body-signal-apk` artifact.
+Once pushed, go to the **Actions** tab in your GitHub repository to see the build progress.
+When you push a version tag like `v0.1.0`, the workflow also uploads APK files to the matching **GitHub Release** so you can download them directly on your phone.
 
 ---
 
@@ -68,7 +69,7 @@ npx cap open android
 
 ## 🤖 Install on Phone
 
-1. Transfer the `.apk` file to your Android phone (via USB, Drive, etc.).
+1. Download the `app-debug.apk` asset from the matching **GitHub Release** (or transfer it by USB/Drive).
 2. Open the file on your phone and tap **Install**.
    - _Note: You may need to allow installation from unknown sources._
 
