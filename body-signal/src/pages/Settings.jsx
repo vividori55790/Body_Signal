@@ -5,47 +5,8 @@ import { clearPin, savePin, verifyPin } from '../utils/pin';
 const SettingsPage = ({ onExport, onImport, onExportCalendar, onExportCsv, onReset, isDarkMode, toggleTheme, pendingSyncCount }) => {
   // UI toggles only (no functionality except Dark Mode)
   
-  const [notifications, setNotifications] = useState(false);
   const [appLock, setAppLock] = useState(false);
-  const [cloudSync, setCloudSync] = useState(false);
   const [language, setLanguage] = useState('en');
-
-  // Initialize Notification State
-  useEffect(() => {
-      const savedNoti = localStorage.getItem('bs-noti') === 'true';
-      if (savedNoti && 'Notification' in window && Notification.permission === 'granted') {
-          setNotifications(true);
-      }
-  }, []);
-
-  const handleNotification = async (enabled) => {
-      if (enabled) {
-          if (!("Notification" in window)) {
-              alert("This browser does not support system notifications.");
-              return;
-          }
-
-          let permission = Notification.permission;
-          if (permission !== 'granted') {
-              permission = await Notification.requestPermission();
-          }
-
-          if (permission === 'granted') {
-              setNotifications(true);
-              localStorage.setItem('bs-noti', 'true');
-              new Notification("Body Signal", {
-                  body: "Notification access is enabled. Scheduled reminders are coming in a future release.",
-              });
-          } else {
-              setNotifications(false);
-              localStorage.setItem('bs-noti', 'false');
-              alert("Notification permission is required for reminders.");
-          }
-      } else {
-          setNotifications(false);
-          localStorage.setItem('bs-noti', 'false');
-      }
-  };
 
   const [importError, setImportError] = useState('');
 
@@ -117,15 +78,6 @@ const SettingsPage = ({ onExport, onImport, onExportCalendar, onExportCsv, onRes
                 <div className="font-bold text-slate-700 text-sm">{label}</div>
                 {subLabel && <div className="text-[10px] text-slate-400">{subLabel}</div>}
             </div>
-            <div className="p-4 flex items-center justify-between border-t border-slate-50">
-                <div>
-                    <div className="font-bold text-slate-700 text-sm">Sync queue</div>
-                    <div className="text-[10px] text-slate-400">Prepared for future account sync</div>
-                </div>
-                <span className="text-xs font-bold text-slate-500">
-                    {pendingSyncCount > 0 ? `${pendingSyncCount} pending` : 'Up to date'}
-                </span>
-            </div>
         </div>
         {customAction ? customAction : <Switch checked={value} onChange={setValue} />}
     </div>
@@ -165,13 +117,18 @@ const SettingsPage = ({ onExport, onImport, onExportCalendar, onExportCsv, onRes
                     value={isDarkMode} 
                     setValue={toggleTheme} 
                 />
-                <SettingItem 
-                    icon={Bell} 
-                    label="Daily Reminders" 
-                    subLabel="Permission for future reminders"
-                    value={notifications} 
-                    setValue={handleNotification} 
-                />
+                <div className="p-4 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                        <div className="p-2 rounded-lg bg-amber-50 text-amber-600">
+                            <Bell size={20} />
+                        </div>
+                        <div>
+                            <div className="font-bold text-slate-700 text-sm">Daily reminders</div>
+                            <div className="text-[10px] text-slate-400">Scheduling is not available in this release</div>
+                        </div>
+                    </div>
+                    <span className="text-[10px] font-bold uppercase text-slate-400">Unavailable</span>
+                </div>
                  <SettingItem 
                     icon={Globe} 
                     label="Language" 
@@ -187,6 +144,15 @@ const SettingsPage = ({ onExport, onImport, onExportCalendar, onExportCsv, onRes
                         </button>
                     }
                 />
+                <div className="p-4 flex items-center justify-between border-t border-slate-50">
+                    <div>
+                        <div className="font-bold text-slate-700 text-sm">Sync queue</div>
+                        <div className="text-[10px] text-slate-400">Prepared for future account sync</div>
+                    </div>
+                    <span className="text-xs font-bold text-slate-500">
+                        {pendingSyncCount > 0 ? `${pendingSyncCount} pending` : 'Up to date'}
+                    </span>
+                </div>
             </div>
         </section>
 
