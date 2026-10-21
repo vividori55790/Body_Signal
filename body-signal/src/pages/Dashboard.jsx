@@ -69,7 +69,7 @@ const DetailedConditionCard = ({ condition, logs, onUpdateCondition, onSave }) =
                 <div className="flex-1">
                     {isExpanded ? (
                         <input 
-                            value={editLabel}
+                            value={editedLabel}
                             onChange={handleLabelChange}
                             onBlur={handleLabelBlur}
                             onClick={(e) => e.stopPropagation()}
@@ -256,7 +256,9 @@ const Dashboard = ({ conditions, logs, onUpdateCondition, onSave }) => {
 
   const filteredConditions = activeConditions.filter(c => {
       if (filter === 'All') return true;
-      const cLogs = logs.filter(l => l.conditionId === c.id);
+      const cLogs = logs
+        .filter(l => l.conditionId === c.id)
+        .sort((a, b) => new Date(a.date) - new Date(b.date));
       if (!cLogs.length) return false;
       
       const last = cLogs[cLogs.length - 1];
@@ -300,8 +302,8 @@ const Dashboard = ({ conditions, logs, onUpdateCondition, onSave }) => {
                  <div className="bg-white p-3 rounded-xl border border-slate-100 shadow-sm">
                      <div className="text-xs text-slate-400 font-bold uppercase tracking-wider mb-1">Outlook</div>
                      <div className="flex items-center gap-2">
-                         <TrendingDown size={16} className="text-improved" />
-                         <span className="text-xl font-bold text-improved">Good</span>
+                          <TrendingDown size={16} className="text-slate-500" />
+                          <span className="text-sm font-bold text-slate-600">Recorded data</span>
                      </div>
                  </div>
             </div>

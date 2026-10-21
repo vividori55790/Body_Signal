@@ -94,8 +94,8 @@ const CalendarPage = ({ logs, conditions, diaryEntries, onSaveDiaryEntry }) => {
                 <div className="mt-6 animate-in slide-in-from-bottom-4 fade-in duration-300">
                     <div className="flex justify-between items-center mb-4">
                         <h2 className="font-bold text-lg text-slate-800">{format(selectedDate, 'EEEE, MMMM do')}</h2>
-                        <span className="rounded-full bg-slate-100 px-3 py-2 text-xs font-bold text-slate-400">
-                            Insights coming soon
+                        <span className="rounded-full bg-slate-100 px-3 py-2 text-xs font-bold text-slate-500">
+                        Recorded summary
                         </span>
                     </div>
 

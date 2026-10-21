@@ -90,7 +90,7 @@ function App() {
 
     if (!hasCondition || Number.isNaN(parsedDate.getTime()) || !Number.isInteger(intensity) || intensity < 1 || intensity > 10) {
       window.alert("Please complete the condition, date, and an intensity from 1 to 10.");
-      return;
+      return false;
     }
 
     let conditionId = conditionData.id;
@@ -107,6 +107,7 @@ function App() {
 
     // Call the new handleSaveLog for consistency and Google Sync
     handleSaveLog(conditionId, { ...logData, intensity });
+    return true;
   };
 
   const handleReset = () => {

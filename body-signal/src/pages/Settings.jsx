@@ -1,13 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Download, Trash2, Shield, Bell, Moon, Lock, Cloud, Globe, User, ChevronRight, Calendar, Upload, FileSpreadsheet } from 'lucide-react';
+import { Download, Trash2, Shield, Bell, Moon, Lock, Cloud, User, ChevronRight, Calendar, Upload, FileSpreadsheet } from 'lucide-react';
 import { clearPin, savePin, verifyPin } from '../utils/pin';
 
 const SettingsPage = ({ onExport, onImport, onExportCalendar, onExportCsv, onReset, isDarkMode, toggleTheme, pendingSyncCount }) => {
   // UI toggles only (no functionality except Dark Mode)
   
   const [appLock, setAppLock] = useState(false);
-  const [language, setLanguage] = useState('en');
-
   const [importError, setImportError] = useState('');
 
   useEffect(() => {
@@ -129,21 +127,18 @@ const SettingsPage = ({ onExport, onImport, onExportCalendar, onExportCsv, onRes
                     </div>
                     <span className="text-[10px] font-bold uppercase text-slate-400">Unavailable</span>
                 </div>
-                 <SettingItem 
-                    icon={Globe} 
-                    label="Language" 
-                    subLabel={language === 'en' ? "English (US)" : "Korean (한국어)"}
-                    colorClass="text-blue-600"
-                    bgClass="bg-blue-50"
-                    customAction={
-                        <button 
-                            onClick={() => setLanguage(l => l === 'en' ? 'ko' : 'en')}
-                            className="px-3 py-1 bg-slate-100 hover:bg-slate-200 rounded-lg text-xs font-bold text-slate-600 transition-colors"
-                        >
-                            {language === 'en' ? 'EN' : 'KO'}
-                        </button>
-                    }
-                />
+                <div className="p-4 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                        <div className="p-2 rounded-lg bg-blue-50 text-blue-600">
+                            <Globe size={20} />
+                        </div>
+                        <div>
+                            <div className="font-bold text-slate-700 text-sm">Language</div>
+                            <div className="text-[10px] text-slate-400">English interface; translation is not available yet</div>
+                        </div>
+                    </div>
+                    <span className="text-[10px] font-bold uppercase text-slate-400">English</span>
+                </div>
                 <div className="p-4 flex items-center justify-between border-t border-slate-50">
                     <div>
                         <div className="font-bold text-slate-700 text-sm">Sync queue</div>

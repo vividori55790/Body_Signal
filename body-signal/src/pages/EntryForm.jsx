@@ -63,8 +63,10 @@ const EntryForm = ({ activeConditions, onSave }) => {
        }
     };
 
-    onSave(payload);
-    navigate('/');
+    const saved = onSave(payload);
+    if (saved !== false) {
+      navigate('/');
+    }
   };
 
   return (
@@ -102,7 +104,7 @@ const EntryForm = ({ activeConditions, onSave }) => {
                    onClick={() => setMode('new')}
                    className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${mode === 'new' ? 'bg-white shadow text-primary' : 'text-secondary'}`}
                 >
-                    New Diagnosis
+                    New condition
                 </button>
             </div>
 
