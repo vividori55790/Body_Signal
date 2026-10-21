@@ -306,7 +306,7 @@ const SettingsPage = ({ onExport, onImport, onExportCalendar, onReset, isDarkMod
         <div className="text-center py-6">
              <div className="inline-flex items-center gap-2 px-3 py-1 bg-slate-100 rounded-full border border-slate-200">
                 <Shield size={12} className="text-slate-400" />
-                <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Version 5.0.0</span>
+                <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Version 0.1.0</span>
             </div>
         </div>
     </div>
