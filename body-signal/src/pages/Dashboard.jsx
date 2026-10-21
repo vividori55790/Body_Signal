@@ -1,10 +1,9 @@
-import React, { useState, useMemo, useEffect } from 'react';
-import { Plus, AlertCircle, TrendingDown, ArrowRight, ChevronDown, ChevronUp, CheckCircle, Save, Calendar } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import { Plus, AlertCircle, TrendingDown, ArrowRight, ChevronDown, ChevronUp, CheckCircle, Save } from 'lucide-react';
 import ProgressHeatmap from '../components/ProgressHeatmap';
 import CalendarHeatmap from '../components/CalendarHeatmap';
 import { useNavigate } from 'react-router-dom';
 import { LineChart, Line, ResponsiveContainer, YAxis } from 'recharts';
-import { getLinkedGoogleAccount } from '../utils/googleSync';
 
 
 const DetailedConditionCard = ({ condition, logs, onUpdateCondition, onSave }) => {
@@ -17,14 +16,6 @@ const DetailedConditionCard = ({ condition, logs, onUpdateCondition, onSave }) =
     const [notes, setNotes] = useState('');
     const [isEditingLabel, setIsEditingLabel] = useState(false);
     const [editedLabel, setEditedLabel] = useState(condition.label);
-    const [syncToGoogle, setSyncToGoogle] = useState(false);
-    const [googleAccount, setGoogleAccount] = useState(null);
-
-    useEffect(() => {
-        const account = getLinkedGoogleAccount();
-        setGoogleAccount(account);
-        setSyncToGoogle(!!account);
-    }, []);
 
     const conditionLogs = logs.filter(l => l.conditionId === condition.id).sort((a,b) => new Date(a.date) - new Date(b.date));
     const lastLog = conditionLogs[conditionLogs.length - 1];
@@ -49,7 +40,6 @@ const DetailedConditionCard = ({ condition, logs, onUpdateCondition, onSave }) =
                 medication,
                 notes
             },
-            syncToGoogle // pass this flag up
         });
         // Reset local form state
         setDate(new Date().toISOString().slice(0, 16));
@@ -209,22 +199,6 @@ const DetailedConditionCard = ({ condition, logs, onUpdateCondition, onSave }) =
                                 className="w-full p-2 bg-slate-50 border border-slate-200 rounded text-sm outline-none focus:border-primary resize-none"
                             />
                         </div>
-
-                            {googleAccount && (
-                                <div className="flex items-center gap-2 mt-4 px-1 py-2 bg-blue-50/50 rounded border border-blue-100/50">
-                                    <input 
-                                       type="checkbox" 
-                                       id={`sync-${condition.id}`}
-                                       className="w-4 h-4 text-primary rounded border-slate-300 focus:ring-primary"
-                                       checked={syncToGoogle}
-                                       onChange={(e) => setSyncToGoogle(e.target.checked)}
-                                    />
-                                    <label htmlFor={`sync-${condition.id}`} className="text-xs font-bold text-slate-700 flex items-center gap-1 cursor-pointer">
-                                        <Calendar size={12} className="text-blue-500" />
-                                        Save to Google Calendar <span className="text-slate-400 font-normal">({googleAccount.email})</span>
-                                    </label>
-                                </div>
-                            )}
 
                         <button 
                             type="submit"
