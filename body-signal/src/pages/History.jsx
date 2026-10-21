@@ -122,7 +122,7 @@ const HistoryGroup = ({ title, logs, conditions, logHistoryMap, onDelete }) => {
     );
 };
 
-const HistoryCalendarView = ({ logs, conditions, logHistoryMap }) => {
+const HistoryCalendarView = ({ logs, logHistoryMap }) => {
     const [currentMonth, setCurrentMonth] = useState(new Date());
     const [metric, setMetric] = useState('intensity'); // 'intensity' | 'trend'
 

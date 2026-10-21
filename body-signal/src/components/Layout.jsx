@@ -18,7 +18,7 @@ const BottomNav = () => {
     return (
         <nav className="fixed bottom-0 left-0 right-0 bg-surface/90 backdrop-blur-md border-t border-white/5 pb-safe pt-2 px-6 z-50">
             <div className="flex justify-around items-center max-w-md mx-auto h-16">
-                {navItems.map(({ path, icon: Icon, label }) => (
+                {navItems.map(({ path, icon, label }) => (
                     <NavLink
                         key={path}
                         to={path}
@@ -27,7 +27,7 @@ const BottomNav = () => {
                             isActive ? "text-primary" : "text-slate-500 hover:text-slate-300"
                         )}
                     >
-                        <Icon size={24} />
+                        {React.createElement(icon, { size: 24 })}
                         <span className="text-[10px] font-medium">{label}</span>
                     </NavLink>
                 ))}

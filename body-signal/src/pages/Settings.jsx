@@ -1,16 +1,38 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Download, Trash2, Shield, Bell, Moon, Lock, Cloud, User, ChevronRight, Calendar, Upload, FileSpreadsheet } from 'lucide-react';
 import { clearPin, savePin, verifyPin } from '../utils/pin';
+
+const Switch = ({ checked, onChange }) => (
+    <button
+        type="button"
+        aria-pressed={checked}
+        onClick={() => onChange(!checked)}
+        className={`w-11 h-6 rounded-full transition-colors relative flex-shrink-0 ${checked ? 'bg-slate-700' : 'bg-slate-200'}`}
+    >
+        <div className={`absolute top-1 left-1 bg-white w-4 h-4 rounded-full shadow-sm transition-transform duration-200 ${checked ? 'translate-x-5' : 'translate-x-0'}`} />
+    </button>
+);
+
+const SettingItem = ({ icon, label, subLabel, value, setValue, colorClass = "text-slate-600", bgClass = "bg-slate-100", customAction }) => (
+  <div className="p-4 flex items-center justify-between">
+      <div className="flex items-center gap-3">
+          <div className={`p-2 rounded-lg ${bgClass} ${colorClass}`}>
+              {React.createElement(icon, { size: 20 })}
+          </div>
+          <div>
+              <div className="font-bold text-slate-700 text-sm">{label}</div>
+              {subLabel && <div className="text-[10px] text-slate-400">{subLabel}</div>}
+          </div>
+      </div>
+      {customAction || <Switch checked={value} onChange={setValue} />}
+  </div>
+);
 
 const SettingsPage = ({ onExport, onImport, onExportCalendar, onExportCsv, onReset, isDarkMode, toggleTheme, pendingSyncCount }) => {
   // UI toggles only (no functionality except Dark Mode)
   
-  const [appLock, setAppLock] = useState(false);
+  const [appLock, setAppLock] = useState(() => localStorage.getItem('bs-pin-enabled') === 'true');
   const [importError, setImportError] = useState('');
-
-  useEffect(() => {
-     setAppLock(localStorage.getItem('bs-pin-enabled') === 'true');
-  }, []);
 
   const handleAppLockToggle = async (enabled) => {
       if (enabled) {
@@ -54,32 +76,6 @@ const SettingsPage = ({ onExport, onImport, onExportCalendar, onExportCsv, onRes
           setImportError(error.message || 'Could not import this backup.');
       }
   };
-
-  // Custom Switch Component for better aesthetics
-  const Switch = ({ checked, onChange }) => (
-      <button 
-          onClick={() => onChange(!checked)}
-          className={`w-11 h-6 rounded-full transition-colors relative flex-shrink-0 ${checked ? 'bg-slate-700' : 'bg-slate-200'}`}
-      >
-          <div className={`absolute top-1 left-1 bg-white w-4 h-4 rounded-full shadow-sm transition-transform duration-200 ${checked ? 'translate-x-5' : 'translate-x-0'}`} />
-      </button>
-  );
-
-  // Reusable Setting Item Row
-  const SettingItem = ({ icon: Icon, label, subLabel, value, setValue, colorClass = "text-slate-600", bgClass = "bg-slate-100", customAction }) => (
-    <div className="p-4 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-            <div className={`p-2 rounded-lg ${bgClass} ${colorClass}`}>
-                <Icon size={20} />
-            </div>
-            <div>
-                <div className="font-bold text-slate-700 text-sm">{label}</div>
-                {subLabel && <div className="text-[10px] text-slate-400">{subLabel}</div>}
-            </div>
-        </div>
-        {customAction ? customAction : <Switch checked={value} onChange={setValue} />}
-    </div>
-  );
 
   return (
     <div className="min-h-screen bg-bg p-4 pb-24 space-y-6">

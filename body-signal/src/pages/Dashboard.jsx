@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState } from 'react';
 import { Plus, AlertCircle, TrendingDown, ArrowRight, ChevronDown, ChevronUp, CheckCircle, Save } from 'lucide-react';
 import ProgressHeatmap from '../components/ProgressHeatmap';
 import CalendarHeatmap from '../components/CalendarHeatmap';
@@ -14,7 +14,6 @@ const DetailedConditionCard = ({ condition, logs, onUpdateCondition, onSave, isA
     const [newIntensity, setNewIntensity] = useState(5);
     const [medication, setMedication] = useState('');
     const [notes, setNotes] = useState('');
-    const [isEditingLabel, setIsEditingLabel] = useState(false);
     const [editedLabel, setEditedLabel] = useState(condition.label);
 
     const conditionLogs = logs.filter(l => l.conditionId === condition.id).sort((a,b) => new Date(a.date) - new Date(b.date));

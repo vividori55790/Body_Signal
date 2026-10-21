@@ -17,41 +17,32 @@ function App() {
   const [conditions, setConditions] = useState([]); // Initialized empty, will load from localStorage
   const [logs, setLogs] = useState([]);
   const [diaryEntries, setDiaryEntries] = useState([]);
-  const [theme, setTheme] = useState('light'); // Changed from isDarkMode to theme
-  const [isUnlocked, setIsUnlocked] = useState(false); // Added
-  const [pendingSyncCount, setPendingSyncCount] = useState(0);
+  const [theme, setTheme] = useState(() => localStorage.getItem("bs-theme") || 'light');
+  const [isUnlocked, setIsUnlocked] = useState(() => localStorage.getItem('bs-pin-enabled') !== 'true');
   const [dataLoadError, setDataLoadError] = useState('');
+  const pendingSyncCount = getPendingSyncCount();
 
   // Initialize Data, Theme, and Lock State
   useEffect(() => {
     // Lock logic
-    const pinEnabled = localStorage.getItem('bs-pin-enabled') === 'true';
-    setIsUnlocked(!pinEnabled);
-
     try {
       const savedData = loadData();
+      // Loading external local storage is intentionally performed once on mount.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setConditions(savedData.conditions);
       setLogs(savedData.logs);
       setDiaryEntries(savedData.diaryEntries);
-      setPendingSyncCount(getPendingSyncCount());
     } catch (error) {
       setDataLoadError(error.message);
     }
 
     // Theme loading
-    const savedTheme = localStorage.getItem("bs-theme");
-    if (savedTheme) {
-      setTheme(savedTheme);
-    } else {
-      setTheme('light'); // Default theme
-    }
   }, []); // Run once on mount
 
   // Persistence for conditions and logs (now combined into 'bs-data-v2')
   useEffect(() => {
     if (isUnlocked && !dataLoadError) { // Do not overwrite data that failed validation.
       saveData({ conditions, logs, diaryEntries });
-      setPendingSyncCount(getPendingSyncCount());
     }
   }, [conditions, logs, diaryEntries, isUnlocked, dataLoadError]);
 
@@ -162,7 +153,6 @@ function App() {
     setConditions(importedData.conditions);
     setLogs(importedData.logs);
     setDiaryEntries(importedData.diaryEntries);
-    setPendingSyncCount(getPendingSyncCount());
   };
 
   const handleExportCalendar = () => {

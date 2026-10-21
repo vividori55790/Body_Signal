@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { format, subDays, startOfWeek, addDays, isSameDay } from 'date-fns';
+import { format, subDays, startOfWeek, addDays } from 'date-fns';
 import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
@@ -15,26 +15,6 @@ const ProgressHeatmap = ({ logs = [], onDateClick }) => {
     const sortedLogs = [...logs].sort((a, b) => new Date(a.date) - new Date(b.date));
 
     // 2. Map Date -> { intensity, delta, count }
-    const dateMap = {};
-    let previousIntensity = null;
-
-    sortedLogs.forEach(log => {
-        const dateStr = log.date.split('T')[0];
-        
-        let delta = 0;
-        if (previousIntensity !== null) {
-            delta = log.intensity - previousIntensity;
-        }
-        
-        dateMap[dateStr] = {
-            intensity: log.intensity,
-            delta: delta,
-            hasData: true
-        };
-
-        previousIntensity = log.intensity;
-    });
-
     const getCellColor = (dayData) => {
         if (!dayData || !dayData.hasData) return 'bg-slate-100 border border-slate-200'; // No Data (Grey/White)
         
@@ -59,6 +39,14 @@ const ProgressHeatmap = ({ logs = [], onDateClick }) => {
 
     // Render Last 12 Weeks (GitHub Style)
     const calendarGrid = useMemo(() => {
+        const dateMap = {};
+        let previousIntensity = null;
+        sortedLogs.forEach(log => {
+            const dateStr = log.date.split('T')[0];
+            const delta = previousIntensity === null ? 0 : log.intensity - previousIntensity;
+            dateMap[dateStr] = { intensity: log.intensity, delta, hasData: true };
+            previousIntensity = log.intensity;
+        });
         const today = new Date();
         const startDate = startOfWeek(subDays(today, 84)); // 12 weeks ago
         
@@ -79,7 +67,7 @@ const ProgressHeatmap = ({ logs = [], onDateClick }) => {
             weeks.push(days);
         }
         return weeks;
-    }, [logs]);
+    }, [sortedLogs]);
 
     return (
         <div className="w-full overflow-x-auto">

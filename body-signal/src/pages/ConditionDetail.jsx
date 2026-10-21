@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Calendar, Activity, TrendingUp, AlertCircle, Clock, Edit3, PlusCircle, X, Save, Pill } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
@@ -14,13 +14,6 @@ const ConditionDetailPage = ({ conditions, logs, onUpdateCondition }) => {
     const [editLabel, setEditLabel] = useState('');
     const [editBodyPart, setEditBodyPart] = useState('');
     const [editError, setEditError] = useState('');
-
-    useEffect(() => {
-        if (condition) {
-            setEditLabel(condition.label);
-            setEditBodyPart(condition.bodyPart);
-        }
-    }, [condition]);
 
     const handleSaveEdit = () => {
         if (!editLabel.trim() || !editBodyPart.trim()) {
@@ -81,7 +74,12 @@ const ConditionDetailPage = ({ conditions, logs, onUpdateCondition }) => {
                     <p className="text-xs text-slate-500 font-medium uppercase tracking-wide">{condition.bodyPart}</p>
                 </div>
                 <button 
-                    onClick={() => setIsEditing(true)}
+                    onClick={() => {
+                        setEditLabel(condition.label);
+                        setEditBodyPart(condition.bodyPart);
+                        setEditError('');
+                        setIsEditing(true);
+                    }}
                     className="p-2 -mr-2 text-slate-400 hover:text-primary rounded-full transition-colors"
                 >
                     <Edit3 size={20} />
