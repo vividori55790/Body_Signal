@@ -33,6 +33,8 @@ assert.throws(
 
 saveData(data);
 assert.equal(getPendingSyncCount(), 1);
+saveData(data);
+assert.equal(getPendingSyncCount(), 1);
 const queued = getNextSyncItem();
 assert.equal(queued.type, "snapshot");
 assert.deepEqual(queued.data, data);

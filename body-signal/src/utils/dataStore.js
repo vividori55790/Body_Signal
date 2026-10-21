@@ -3,6 +3,7 @@ const SYNC_QUEUE_KEY = "bs-sync-queue-v1";
 const STORAGE_VERSION = 1;
 
 const emptyData = () => ({ conditions: [], logs: [] });
+const serializeData = (data) => JSON.stringify(data);
 
 const isRecord = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
 
@@ -107,13 +108,24 @@ const readSyncQueue = () => {
 
 const enqueueSyncSnapshot = (data) => {
   const queue = readSyncQueue();
+  const serializedData = serializeData(data);
+  const lastItem = queue[queue.length - 1];
+  if (lastItem?.type === "snapshot" && serializeData(lastItem.data) === serializedData) {
+    return;
+  }
+
   const nextItem = {
     id: crypto.randomUUID(),
     type: "snapshot",
     createdAt: new Date().toISOString(),
     data,
   };
-  localStorage.setItem(SYNC_QUEUE_KEY, JSON.stringify([...queue.slice(-4), nextItem]));
+  try {
+    localStorage.setItem(SYNC_QUEUE_KEY, JSON.stringify([...queue.slice(-4), nextItem]));
+  } catch (error) {
+    console.error("Failed to queue local data for synchronization.", error);
+    throw new Error("Storage is full. Export a backup and remove old records before continuing.");
+  }
 };
 
 export const getPendingSyncCount = () => readSyncQueue().length;

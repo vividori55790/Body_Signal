@@ -198,6 +198,35 @@ function App() {
     URL.revokeObjectURL(url);
   };
 
+  const handleExportCsv = () => {
+    const escapeCsv = (value) => `"${String(value ?? '').replaceAll('"', '""')}"`;
+    const rows = [
+      ['Recorded at', 'Condition', 'Body part', 'Intensity', 'Medication or treatment', 'Notes'],
+      ...logs
+        .slice()
+        .sort((a, b) => new Date(a.date) - new Date(b.date))
+        .map((log) => {
+          const condition = conditions.find((item) => item.id === log.conditionId);
+          return [
+            log.date,
+            condition?.label || 'Unknown condition',
+            condition?.bodyPart || '',
+            log.intensity,
+            log.medication || '',
+            log.notes || '',
+          ];
+        }),
+    ];
+    const csv = rows.map((row) => row.map(escapeCsv).join(',')).join('\r\n');
+    const blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `body-signal-report-${new Date().toISOString().split('T')[0]}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
   const handleUpdateCondition = (id, updatedData) => {
     setConditions((prev) =>
       prev.map((c) => (c.id === id ? { ...c, ...updatedData } : c)),
@@ -262,6 +291,7 @@ function App() {
                 onExport={handleExport}
                 onImport={handleImport}
                 onExportCalendar={handleExportCalendar}
+                onExportCsv={handleExportCsv}
                 pendingSyncCount={pendingSyncCount}
                 isDarkMode={theme === 'dark'}
                 toggleTheme={toggleTheme}

@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Download, Trash2, Shield, Bell, Moon, Lock, Cloud, Globe, User, ChevronRight, Calendar, Upload } from 'lucide-react';
+import { Download, Trash2, Shield, Bell, Moon, Lock, Cloud, Globe, User, ChevronRight, Calendar, Upload, FileSpreadsheet } from 'lucide-react';
 import { clearPin, savePin, verifyPin } from '../utils/pin';
 
-const SettingsPage = ({ onExport, onImport, onExportCalendar, onReset, isDarkMode, toggleTheme, pendingSyncCount }) => {
+const SettingsPage = ({ onExport, onImport, onExportCalendar, onExportCsv, onReset, isDarkMode, toggleTheme, pendingSyncCount }) => {
   // UI toggles only (no functionality except Dark Mode)
   
   const [notifications, setNotifications] = useState(false);
@@ -245,6 +245,21 @@ const SettingsPage = ({ onExport, onImport, onExportCalendar, onReset, isDarkMod
                         <div>
                             <div className="font-bold text-slate-700 text-sm">Export Data</div>
                             <div className="text-[10px] text-slate-400">Download formatted JSON</div>
+                        </div>
+                    </div>
+                    <ChevronRight size={16} className="text-slate-300" />
+                </button>
+                <button
+                  onClick={onExportCsv}
+                  className="w-full text-left p-4 flex items-center justify-between hover:bg-slate-50 active:bg-slate-100 transition-colors border-t border-slate-50"
+                >
+                    <div className="flex items-center gap-3">
+                        <div className="p-2 bg-violet-50 text-violet-600 rounded-lg">
+                            <FileSpreadsheet size={20} />
+                        </div>
+                        <div>
+                            <div className="font-bold text-slate-700 text-sm">Export CSV Report</div>
+                            <div className="text-[10px] text-slate-400">Review records in a spreadsheet</div>
                         </div>
                     </div>
                     <ChevronRight size={16} className="text-slate-300" />
