@@ -1,0 +1,67 @@
+﻿[
+    {
+        "number":  1,
+        "name":  "Set up job",
+        "conclusion":  "success"
+    },
+    {
+        "number":  2,
+        "name":  "Checkout Code",
+        "conclusion":  "success"
+    },
+    {
+        "number":  3,
+        "name":  "Setup Node.js",
+        "conclusion":  "success"
+    },
+    {
+        "number":  4,
+        "name":  "Install Dependencies",
+        "conclusion":  "success"
+    },
+    {
+        "number":  5,
+        "name":  "Build Web App",
+        "conclusion":  "success"
+    },
+    {
+        "number":  6,
+        "name":  "Setup Java",
+        "conclusion":  "success"
+    },
+    {
+        "number":  7,
+        "name":  "Sync Capacitor",
+        "conclusion":  "failure"
+    },
+    {
+        "number":  8,
+        "name":  "Build Android Debug APK",
+        "conclusion":  "skipped"
+    },
+    {
+        "number":  9,
+        "name":  "Upload APK Artifact",
+        "conclusion":  "skipped"
+    },
+    {
+        "number":  16,
+        "name":  "Post Setup Java",
+        "conclusion":  "success"
+    },
+    {
+        "number":  17,
+        "name":  "Post Setup Node.js",
+        "conclusion":  "skipped"
+    },
+    {
+        "number":  18,
+        "name":  "Post Checkout Code",
+        "conclusion":  "success"
+    },
+    {
+        "number":  19,
+        "name":  "Complete job",
+        "conclusion":  "success"
+    }
+]

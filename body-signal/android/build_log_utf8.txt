@@ -1,0 +1,56 @@
+﻿
+> Configure project :app
+WARNING: Using flatDir should be avoided because it doesn't support any meta-data formats.
+
+> Configure project :capacitor-cordova-android-plugins
+WARNING: Using flatDir should be avoided because it doesn't support any meta-data formats.
+.\gradlew : 
+위치 줄:1 문자:14
++ cd android ; .\gradle
+w assembleDebug > build
+_log.txt 2>&1
++              ~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~
+    + CategoryInfo     
+         : NotSpecifi  
+  ed: (:String) [],    
+ RemoteException
+    + FullyQualifiedEr 
+   rorId : NativeComm  
+  andError
+ 
+FAILURE: Build failed w
+ith an exception.
+
+* What went wrong:
+Could not determine the
+ dependencies of task '
+:app:compileDebugJavaWi
+thJavac'.
+> SDK location not foun
+d. Define a valid SDK l
+ocation with an ANDROID
+_HOME environment varia
+ble or by setting the s
+dk.dir path in your pro
+ject's local properties
+ file at 'C:\Users\vivi
+d\Documents\GitProject\
+Personal\Bignal\body-si
+gnal\android\local.prop
+erties'.
+
+* Try:
+> Run with --stacktrace
+ option to get the stac
+k trace.
+> Run with --info or --
+debug option to get mor
+e log output.
+> Run with --scan to ge
+t full insights.
+> Get more help at http
+s://help.gradle.org.
+
+BUILD FAILED in 6s

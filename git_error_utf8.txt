@@ -1,0 +1,30 @@
+﻿git : To https://githu
+b.com/vividori55790/Bo
+dy_Signal.git
+위치 줄:1 문자:1
++ git push origin main
+ > git_error.txt 2>&1
++ ~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo    
+          : NotSpeci  
+  fied: (To https:/   
+ /gith...Body_Sign    
+al.git:String) []    ,
+ RemoteException
+    + FullyQualifiedE 
+   rrorId : NativeCo  
+  mmandError
+ 
+ ! [remote rejected] m
+ain -> main (refusing 
+to allow a Personal Ac
+cess Token to create o
+r update workflow `.gi
+thub/workflows/build-a
+pk.yml` without `workf
+low` scope)
+error: failed to push 
+some refs to 'https://
+github.com/vividori557
+90/Body_Signal.git'
