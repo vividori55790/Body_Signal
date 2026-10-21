@@ -1,11 +1,16 @@
 import React, { useMemo, useState } from 'react';
 import { format, isToday, isYesterday, startOfWeek, endOfWeek, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, getDay, addMonths, subMonths } from 'date-fns';
 import { useNavigate } from 'react-router-dom';
-import { ClipboardList, Pill, ChevronDown, ChevronRight, ChevronLeft, Activity, ArrowUpRight, ArrowDownRight, Minus, Calendar as CalendarIcon, List as ListIcon, Trash2 } from 'lucide-react';
+import { ClipboardList, Pill, ChevronDown, ChevronRight, ChevronLeft, Activity, ArrowUpRight, ArrowDownRight, Minus, Calendar as CalendarIcon, List as ListIcon, Trash2, Edit3, Save, X } from 'lucide-react';
 
-const HistoryItem = ({ log, previousLog, condition, onDelete }) => {
+const HistoryItem = ({ log, previousLog, condition, onDelete, onUpdate }) => {
     const navigate = useNavigate();
     const [expanded, setExpanded] = useState(false);
+    const [editing, setEditing] = useState(false);
+    const [editDate, setEditDate] = useState('');
+    const [editIntensity, setEditIntensity] = useState(log.intensity);
+    const [editMedication, setEditMedication] = useState(log.medication || '');
+    const [editNotes, setEditNotes] = useState(log.notes || '');
     const isNewType = !previousLog; 
     let statusColor = 'bg-slate-100 text-slate-600';
     let StatusIcon = Minus;
@@ -43,6 +48,27 @@ const HistoryItem = ({ log, previousLog, condition, onDelete }) => {
         }
     };
 
+    const beginEdit = (e) => {
+        e.stopPropagation();
+        setEditDate(new Date(log.date).toISOString().slice(0, 16));
+        setEditIntensity(log.intensity);
+        setEditMedication(log.medication || '');
+        setEditNotes(log.notes || '');
+        setEditing(true);
+    };
+
+    const saveEdit = (e) => {
+        e.stopPropagation();
+        if (onUpdate(log.id, {
+            date: editDate,
+            intensity: editIntensity,
+            medication: editMedication,
+            notes: editNotes,
+        }) !== false) {
+            setEditing(false);
+        }
+    };
+
     return (
         <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden transition-all">
             <div className={`flex justify-between items-stretch ${expanded ? 'bg-slate-50' : ''}`}>
@@ -63,13 +89,33 @@ const HistoryItem = ({ log, previousLog, condition, onDelete }) => {
             </div>
             {expanded && (
                 <div className="px-4 pb-4 pt-0 border-t border-slate-100 bg-slate-50/50">
-                    <button
-                        type="button"
-                        onClick={handleDelete}
-                        className="mt-3 ml-auto flex items-center gap-1.5 text-xs font-bold text-rose-600 hover:text-rose-700"
-                    >
-                        <Trash2 size={14} /> Delete record
-                    </button>
+                    {editing ? (
+                        <div className="mt-3 space-y-3 rounded-lg border border-slate-200 bg-white p-3">
+                            <div className="grid grid-cols-2 gap-3">
+                                <label className="text-xs font-bold text-slate-500">Date and time
+                                    <input type="datetime-local" value={editDate} onChange={(event) => setEditDate(event.target.value)} className="mt-1 w-full rounded border border-slate-200 p-2 font-normal text-slate-700" />
+                                </label>
+                                <label className="text-xs font-bold text-slate-500">Intensity
+                                    <input type="number" min="1" max="10" value={editIntensity} onChange={(event) => setEditIntensity(event.target.value)} className="mt-1 w-full rounded border border-slate-200 p-2 font-normal text-slate-700" />
+                                </label>
+                            </div>
+                            <label className="block text-xs font-bold text-slate-500">Treatment
+                                <input value={editMedication} maxLength={500} onChange={(event) => setEditMedication(event.target.value)} className="mt-1 w-full rounded border border-slate-200 p-2 font-normal text-slate-700" />
+                            </label>
+                            <label className="block text-xs font-bold text-slate-500">Notes
+                                <textarea value={editNotes} maxLength={5000} onChange={(event) => setEditNotes(event.target.value)} className="mt-1 h-20 w-full rounded border border-slate-200 p-2 font-normal text-slate-700" />
+                            </label>
+                            <div className="flex justify-end gap-3">
+                                <button type="button" onClick={() => setEditing(false)} className="flex items-center gap-1 text-xs font-bold text-slate-500"><X size={14} /> Cancel</button>
+                                <button type="button" onClick={saveEdit} className="flex items-center gap-1 text-xs font-bold text-emerald-600"><Save size={14} /> Save changes</button>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="mt-3 flex justify-end gap-4">
+                            <button type="button" onClick={beginEdit} className="flex items-center gap-1.5 text-xs font-bold text-slate-600 hover:text-slate-800"><Edit3 size={14} /> Edit record</button>
+                            <button type="button" onClick={handleDelete} className="flex items-center gap-1.5 text-xs font-bold text-rose-600 hover:text-rose-700"><Trash2 size={14} /> Delete record</button>
+                        </div>
+                    )}
                     <div className="grid grid-cols-2 gap-4 mt-4 text-xs">
                         <div><span className="block text-slate-400 font-bold uppercase mb-1">Previous</span><span className="text-slate-700 font-mono text-lg">{previousLog ? previousLog.intensity : '--'}</span></div>
                         <div><span className="block text-slate-400 font-bold uppercase mb-1">Trend</span><span className="text-slate-700 font-medium">{isNewType ? "First Occurrence" : (log.intensity === previousLog.intensity ? "No Change" : (log.intensity > previousLog.intensity ? `Worsened (+${log.intensity - previousLog.intensity})` : `Improved (${log.intensity - previousLog.intensity})`))}</span></div>
@@ -86,7 +132,7 @@ const HistoryItem = ({ log, previousLog, condition, onDelete }) => {
     );
 };
 
-const HistoryGroup = ({ title, logs, conditions, logHistoryMap, onDelete }) => {
+const HistoryGroup = ({ title, logs, conditions, logHistoryMap, onDelete, onUpdate }) => {
     const [isOpen, setIsOpen] = useState(true);
 
     return (
@@ -113,6 +159,7 @@ const HistoryGroup = ({ title, logs, conditions, logHistoryMap, onDelete }) => {
                                 previousLog={logHistoryMap[log.id]} 
                                 condition={condition} 
                                 onDelete={onDelete}
+                                onUpdate={onUpdate}
                             />
                         );
                      })}
@@ -228,7 +275,7 @@ const HistoryCalendarView = ({ logs, logHistoryMap }) => {
     );
 };
 
-const HistoryPage = ({ logs, conditions, onDeleteLog }) => {
+const HistoryPage = ({ logs, conditions, onDeleteLog, onUpdateLog }) => {
     const [displayMode, setDisplayMode] = useState('list'); // 'list' | 'calendar'
     const [listViewMode, setListViewMode] = useState('day'); // 'day' | 'week' | 'month'
 
@@ -349,6 +396,7 @@ const HistoryPage = ({ logs, conditions, onDeleteLog }) => {
                             conditions={conditions} 
                             logHistoryMap={logHistoryMap}
                             onDelete={onDeleteLog}
+                            onUpdate={onUpdateLog}
                         />
                     ))}
                 </div>

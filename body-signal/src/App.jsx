@@ -255,6 +255,25 @@ function App() {
     setLogs((previousLogs) => previousLogs.filter((log) => log.id !== id));
   };
 
+  const handleUpdateLog = (id, updates) => {
+    const intensity = Number(updates.intensity);
+    const date = new Date(updates.date);
+    if (Number.isNaN(date.getTime()) || !Number.isInteger(intensity) || intensity < 1 || intensity > 10) {
+      window.alert("Enter a valid date and an intensity from 1 to 10.");
+      return false;
+    }
+    if (updates.medication.length > 500 || updates.notes.length > 5000) {
+      window.alert("Treatment must be 500 characters or fewer and notes must be 5,000 characters or fewer.");
+      return false;
+    }
+    setLogs((previousLogs) => previousLogs.map((log) => (
+      log.id === id
+        ? { ...log, ...updates, date: date.toISOString(), intensity }
+        : log
+    )));
+    return true;
+  };
+
   if (!isUnlocked) {
       return <LockScreen onUnlock={() => setIsUnlocked(true)} />;
   }
@@ -315,7 +334,14 @@ function App() {
           />
           <Route
             path="/history"
-            element={<HistoryPage logs={logs} conditions={conditions} onDeleteLog={handleDeleteLog} />}
+            element={
+              <HistoryPage
+                logs={logs}
+                conditions={conditions}
+                onDeleteLog={handleDeleteLog}
+                onUpdateLog={handleUpdateLog}
+              />
+            }
           />
           <Route
             path="/condition/:id"
