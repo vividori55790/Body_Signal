@@ -36,7 +36,13 @@ const normalizeData = (value) => {
   const conditions = Array.isArray(value.conditions) ? value.conditions : null;
   const logs = Array.isArray(value.logs) ? value.logs : null;
 
-  if (!conditions || !logs || !conditions.every(isValidCondition) || !logs.every(isValidLog)) {
+  const conditionIds = new Set(conditions?.map((condition) => condition.id));
+  if (
+    !conditions
+    || !logs
+    || !conditions.every(isValidCondition)
+    || !logs.every((log) => isValidLog(log) && conditionIds.has(log.conditionId))
+  ) {
     return null;
   }
 

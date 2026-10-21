@@ -60,12 +60,12 @@ const DetailedConditionCard = ({ condition, logs, onUpdateCondition, onSave }) =
     };
 
     const handleLabelChange = (e) => {
-        setEditLabel(e.target.value);
+        setEditedLabel(e.target.value);
     };
 
     const handleLabelBlur = () => {
-        if(editLabel !== condition.label && editLabel.trim() !== '') {
-            onUpdateCondition(condition.id, { label: editLabel });
+        if(editedLabel !== condition.label && editedLabel.trim() !== '') {
+            onUpdateCondition(condition.id, { label: editedLabel.trim() });
         }
     };
 
