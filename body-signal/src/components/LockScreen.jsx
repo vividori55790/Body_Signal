@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Lock, Fingerprint, Delete, AlertCircle } from 'lucide-react';
+import { clearFailedAttempts, getLockoutRemaining, registerFailedAttempt, verifyPin as verifyStoredPin } from '../utils/pin';
 
 const LockScreen = ({ onUnlock }) => {
     const [pinCode, setPinCode] = useState('');
@@ -32,19 +33,20 @@ const LockScreen = ({ onUnlock }) => {
         setErrorMsg('');
     };
 
-    const verifyPin = (enteredPin) => {
-        const storedPin = localStorage.getItem('bs-pin') || '';
-        
-        // If no PIN was actually stored (edge case handling)
-        if (!storedPin) {
-           onUnlock();
-           return;
+    const verifyPin = async (enteredPin) => {
+        const remaining = getLockoutRemaining();
+        if (remaining > 0) {
+            setErrorMsg(`Too many attempts. Try again in ${Math.ceil(remaining / 1000)}s.`);
+            setPinCode('');
+            return;
         }
 
-        if (enteredPin === storedPin) {
+        if (await verifyStoredPin(enteredPin)) {
+            clearFailedAttempts();
             onUnlock();
         } else {
-            setErrorMsg('Incorrect PIN. Try again.');
+            const lockout = registerFailedAttempt();
+            setErrorMsg(lockout ? 'Too many attempts. Try again in 30s.' : 'Incorrect PIN. Try again.');
             setTimeout(() => setPinCode(''), 500); // Shaking animation simulation timeout
         }
     };

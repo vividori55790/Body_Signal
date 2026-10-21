@@ -11,6 +11,7 @@ import { syncEventToGoogleCalendar, getLinkedGoogleAccount } from './utils/googl
 
 import ConditionDetailPage from "./pages/ConditionDetail";
 import { clearData, createBackup, loadData, parseBackup, saveData } from "./utils/dataStore";
+import { clearPin } from "./utils/pin";
 
 function App() {
   // Centralized State
@@ -110,6 +111,7 @@ function App() {
 
   const handleReset = () => {
     clearData();
+    clearPin();
     localStorage.removeItem("bs-theme"); // Reset theme as well
     localStorage.removeItem("bs-pin-enabled"); // Reset pin state
     window.location.reload();

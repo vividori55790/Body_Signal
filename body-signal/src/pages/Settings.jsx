@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Download, Trash2, Shield, Bell, Moon, Lock, Cloud, Globe, User, ChevronRight, Calendar, Fingerprint, Upload } from 'lucide-react';
 import { initiateGoogleLogin, getLinkedGoogleAccount, unlinkGoogleAccount } from '../utils/googleSync';
+import { clearPin, savePin, verifyPin } from '../utils/pin';
 
 const SettingsPage = ({ onExport, onImport, onExportCalendar, onReset, isDarkMode, toggleTheme }) => {
   // UI toggles only (no functionality except Dark Mode)
@@ -58,11 +59,11 @@ const SettingsPage = ({ onExport, onImport, onExportCalendar, onReset, isDarkMod
      setGoogleAccount(getLinkedGoogleAccount());
   }, []);
 
-  const handleAppLockToggle = (enabled) => {
+  const handleAppLockToggle = async (enabled) => {
       if (enabled) {
           const pin = prompt('Enter a 4-digit PIN to lock the app:', '');
           if (pin && pin.length === 4 && !isNaN(Number(pin))) {
-              localStorage.setItem('bs-pin', pin);
+              await savePin(pin);
               localStorage.setItem('bs-pin-enabled', 'true');
               setAppLock(true);
               alert('App Lock enabled successfully.');
@@ -72,9 +73,8 @@ const SettingsPage = ({ onExport, onImport, onExportCalendar, onReset, isDarkMod
           }
       } else {
           const confirmPin = prompt('Enter your 4-digit PIN to disable lock:', '');
-          const savedPin = localStorage.getItem('bs-pin');
-          if (confirmPin === savedPin) {
-              localStorage.removeItem('bs-pin');
+          if (confirmPin && await verifyPin(confirmPin)) {
+              clearPin();
               localStorage.setItem('bs-pin-enabled', 'false');
               setAppLock(false);
               // also disable biometric
