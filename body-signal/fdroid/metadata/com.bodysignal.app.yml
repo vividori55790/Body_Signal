@@ -1,0 +1,31 @@
+Categories:
+  - Health
+License: MIT
+AuthorName: vividori55790
+SourceCode: https://github.com/vividori55790/Body_Signal
+IssueTracker: https://github.com/vividori55790/Body_Signal/issues
+Changelog: https://github.com/vividori55790/Body_Signal/releases
+
+AutoName: Body Signal
+Summary: Private symptom and body-signal tracker
+Description: |-
+  Body Signal helps you record symptoms, intensity, notes, and related
+  conditions so that you can review personal trends over time.
+
+  It is a personal tracking tool, not a diagnostic or emergency medical
+  service.
+
+RepoType: git
+Repo: https://github.com/vividori55790/Body_Signal.git
+
+Builds:
+  - versionName: 0.1.0
+    versionCode: 1
+    commit: v0.1.0
+    subdir: body-signal
+    gradle: yes
+    output: android/app/build/outputs/apk/release/app-release-unsigned.apk
+
+UpdateCheckMode: Tags
+CurrentVersion: 0.1.0
+CurrentVersionCode: 1

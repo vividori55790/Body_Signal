@@ -74,9 +74,27 @@ npx cap open android
 
 ---
 
-## 🌐 (Optional) F-Droid
+## 🌐 F-Droid source build
 
-To publish to F-Droid later:
+F-Droid does not accept a developer-signed APK as the release artifact. It
+checks out a tagged source revision and builds an unsigned APK that F-Droid
+signs itself.
 
-1. You will need to build a **Signed Release APK** (Build > Generate Signed Bundle / APK).
-2. F-Droid builds from source, so you would submit this entire project (including the `android` folder) to a public GitHub repo eventually.
+This repository includes:
+
+- `fdroid/metadata/com.bodysignal.app.yml` — submission metadata draft
+- `fdroid/README.md` — release and submission checklist
+- `LICENSE` — the MIT license declared by the metadata
+- versioned Capacitor web assets under `android/app/src/main/assets/public`
+
+Before submitting:
+
+1. Create a public `v0.1.0` Git tag.
+2. Build from a clean checkout with the pinned Gradle wrapper.
+3. Confirm `android/app/build/outputs/apk/release/app-release-unsigned.apk`
+   is generated without a signing key or private service configuration.
+4. Submit the metadata to the
+   [F-Droid data repository](https://gitlab.com/fdroid/fdroiddata).
+
+The local build requires an Android SDK. CI uses Node 22, Java 17, and the
+Gradle wrapper; do not commit a keystore or a signed APK.
