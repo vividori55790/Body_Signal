@@ -15,7 +15,8 @@ import { clearPin } from "./utils/pin";
 function App() {
   // Centralized State
   const [conditions, setConditions] = useState([]); // Initialized empty, will load from localStorage
-  const [logs, setLogs] = useState([]); // Initialized empty, will load from localStorage
+  const [logs, setLogs] = useState([]);
+  const [diaryEntries, setDiaryEntries] = useState([]);
   const [theme, setTheme] = useState('light'); // Changed from isDarkMode to theme
   const [isUnlocked, setIsUnlocked] = useState(false); // Added
   const [pendingSyncCount, setPendingSyncCount] = useState(0);
@@ -31,6 +32,7 @@ function App() {
       const savedData = loadData();
       setConditions(savedData.conditions);
       setLogs(savedData.logs);
+      setDiaryEntries(savedData.diaryEntries);
       setPendingSyncCount(getPendingSyncCount());
     } catch (error) {
       setDataLoadError(error.message);
@@ -48,10 +50,10 @@ function App() {
   // Persistence for conditions and logs (now combined into 'bs-data-v2')
   useEffect(() => {
     if (isUnlocked && !dataLoadError) { // Do not overwrite data that failed validation.
-      saveData({ conditions, logs });
+      saveData({ conditions, logs, diaryEntries });
       setPendingSyncCount(getPendingSyncCount());
     }
-  }, [conditions, logs, isUnlocked, dataLoadError]);
+  }, [conditions, logs, diaryEntries, isUnlocked, dataLoadError]);
 
   // Theme application
   useEffect(() => {
@@ -73,8 +75,7 @@ function App() {
       date: new Date().toISOString(), // Added date
       ...logData
     };
-    const newLogs = [newLog, ...logs]; // Prepends new log
-    setLogs(newLogs);
+    setLogs((previousLogs) => [newLog, ...previousLogs]);
     // Persistence is handled by the useEffect, no need to set here directly
 
   };
@@ -159,6 +160,7 @@ function App() {
     const importedData = parseBackup(contents);
     setConditions(importedData.conditions);
     setLogs(importedData.logs);
+    setDiaryEntries(importedData.diaryEntries);
     setPendingSyncCount(getPendingSyncCount());
   };
 
@@ -267,7 +269,29 @@ function App() {
           />
           <Route
             path="/calendar"
-            element={<CalendarPage logs={logs} conditions={conditions} />}
+            element={
+              <CalendarPage
+                logs={logs}
+                conditions={conditions}
+                diaryEntries={diaryEntries}
+                onSaveDiaryEntry={(date, text) => {
+                  const normalizedDate = new Date(date);
+                  if (Number.isNaN(normalizedDate.getTime()) || text.length > 5000) {
+                    throw new Error("Diary entries must contain a valid date and no more than 5,000 characters.");
+                  }
+                  const dateKey = normalizedDate.toISOString().slice(0, 10);
+                  setDiaryEntries((previousEntries) => {
+                    const nextEntry = {
+                      date: dateKey,
+                      text,
+                      updatedAt: new Date().toISOString(),
+                    };
+                    const remaining = previousEntries.filter((entry) => entry.date !== dateKey);
+                    return text.trim() ? [...remaining, nextEntry] : remaining;
+                  });
+                }}
+              />
+            }
           />
           <Route
             path="/history"

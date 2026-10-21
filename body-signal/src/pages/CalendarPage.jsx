@@ -2,10 +2,17 @@ import React, { useState, useMemo } from 'react';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, getDay, addMonths, subMonths } from 'date-fns';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
-const CalendarPage = ({ logs, conditions }) => {
+const CalendarPage = ({ logs, conditions, diaryEntries, onSaveDiaryEntry }) => {
     const [currentMonth, setCurrentMonth] = useState(new Date());
     const [selectedDate, setSelectedDate] = useState(null);
-    const [diaryEntry, setDiaryEntry] = useState(''); // Simple local state for demo
+    const storedDiaryEntry = diaryEntries.find((entry) => (
+        selectedDate && entry.date === format(selectedDate, 'yyyy-MM-dd')
+    ));
+    const [diaryEntry, setDiaryEntry] = useState('');
+
+    React.useEffect(() => {
+        setDiaryEntry(storedDiaryEntry?.text || '');
+    }, [storedDiaryEntry?.date, storedDiaryEntry?.text]);
 
     // Calendar Grid Logic
     const days = useMemo(() => {
@@ -98,12 +105,16 @@ const CalendarPage = ({ logs, conditions }) => {
                             <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">Daily Journal</label>
                             <textarea
                                 value={diaryEntry}
-                                onChange={(e) => setDiaryEntry(e.target.value)}
+                                onChange={(e) => {
+                                    const nextValue = e.target.value;
+                                    setDiaryEntry(nextValue);
+                                    onSaveDiaryEntry(selectedDate, nextValue);
+                                }}
                                 placeholder="How was your day? Any stress or triggers?"
                                 className="w-full text-sm resize-none focus:outline-none text-slate-700 h-20 bg-transparent"
                             />
                             <div className="absolute top-4 right-4 text-xs text-slate-300 group-hover:text-slate-400 transition-colors">
-                                Auto-saved
+                                Saved locally
                             </div>
                         </div>
 

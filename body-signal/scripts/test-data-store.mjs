@@ -23,13 +23,21 @@ const log = {
   date: "2026-01-01T10:00:00.000Z",
   intensity: 5,
 };
-const data = { conditions: [condition], logs: [log] };
+const data = {
+  conditions: [condition],
+  logs: [log],
+  diaryEntries: [{ date: "2026-01-01", text: "Busy morning", updatedAt: "2026-01-01T12:00:00.000Z" }],
+};
 
 assert.deepEqual(parseBackup(JSON.stringify(createBackup(data))), data);
 assert.throws(() => parseBackup("{invalid"), /valid JSON/);
 assert.throws(
   () => parseBackup(JSON.stringify({ conditions: [condition], logs: [{ ...log, conditionId: "missing" }] })),
   /valid Body Signal data/,
+);
+assert.deepEqual(
+  parseBackup(JSON.stringify({ conditions: [], logs: [] })),
+  { conditions: [], logs: [], diaryEntries: [] },
 );
 
 saveData(data);

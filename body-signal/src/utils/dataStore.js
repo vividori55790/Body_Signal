@@ -2,7 +2,7 @@ const STORAGE_KEY = "bs-data-v2";
 const SYNC_QUEUE_KEY = "bs-sync-queue-v1";
 const STORAGE_VERSION = 1;
 
-const emptyData = () => ({ conditions: [], logs: [] });
+const emptyData = () => ({ conditions: [], logs: [], diaryEntries: [] });
 const serializeData = (data) => JSON.stringify(data);
 
 const isRecord = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
@@ -30,6 +30,16 @@ const isValidLog = (log) => (
   && log.intensity <= 10
 );
 
+const isValidDiaryEntry = (entry) => (
+  isRecord(entry)
+  && typeof entry.date === "string"
+  && !Number.isNaN(Date.parse(entry.date))
+  && typeof entry.text === "string"
+  && entry.text.length <= 5000
+  && typeof entry.updatedAt === "string"
+  && !Number.isNaN(Date.parse(entry.updatedAt))
+);
+
 const normalizeData = (value) => {
   if (!isRecord(value)) {
     return null;
@@ -37,13 +47,18 @@ const normalizeData = (value) => {
 
   const conditions = Array.isArray(value.conditions) ? value.conditions : null;
   const logs = Array.isArray(value.logs) ? value.logs : null;
+  const diaryEntries = value.diaryEntries === undefined
+    ? []
+    : (Array.isArray(value.diaryEntries) ? value.diaryEntries : null);
 
   const conditionIds = new Set(conditions?.map((condition) => condition.id));
   if (
     !conditions
     || !logs
+    || !diaryEntries
     || !conditions.every(isValidCondition)
     || !logs.every((log) => isValidLog(log) && conditionIds.has(log.conditionId))
+    || !diaryEntries.every(isValidDiaryEntry)
   ) {
     return null;
   }
@@ -51,6 +66,7 @@ const normalizeData = (value) => {
   return {
     conditions,
     logs,
+    diaryEntries,
   };
 };
 
