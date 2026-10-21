@@ -81,6 +81,17 @@ function App() {
 
   const handleSaveEntry = (payload) => {
     const { isNewCondition, conditionData, logData, syncToGoogle } = payload;
+    const intensity = Number(logData?.intensity);
+    const parsedDate = new Date(logData?.date);
+    const hasCondition = isNewCondition
+      ? conditionData?.label?.trim() && conditionData?.bodyPart?.trim() && conditionData?.onsetDate
+      : conditionData?.id;
+
+    if (!hasCondition || Number.isNaN(parsedDate.getTime()) || !Number.isInteger(intensity) || intensity < 1 || intensity > 10) {
+      window.alert("Please complete the condition, date, and an intensity from 1 to 10.");
+      return;
+    }
+
     let conditionId = conditionData.id;
 
     if (isNewCondition) {
@@ -94,7 +105,7 @@ function App() {
     }
 
     // Call the new handleSaveLog for consistency and Google Sync
-    handleSaveLog(conditionId, logData, syncToGoogle);
+    handleSaveLog(conditionId, { ...logData, intensity }, syncToGoogle);
   };
 
   const handleReset = () => {

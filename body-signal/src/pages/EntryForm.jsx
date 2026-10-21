@@ -20,10 +20,33 @@ const EntryForm = ({ activeConditions, onSave }) => {
   const [intensity, setIntensity] = useState(5);
   const [medication, setMedication] = useState('');
   const [notes, setNotes] = useState('');
+  const [error, setError] = useState('');
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    
+    const numericIntensity = Number(intensity);
+    const parsedDate = new Date(date);
+    const hasValidCondition = mode === 'new'
+      ? newLabel.trim() && newBodyPart.trim() && newOnsetDate
+      : selectedConditionId;
+
+    if (!hasValidCondition) {
+      setError('Choose an existing condition or complete the new condition fields.');
+      return;
+    }
+
+    if (!date || Number.isNaN(parsedDate.getTime())) {
+      setError('Enter a valid date and time.');
+      return;
+    }
+
+    if (!Number.isInteger(numericIntensity) || numericIntensity < 1 || numericIntensity > 10) {
+      setError('Pain rating must be a whole number from 1 to 10.');
+      return;
+    }
+
+    setError('');
+
     // Construct Payload
     const payload = {
        isNewCondition: mode === 'new',
@@ -34,7 +57,7 @@ const EntryForm = ({ activeConditions, onSave }) => {
        } : { id: selectedConditionId },
        logData: {
            date: new Date(date).toISOString(),
-           intensity: parseInt(intensity),
+           intensity: numericIntensity,
            medication,
            notes
        }
@@ -55,6 +78,11 @@ const EntryForm = ({ activeConditions, onSave }) => {
       </header>
 
       <form onSubmit={handleSubmit} className="p-4 max-w-lg mx-auto space-y-8">
+        {error && (
+            <div role="alert" className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">
+                {error}
+            </div>
+        )}
         
         {/* SECTION 1: Condition Context */}
         <section className="bg-surface p-5 rounded-lg border border-border shadow-sm space-y-4">
