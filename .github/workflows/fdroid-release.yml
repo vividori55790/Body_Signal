@@ -1,0 +1,53 @@
+name: Verify F-Droid release build
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+jobs:
+  verify-release:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: body-signal
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: body-signal/package-lock.json
+
+      - name: Install JavaScript dependencies
+        run: npm ci
+
+      - name: Run data integrity tests
+        run: npm run test:data
+
+      - name: Build web assets
+        run: npm run build
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Build unsigned release APK
+        run: |
+          chmod +x android/gradlew
+          android/gradlew assembleRelease --no-daemon
+
+      - name: Upload unsigned APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: body-signal-fdroid-release-unsigned
+          path: body-signal/android/app/build/outputs/apk/release/app-release-unsigned.apk
