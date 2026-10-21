@@ -20,7 +20,19 @@ const getHeatmapColor = (intensity) => {
 
 const BodyPart = ({ id, d, intensity, onClick, label }) => {
   return (
-    <g onClick={() => onClick(id)} className="cursor-pointer group transition-all duration-300">
+    <g
+      role="button"
+      tabIndex="0"
+      aria-label={label}
+      onClick={() => onClick(id)}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          onClick(id);
+        }
+      }}
+      className="cursor-pointer group transition-all duration-300"
+    >
       <path
         d={d}
         className={cn(

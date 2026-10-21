@@ -240,9 +240,25 @@ function App() {
   };
 
   const handleUpdateCondition = (id, updatedData) => {
+    const label = updatedData.label?.trim();
+    const bodyPart = updatedData.bodyPart?.trim();
+    if (updatedData.label !== undefined && !label) {
+      window.alert("Condition name cannot be empty.");
+      return false;
+    }
+    if (updatedData.bodyPart !== undefined && !bodyPart) {
+      window.alert("Body part cannot be empty.");
+      return false;
+    }
     setConditions((prev) =>
-      prev.map((c) => (c.id === id ? { ...c, ...updatedData } : c)),
+      prev.map((c) => (c.id === id ? {
+        ...c,
+        ...updatedData,
+        ...(label ? { label } : {}),
+        ...(bodyPart ? { bodyPart } : {}),
+      } : c)),
     );
+    return true;
   };
 
   const handleDeleteLog = (id) => {

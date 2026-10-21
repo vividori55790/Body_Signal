@@ -13,6 +13,7 @@ const ConditionDetailPage = ({ conditions, logs, onUpdateCondition }) => {
     const [isEditing, setIsEditing] = useState(false);
     const [editLabel, setEditLabel] = useState('');
     const [editBodyPart, setEditBodyPart] = useState('');
+    const [editError, setEditError] = useState('');
 
     useEffect(() => {
         if (condition) {
@@ -22,8 +23,14 @@ const ConditionDetailPage = ({ conditions, logs, onUpdateCondition }) => {
     }, [condition]);
 
     const handleSaveEdit = () => {
-        onUpdateCondition(id, { label: editLabel, bodyPart: editBodyPart });
-        setIsEditing(false);
+        if (!editLabel.trim() || !editBodyPart.trim()) {
+            setEditError('Condition name and body part are required.');
+            return;
+        }
+        if (onUpdateCondition(id, { label: editLabel, bodyPart: editBodyPart }) !== false) {
+            setEditError('');
+            setIsEditing(false);
+        }
     };
     
     // Sort logs descending for history list, ascending for chart
@@ -87,7 +94,7 @@ const ConditionDetailPage = ({ conditions, logs, onUpdateCondition }) => {
                     <div className="bg-white rounded-2xl w-full max-w-sm p-6 space-y-4 shadow-2xl">
                         <div className="flex justify-between items-center">
                             <h3 className="font-bold text-lg text-slate-800">Edit Condition</h3>
-                            <button onClick={() => setIsEditing(false)} className="text-slate-400 hover:text-slate-600"><X size={20} /></button>
+                            <button type="button" aria-label="Close edit condition dialog" onClick={() => setIsEditing(false)} className="text-slate-400 hover:text-slate-600"><X size={20} /></button>
                         </div>
                         
                         <div className="space-y-3">
@@ -110,8 +117,10 @@ const ConditionDetailPage = ({ conditions, logs, onUpdateCondition }) => {
                                 />
                             </div>
                         </div>
+                        {editError && <p role="alert" className="text-sm font-medium text-rose-600">{editError}</p>}
 
                         <button 
+                            type="button"
                             onClick={handleSaveEdit}
                             className="w-full py-3 bg-slate-800 text-white rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-slate-700 transition-colors"
                         >
