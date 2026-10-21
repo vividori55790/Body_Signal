@@ -31,6 +31,18 @@ export default defineConfig({
         display: "standalone",
         background_color: "#ffffff"
       }
-    })
+    }),
   ],
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          react: ['react', 'react-dom', 'react-router-dom'],
+          charts: ['recharts'],
+          dates: ['date-fns'],
+          icons: ['lucide-react'],
+        },
+      },
+    },
+  },
 })
