@@ -14,7 +14,9 @@ const isValidCondition = (condition) => (
   && typeof condition.label === "string"
   && condition.label.trim().length > 0
   && typeof condition.bodyPart === "string"
+  && condition.bodyPart.trim().length > 0
   && typeof condition.onsetDate === "string"
+  && !Number.isNaN(Date.parse(condition.onsetDate))
   && typeof condition.isArchived === "boolean"
 );
 
@@ -28,6 +30,8 @@ const isValidLog = (log) => (
   && Number.isInteger(log.intensity)
   && log.intensity >= 1
   && log.intensity <= 10
+  && (log.medication === undefined || (typeof log.medication === "string" && log.medication.length <= 500))
+  && (log.notes === undefined || (typeof log.notes === "string" && log.notes.length <= 5000))
 );
 
 const isValidDiaryEntry = (entry) => (

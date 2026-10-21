@@ -70,7 +70,7 @@ function App() {
   // Handlers
   const handleSaveLog = (conditionId, logData) => {
     const newLog = {
-      id: Date.now().toString(), // Changed to Date.now().toString() for unique ID
+      id: crypto.randomUUID(),
       conditionId,
       date: new Date().toISOString(), // Added date
       ...logData

@@ -47,6 +47,20 @@ assert.throws(
   })),
   /valid Body Signal data/,
 );
+assert.throws(
+  () => parseBackup(JSON.stringify({
+    conditions: [{ ...condition, bodyPart: " " }],
+    logs: [],
+  })),
+  /valid Body Signal data/,
+);
+assert.throws(
+  () => parseBackup(JSON.stringify({
+    conditions: [condition],
+    logs: [{ ...log, notes: "x".repeat(5001) }],
+  })),
+  /valid Body Signal data/,
+);
 
 saveData(data);
 assert.equal(getPendingSyncCount(), 1);
