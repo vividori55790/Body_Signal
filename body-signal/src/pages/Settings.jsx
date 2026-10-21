@@ -33,6 +33,7 @@ const SettingsPage = ({ onExport, onImport, onExportCalendar, onExportCsv, onRes
   
   const [appLock, setAppLock] = useState(() => localStorage.getItem('bs-pin-enabled') === 'true');
   const [importError, setImportError] = useState('');
+  const [importPreview, setImportPreview] = useState(null);
 
   const handleAppLockToggle = async (enabled) => {
       if (enabled) {
@@ -65,14 +66,28 @@ const SettingsPage = ({ onExport, onImport, onExportCalendar, onExportCsv, onRes
       if (!file) return;
 
       try {
-          if (!window.confirm('Importing a backup will replace the current local data. Continue?')) {
+          const contents = await file.text();
+          const parsed = JSON.parse(contents);
+          const backupData = parsed?.data || parsed;
+          const preview = {
+              conditions: Array.isArray(backupData?.conditions) ? backupData.conditions.length : 0,
+              logs: Array.isArray(backupData?.logs) ? backupData.logs.length : 0,
+              diaryEntries: Array.isArray(backupData?.diaryEntries) ? backupData.diaryEntries.length : 0,
+          };
+          setImportPreview(preview);
+          if (!window.confirm(
+              `This backup contains ${preview.conditions} condition(s), ${preview.logs} log(s), and ${preview.diaryEntries} journal entr${preview.diaryEntries === 1 ? 'y' : 'ies'}. It will replace current local data. Continue?`,
+          )) {
+              setImportPreview(null);
               return;
           }
           await onImport(file);
+          setImportPreview(null);
           setImportError('');
           alert('Backup imported successfully.');
       } catch (error) {
           console.error('Failed to import backup.', error);
+          setImportPreview(null);
           setImportError(error.message || 'Could not import this backup.');
       }
   };
@@ -235,6 +250,11 @@ const SettingsPage = ({ onExport, onImport, onExportCalendar, onExportCsv, onRes
                     <ChevronRight size={16} className="text-slate-300" />
                 </label>
                 {importError && <p className="px-4 pb-3 text-xs font-medium text-rose-600">{importError}</p>}
+                {importPreview && (
+                    <p className="px-4 pb-3 text-xs text-slate-500" role="status">
+                        Preview: {importPreview.conditions} condition(s), {importPreview.logs} log(s), {importPreview.diaryEntries} journal entr{importPreview.diaryEntries === 1 ? 'y' : 'ies'}.
+                    </p>
+                )}
                 <button 
                   onClick={onExportCalendar}
                   className="w-full text-left p-4 flex items-center justify-between hover:bg-slate-50 active:bg-slate-100 transition-colors border-t border-slate-50"
