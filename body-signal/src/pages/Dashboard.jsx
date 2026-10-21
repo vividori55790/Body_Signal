@@ -350,6 +350,24 @@ const Dashboard = ({ conditions, logs, onUpdateCondition, onSave }) => {
         <section className="grid grid-cols-1 sm:grid-cols-2 gap-4">
              <AddLogCard onClick={() => navigate('/entry')} />
 
+             {activeConditions.length === 0 && (
+                 <div className="sm:col-span-2 bg-white rounded-xl border border-dashed border-slate-300 p-6 text-center">
+                    <div className="mx-auto w-12 h-12 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                        <Plus size={24} />
+                    </div>
+                    <h3 className="mt-3 font-bold text-slate-700">Start your first health record</h3>
+                    <p className="mt-1 text-sm text-slate-500">
+                        Add a condition and record how you feel. Your data stays on this device until you choose to export it.
+                    </p>
+                    <button
+                        onClick={() => navigate('/entry')}
+                        className="mt-4 px-4 py-2 rounded-lg bg-slate-800 text-white text-sm font-bold hover:bg-slate-700"
+                    >
+                        Create first record
+                    </button>
+                 </div>
+             )}
+
              {filteredConditions.map(c => (
                  <DetailedConditionCard 
                     key={c.id} 

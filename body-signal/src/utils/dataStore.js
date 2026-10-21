@@ -5,6 +5,29 @@ const emptyData = () => ({ conditions: [], logs: [] });
 
 const isRecord = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
 
+const isValidCondition = (condition) => (
+  isRecord(condition)
+  && typeof condition.id === "string"
+  && condition.id.length > 0
+  && typeof condition.label === "string"
+  && condition.label.trim().length > 0
+  && typeof condition.bodyPart === "string"
+  && typeof condition.onsetDate === "string"
+  && typeof condition.isArchived === "boolean"
+);
+
+const isValidLog = (log) => (
+  isRecord(log)
+  && typeof log.id === "string"
+  && log.id.length > 0
+  && typeof log.conditionId === "string"
+  && typeof log.date === "string"
+  && !Number.isNaN(Date.parse(log.date))
+  && Number.isInteger(log.intensity)
+  && log.intensity >= 1
+  && log.intensity <= 10
+);
+
 const normalizeData = (value) => {
   if (!isRecord(value)) {
     return null;
@@ -13,7 +36,7 @@ const normalizeData = (value) => {
   const conditions = Array.isArray(value.conditions) ? value.conditions : null;
   const logs = Array.isArray(value.logs) ? value.logs : null;
 
-  if (!conditions || !logs) {
+  if (!conditions || !logs || !conditions.every(isValidCondition) || !logs.every(isValidLog)) {
     return null;
   }
 
