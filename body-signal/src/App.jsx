@@ -203,12 +203,13 @@ function App() {
   const handleExportCsv = () => {
     const escapeCsv = (value) => `"${String(value ?? '').replaceAll('"', '""')}"`;
     const rows = [
-      ['Recorded at', 'Condition', 'Body part', 'Intensity', 'Medication or treatment', 'Notes'],
+      ['Recorded at', 'Condition', 'Body part', 'Intensity', 'Medication or treatment', 'Notes', 'Daily journal'],
       ...logs
         .slice()
         .sort((a, b) => new Date(a.date) - new Date(b.date))
         .map((log) => {
           const condition = conditions.find((item) => item.id === log.conditionId);
+          const diary = diaryEntries.find((entry) => entry.date === log.date.slice(0, 10));
           return [
             log.date,
             condition?.label || 'Unknown condition',
@@ -216,9 +217,17 @@ function App() {
             log.intensity,
             log.medication || '',
             log.notes || '',
+            diary?.text || '',
           ];
         }),
     ];
+    const loggedDates = new Set(logs.map((log) => log.date.slice(0, 10)));
+    diaryEntries
+      .filter((entry) => !loggedDates.has(entry.date))
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .forEach((entry) => {
+        rows.push([entry.date, '', '', '', '', '', entry.text]);
+      });
     const csv = rows.map((row) => row.map(escapeCsv).join(',')).join('\r\n');
     const blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob);
