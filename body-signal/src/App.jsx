@@ -177,6 +177,10 @@ function App() {
     );
   };
 
+  const handleDeleteLog = (id) => {
+    setLogs((previousLogs) => previousLogs.filter((log) => log.id !== id));
+  };
+
   if (!isUnlocked) {
       return <LockScreen onUnlock={() => setIsUnlocked(true)} />;
   }
@@ -211,7 +215,7 @@ function App() {
           />
           <Route
             path="/history"
-            element={<HistoryPage logs={logs} conditions={conditions} />}
+            element={<HistoryPage logs={logs} conditions={conditions} onDeleteLog={handleDeleteLog} />}
           />
           <Route
             path="/condition/:id"

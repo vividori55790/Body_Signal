@@ -1,9 +1,9 @@
 import React, { useMemo, useState } from 'react';
 import { format, isToday, isYesterday, startOfWeek, endOfWeek, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, getDay, addMonths, subMonths } from 'date-fns';
 import { useNavigate } from 'react-router-dom';
-import { ClipboardList, Pill, ChevronDown, ChevronRight, ChevronLeft, Activity, ArrowUpRight, ArrowDownRight, Minus, Calendar as CalendarIcon, List as ListIcon } from 'lucide-react';
+import { ClipboardList, Pill, ChevronDown, ChevronRight, ChevronLeft, Activity, ArrowUpRight, ArrowDownRight, Minus, Calendar as CalendarIcon, List as ListIcon, Trash2 } from 'lucide-react';
 
-const HistoryItem = ({ log, previousLog, condition }) => {
+const HistoryItem = ({ log, previousLog, condition, onDelete }) => {
     const navigate = useNavigate();
     const [expanded, setExpanded] = useState(false);
     const isNewType = !previousLog; 
@@ -36,6 +36,13 @@ const HistoryItem = ({ log, previousLog, condition }) => {
         setExpanded(!expanded);
     };
 
+    const handleDelete = (e) => {
+        e.stopPropagation();
+        if (window.confirm('Delete this health record? This cannot be undone.')) {
+            onDelete(log.id);
+        }
+    };
+
     return (
         <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden transition-all">
             <div className={`flex justify-between items-stretch ${expanded ? 'bg-slate-50' : ''}`}>
@@ -56,6 +63,13 @@ const HistoryItem = ({ log, previousLog, condition }) => {
             </div>
             {expanded && (
                 <div className="px-4 pb-4 pt-0 border-t border-slate-100 bg-slate-50/50">
+                    <button
+                        type="button"
+                        onClick={handleDelete}
+                        className="mt-3 ml-auto flex items-center gap-1.5 text-xs font-bold text-rose-600 hover:text-rose-700"
+                    >
+                        <Trash2 size={14} /> Delete record
+                    </button>
                     <div className="grid grid-cols-2 gap-4 mt-4 text-xs">
                         <div><span className="block text-slate-400 font-bold uppercase mb-1">Previous</span><span className="text-slate-700 font-mono text-lg">{previousLog ? previousLog.intensity : '--'}</span></div>
                         <div><span className="block text-slate-400 font-bold uppercase mb-1">Trend</span><span className="text-slate-700 font-medium">{isNewType ? "First Occurrence" : (log.intensity === previousLog.intensity ? "No Change" : (log.intensity > previousLog.intensity ? `Worsened (+${log.intensity - previousLog.intensity})` : `Improved (${log.intensity - previousLog.intensity})`))}</span></div>
@@ -72,7 +86,7 @@ const HistoryItem = ({ log, previousLog, condition }) => {
     );
 };
 
-const HistoryGroup = ({ title, logs, conditions, logHistoryMap }) => {
+const HistoryGroup = ({ title, logs, conditions, logHistoryMap, onDelete }) => {
     const [isOpen, setIsOpen] = useState(true);
 
     return (
@@ -98,6 +112,7 @@ const HistoryGroup = ({ title, logs, conditions, logHistoryMap }) => {
                                 log={log} 
                                 previousLog={logHistoryMap[log.id]} 
                                 condition={condition} 
+                                onDelete={onDelete}
                             />
                         );
                      })}
@@ -213,7 +228,7 @@ const HistoryCalendarView = ({ logs, conditions, logHistoryMap }) => {
     );
 };
 
-const HistoryPage = ({ logs, conditions }) => {
+const HistoryPage = ({ logs, conditions, onDeleteLog }) => {
     const [displayMode, setDisplayMode] = useState('list'); // 'list' | 'calendar'
     const [listViewMode, setListViewMode] = useState('day'); // 'day' | 'week' | 'month'
 
@@ -333,6 +348,7 @@ const HistoryPage = ({ logs, conditions }) => {
                             logs={groupLogs} 
                             conditions={conditions} 
                             logHistoryMap={logHistoryMap}
+                            onDelete={onDeleteLog}
                         />
                     ))}
                 </div>
