@@ -39,6 +39,14 @@ assert.deepEqual(
   parseBackup(JSON.stringify({ conditions: [], logs: [] })),
   { conditions: [], logs: [], diaryEntries: [] },
 );
+assert.throws(
+  () => parseBackup(JSON.stringify({
+    conditions: [],
+    logs: [],
+    diaryEntries: [{ date: "2026-01-01", text: "x".repeat(5001), updatedAt: "2026-01-01T12:00:00.000Z" }],
+  })),
+  /valid Body Signal data/,
+);
 
 saveData(data);
 assert.equal(getPendingSyncCount(), 1);

@@ -105,6 +105,7 @@ const CalendarPage = ({ logs, conditions, diaryEntries, onSaveDiaryEntry }) => {
                             <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">Daily Journal</label>
                             <textarea
                                 value={diaryEntry}
+                                maxLength={5000}
                                 onChange={(e) => {
                                     const nextValue = e.target.value;
                                     setDiaryEntry(nextValue);

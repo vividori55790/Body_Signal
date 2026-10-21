@@ -279,7 +279,11 @@ function App() {
                   if (Number.isNaN(normalizedDate.getTime()) || text.length > 5000) {
                     throw new Error("Diary entries must contain a valid date and no more than 5,000 characters.");
                   }
-                  const dateKey = normalizedDate.toISOString().slice(0, 10);
+                  const dateKey = [
+                    normalizedDate.getFullYear(),
+                    String(normalizedDate.getMonth() + 1).padStart(2, "0"),
+                    String(normalizedDate.getDate()).padStart(2, "0"),
+                  ].join("-");
                   setDiaryEntries((previousEntries) => {
                     const nextEntry = {
                       date: dateKey,
