@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { Download, Trash2, Shield, Bell, Moon, Lock, Cloud, Globe, User, ChevronRight, Calendar, Fingerprint, Upload } from 'lucide-react';
-import { initiateGoogleLogin, getLinkedGoogleAccount, unlinkGoogleAccount } from '../utils/googleSync';
 import { clearPin, savePin, verifyPin } from '../utils/pin';
 
 const SettingsPage = ({ onExport, onImport, onExportCalendar, onReset, isDarkMode, toggleTheme }) => {
@@ -50,13 +49,11 @@ const SettingsPage = ({ onExport, onImport, onExportCalendar, onReset, isDarkMod
   };
 
   const [biometric, setBiometric] = useState(false);
-  const [googleAccount, setGoogleAccount] = useState(null);
   const [importError, setImportError] = useState('');
 
   useEffect(() => {
      setAppLock(localStorage.getItem('bs-pin-enabled') === 'true');
      setBiometric(localStorage.getItem('bs-biometric') === 'true');
-     setGoogleAccount(getLinkedGoogleAccount());
   }, []);
 
   const handleAppLockToggle = async (enabled) => {
@@ -94,22 +91,6 @@ const SettingsPage = ({ onExport, onImport, onExportCalendar, onReset, isDarkMod
       }
       setBiometric(enabled);
       localStorage.setItem('bs-biometric', enabled ? 'true' : 'false');
-  };
-
-  const handleGoogleSyncToggle = async (enabled) => {
-      if (enabled) {
-          try {
-              const account = await initiateGoogleLogin();
-              setGoogleAccount(account);
-              alert(`Successfully linked Google Calendar to ${account.email}`);
-          } catch (e) {
-              alert('Failed to link Google Account.');
-          }
-      } else {
-          unlinkGoogleAccount();
-          setGoogleAccount(null);
-          alert('Google Account unlinked.');
-      }
   };
 
   const handleImport = async (event) => {
@@ -237,15 +218,18 @@ const SettingsPage = ({ onExport, onImport, onExportCalendar, onReset, isDarkMod
                     colorClass="text-emerald-600"
                     bgClass="bg-emerald-50"
                 />
-                <SettingItem 
-                    icon={Cloud} 
-                    label="Google Calendar Auto-Sync" 
-                    subLabel={googleAccount ? `Linked as ${googleAccount.email}` : "Sync new entries automatically"} 
-                    value={!!googleAccount} 
-                    setValue={handleGoogleSyncToggle} 
-                    colorClass="text-sky-600"
-                    bgClass="bg-sky-50"
-                />
+                <div className="p-4 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                        <div className="p-2 rounded-lg bg-sky-50 text-sky-600">
+                            <Cloud size={20} />
+                        </div>
+                        <div>
+                            <div className="font-bold text-slate-700 text-sm">Google Calendar</div>
+                            <div className="text-[10px] text-slate-400">Not configured; use calendar export below</div>
+                        </div>
+                    </div>
+                    <span className="text-[10px] font-bold uppercase text-slate-400">Unavailable</span>
+                </div>
             </div>
         </section>
 

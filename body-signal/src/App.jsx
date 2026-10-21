@@ -7,7 +7,6 @@ import SettingsPage from "./pages/Settings";
 import HistoryPage from "./pages/History";
 import CalendarPage from "./pages/CalendarPage";
 import LockScreen from './components/LockScreen'; // Added
-import { syncEventToGoogleCalendar, getLinkedGoogleAccount } from './utils/googleSync'; // Added
 
 import ConditionDetailPage from "./pages/ConditionDetail";
 import { clearData, createBackup, loadData, parseBackup, saveData } from "./utils/dataStore";
@@ -59,7 +58,7 @@ function App() {
   const toggleTheme = () => setTheme((prev) => (prev === 'light' ? 'dark' : 'light'));
 
   // Handlers
-  const handleSaveLog = async (conditionId, logData, syncToGoogle = true) => {
+  const handleSaveLog = (conditionId, logData) => {
     const newLog = {
       id: Date.now().toString(), // Changed to Date.now().toString() for unique ID
       conditionId,
@@ -70,18 +69,10 @@ function App() {
     setLogs(newLogs);
     // Persistence is handled by the useEffect, no need to set here directly
 
-    if (syncToGoogle) {
-        const account = getLinkedGoogleAccount();
-        if (account) {
-             const condition = conditions.find(c => c.id === conditionId);
-             // Fire and forget, or could await it
-             syncEventToGoogleCalendar(newLog, condition?.label || 'Condition').catch(e => console.error("Google Sync Error:", e));
-        }
-    }
   };
 
   const handleSaveEntry = (payload) => {
-    const { isNewCondition, conditionData, logData, syncToGoogle } = payload;
+    const { isNewCondition, conditionData, logData } = payload;
     const intensity = Number(logData?.intensity);
     const parsedDate = new Date(logData?.date);
     const hasCondition = isNewCondition
@@ -106,7 +97,7 @@ function App() {
     }
 
     // Call the new handleSaveLog for consistency and Google Sync
-    handleSaveLog(conditionId, { ...logData, intensity }, syncToGoogle);
+    handleSaveLog(conditionId, { ...logData, intensity });
   };
 
   const handleReset = () => {
