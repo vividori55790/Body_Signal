@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Download, Trash2, Shield, Bell, Moon, Lock, Cloud, Globe, User, ChevronRight, Calendar, Fingerprint, Upload } from 'lucide-react';
 import { clearPin, savePin, verifyPin } from '../utils/pin';
 
-const SettingsPage = ({ onExport, onImport, onExportCalendar, onReset, isDarkMode, toggleTheme }) => {
+const SettingsPage = ({ onExport, onImport, onExportCalendar, onReset, isDarkMode, toggleTheme, pendingSyncCount }) => {
   // UI toggles only (no functionality except Dark Mode)
   
   const [notifications, setNotifications] = useState(false);
@@ -131,6 +131,15 @@ const SettingsPage = ({ onExport, onImport, onExportCalendar, onReset, isDarkMod
             <div>
                 <div className="font-bold text-slate-700 text-sm">{label}</div>
                 {subLabel && <div className="text-[10px] text-slate-400">{subLabel}</div>}
+            </div>
+            <div className="p-4 flex items-center justify-between border-t border-slate-50">
+                <div>
+                    <div className="font-bold text-slate-700 text-sm">Sync queue</div>
+                    <div className="text-[10px] text-slate-400">Prepared for future account sync</div>
+                </div>
+                <span className="text-xs font-bold text-slate-500">
+                    {pendingSyncCount > 0 ? `${pendingSyncCount} pending` : 'Up to date'}
+                </span>
             </div>
         </div>
         {customAction ? customAction : <Switch checked={value} onChange={setValue} />}

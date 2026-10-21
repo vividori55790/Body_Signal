@@ -1,4 +1,5 @@
 const STORAGE_KEY = "bs-data-v2";
+const SYNC_QUEUE_KEY = "bs-sync-queue-v1";
 const STORAGE_VERSION = 1;
 
 const emptyData = () => ({ conditions: [], logs: [] });
@@ -82,6 +83,38 @@ export const saveData = (data) => {
       data: normalized,
     }),
   );
+  enqueueSyncSnapshot(normalized);
+};
+
+const readSyncQueue = () => {
+  try {
+    const stored = localStorage.getItem(SYNC_QUEUE_KEY);
+    const parsed = stored ? JSON.parse(stored) : [];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (error) {
+    console.error("Failed to read the local sync queue.", error);
+    return [];
+  }
+};
+
+const enqueueSyncSnapshot = (data) => {
+  const queue = readSyncQueue();
+  const nextItem = {
+    id: crypto.randomUUID(),
+    type: "snapshot",
+    createdAt: new Date().toISOString(),
+    data,
+  };
+  localStorage.setItem(SYNC_QUEUE_KEY, JSON.stringify([...queue.slice(-4), nextItem]));
+};
+
+export const getPendingSyncCount = () => readSyncQueue().length;
+
+export const getNextSyncItem = () => readSyncQueue()[0] || null;
+
+export const acknowledgeSyncItem = (id) => {
+  const remaining = readSyncQueue().filter((item) => item.id !== id);
+  localStorage.setItem(SYNC_QUEUE_KEY, JSON.stringify(remaining));
 };
 
 export const createBackup = (data) => ({
@@ -109,4 +142,5 @@ export const parseBackup = (contents) => {
 
 export const clearData = () => {
   localStorage.removeItem(STORAGE_KEY);
+  localStorage.removeItem(SYNC_QUEUE_KEY);
 };

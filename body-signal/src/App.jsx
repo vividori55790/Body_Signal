@@ -9,7 +9,7 @@ import CalendarPage from "./pages/CalendarPage";
 import LockScreen from './components/LockScreen'; // Added
 
 import ConditionDetailPage from "./pages/ConditionDetail";
-import { clearData, createBackup, loadData, parseBackup, saveData } from "./utils/dataStore";
+import { clearData, createBackup, getPendingSyncCount, loadData, parseBackup, saveData } from "./utils/dataStore";
 import { clearPin } from "./utils/pin";
 
 function App() {
@@ -18,6 +18,7 @@ function App() {
   const [logs, setLogs] = useState([]); // Initialized empty, will load from localStorage
   const [theme, setTheme] = useState('light'); // Changed from isDarkMode to theme
   const [isUnlocked, setIsUnlocked] = useState(false); // Added
+  const [pendingSyncCount, setPendingSyncCount] = useState(0);
 
   // Initialize Data, Theme, and Lock State
   useEffect(() => {
@@ -28,6 +29,7 @@ function App() {
     const savedData = loadData();
     setConditions(savedData.conditions);
     setLogs(savedData.logs);
+    setPendingSyncCount(getPendingSyncCount());
 
     // Theme loading
     const savedTheme = localStorage.getItem("bs-theme");
@@ -42,6 +44,7 @@ function App() {
   useEffect(() => {
     if (isUnlocked) { // Only save if unlocked, to prevent saving empty data if locked
       saveData({ conditions, logs });
+      setPendingSyncCount(getPendingSyncCount());
     }
   }, [conditions, logs, isUnlocked]);
 
@@ -126,6 +129,7 @@ function App() {
     const importedData = parseBackup(contents);
     setConditions(importedData.conditions);
     setLogs(importedData.logs);
+    setPendingSyncCount(getPendingSyncCount());
   };
 
   const handleExportCalendar = () => {
@@ -228,6 +232,7 @@ function App() {
                 onExport={handleExport}
                 onImport={handleImport}
                 onExportCalendar={handleExportCalendar}
+                pendingSyncCount={pendingSyncCount}
                 isDarkMode={theme === 'dark'}
                 toggleTheme={toggleTheme}
               />
