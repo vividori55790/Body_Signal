@@ -269,6 +269,16 @@ const Dashboard = ({ conditions, logs, onUpdateCondition, onSave }) => {
   const weeklyAvg = recentLogs.length 
     ? (recentLogs.reduce((a,b) => a + b.intensity, 0) / recentLogs.length).toFixed(1)
     : 0;
+  const previousWeekLogs = logs.filter((log) => {
+      const age = new Date() - new Date(log.date);
+      return age >= 7 * 24 * 60 * 60 * 1000 && age < 14 * 24 * 60 * 60 * 1000;
+  });
+  const previousWeekAvg = previousWeekLogs.length
+    ? previousWeekLogs.reduce((total, log) => total + log.intensity, 0) / previousWeekLogs.length
+    : null;
+  const weeklyChange = previousWeekAvg === null || !recentLogs.length
+    ? null
+    : Number((Number(weeklyAvg) - previousWeekAvg).toFixed(1));
 
   const filteredConditions = activeConditions.filter(c => {
       if (filter === 'All') return true;
@@ -326,6 +336,39 @@ const Dashboard = ({ conditions, logs, onUpdateCondition, onSave }) => {
             <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
                 <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Overall Pain Heatmap</h3>
                 <CalendarHeatmap logs={logs} />
+            </div>
+
+            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                <div className="flex items-center justify-between">
+                    <div>
+                        <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Weekly review</h3>
+                        <p className="mt-1 text-sm font-bold text-slate-700">Last 7 days</p>
+                    </div>
+                    <span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-bold text-slate-500">
+                        {recentLogs.length} {recentLogs.length === 1 ? 'entry' : 'entries'}
+                    </span>
+                </div>
+                {recentLogs.length ? (
+                    <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                        <div className="rounded-lg bg-slate-50 p-3">
+                            <span className="block text-[10px] font-bold uppercase text-slate-400">Average intensity</span>
+                            <span className="mt-1 block text-xl font-black text-slate-700">{weeklyAvg}/10</span>
+                        </div>
+                        <div className="rounded-lg bg-slate-50 p-3">
+                            <span className="block text-[10px] font-bold uppercase text-slate-400">Compared with prior week</span>
+                            <span className="mt-1 block text-xl font-black text-slate-700">
+                                {weeklyChange === null ? 'Not enough data' : `${weeklyChange > 0 ? '+' : ''}${weeklyChange}`}
+                            </span>
+                        </div>
+                    </div>
+                ) : (
+                    <p className="mt-3 text-sm text-slate-500">
+                        Add a record to generate your first weekly review. Summaries describe your entries and do not diagnose causes.
+                    </p>
+                )}
+                <p className="mt-3 text-[10px] leading-4 text-slate-400">
+                    A change in average is a description of recorded intensity, not proof of improvement or worsening.
+                </p>
             </div>
         </header>
 
