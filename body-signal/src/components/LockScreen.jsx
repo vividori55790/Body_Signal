@@ -1,20 +1,10 @@
-import React, { useState, useEffect } from 'react';
-import { Lock, Fingerprint, Delete, AlertCircle } from 'lucide-react';
+import React, { useState } from 'react';
+import { Lock, Delete, AlertCircle } from 'lucide-react';
 import { clearFailedAttempts, getLockoutRemaining, registerFailedAttempt, verifyPin as verifyStoredPin } from '../utils/pin';
 
 const LockScreen = ({ onUnlock }) => {
     const [pinCode, setPinCode] = useState('');
     const [errorMsg, setErrorMsg] = useState('');
-    const [biometricEnabled, setBiometricEnabled] = useState(false);
-    
-    // Check if biometric is enabled on mount
-    useEffect(() => {
-        const bio = localStorage.getItem('bs-biometric') === 'true';
-        setBiometricEnabled(bio);
-        if (bio) {
-            handleBiometricUnlock();
-        }
-    }, []);
 
     const handleNumberClick = (num) => {
         if (pinCode.length < 4) {
@@ -48,27 +38,6 @@ const LockScreen = ({ onUnlock }) => {
             const lockout = registerFailedAttempt();
             setErrorMsg(lockout ? 'Too many attempts. Try again in 30s.' : 'Incorrect PIN. Try again.');
             setTimeout(() => setPinCode(''), 500); // Shaking animation simulation timeout
-        }
-    };
-
-    const handleBiometricUnlock = async () => {
-        // Mocking WebAuthentication API for fingerprint
-        // A real implementation requires secure a WebAuthn server or Capacitor Biometric plugin.
-        if (window.navigator.credentials && window.PublicKeyCredential) {
-            // Using a dummy logic to simulate biometric prompt
-            // To test UI, we just simulate the native dialog timeout
-            setTimeout(() => {
-                const isSuccess = window.confirm("Biometric Authentication Prompt (Simulated).\\nClick OK to simulate fingerprint Scan.");
-                if (isSuccess) {
-                    onUnlock();
-                } else {
-                    setErrorMsg('Biometric failed or cancelled.');
-                }
-            }, 300);
-        } else {
-             // Fallback prompt for demo purposes
-             const isSuccess = window.confirm("Simulating Fingerprint...\\nClick OK to unlock.");
-             if (isSuccess) onUnlock();
         }
     };
 
@@ -109,16 +78,7 @@ const LockScreen = ({ onUnlock }) => {
                       </button>
                   ))}
                   
-                  <div className="flex items-center justify-center">
-                      {biometricEnabled ? (
-                          <button 
-                             onClick={handleBiometricUnlock}
-                             className="w-16 h-16 rounded-full flex items-center justify-center text-emerald-400 hover:text-emerald-300 hover:bg-slate-800 transition-all outline-none"
-                          >
-                             <Fingerprint size={32} />
-                          </button>
-                      ) : <div/>}
-                  </div>
+                  <div />
                   
                   <button 
                       onClick={() => handleNumberClick('0')}

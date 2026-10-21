@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Download, Trash2, Shield, Bell, Moon, Lock, Cloud, Globe, User, ChevronRight, Calendar, Fingerprint, Upload } from 'lucide-react';
+import { Download, Trash2, Shield, Bell, Moon, Lock, Cloud, Globe, User, ChevronRight, Calendar, Upload } from 'lucide-react';
 import { clearPin, savePin, verifyPin } from '../utils/pin';
 
 const SettingsPage = ({ onExport, onImport, onExportCalendar, onReset, isDarkMode, toggleTheme, pendingSyncCount }) => {
@@ -33,9 +33,8 @@ const SettingsPage = ({ onExport, onImport, onExportCalendar, onReset, isDarkMod
           if (permission === 'granted') {
               setNotifications(true);
               localStorage.setItem('bs-noti', 'true');
-              new Notification("Body Signal", { 
-                  body: "Daily reminders enabled! We'll notify you at 8:00 PM.",
-                  icon: "/pwa-192x192.png" 
+              new Notification("Body Signal", {
+                  body: "Notification access is enabled. Scheduled reminders are coming in a future release.",
               });
           } else {
               setNotifications(false);
@@ -48,12 +47,10 @@ const SettingsPage = ({ onExport, onImport, onExportCalendar, onReset, isDarkMod
       }
   };
 
-  const [biometric, setBiometric] = useState(false);
   const [importError, setImportError] = useState('');
 
   useEffect(() => {
      setAppLock(localStorage.getItem('bs-pin-enabled') === 'true');
-     setBiometric(localStorage.getItem('bs-biometric') === 'true');
   }, []);
 
   const handleAppLockToggle = async (enabled) => {
@@ -74,23 +71,11 @@ const SettingsPage = ({ onExport, onImport, onExportCalendar, onReset, isDarkMod
               clearPin();
               localStorage.setItem('bs-pin-enabled', 'false');
               setAppLock(false);
-              // also disable biometric
-              localStorage.setItem('bs-biometric', 'false');
-              setBiometric(false);
               alert('App Lock disabled.');
           } else {
               alert('Incorrect PIN.');
           }
       }
-  };
-
-  const handleBiometricToggle = (enabled) => {
-      if (!appLock) {
-          alert('You must enable App Lock (PIN) first.');
-          return;
-      }
-      setBiometric(enabled);
-      localStorage.setItem('bs-biometric', enabled ? 'true' : 'false');
   };
 
   const handleImport = async (event) => {
@@ -183,7 +168,7 @@ const SettingsPage = ({ onExport, onImport, onExportCalendar, onReset, isDarkMod
                 <SettingItem 
                     icon={Bell} 
                     label="Daily Reminders" 
-                    subLabel="Notifications at 8:00 PM" 
+                    subLabel="Permission for future reminders"
                     value={notifications} 
                     setValue={handleNotification} 
                 />
@@ -218,15 +203,18 @@ const SettingsPage = ({ onExport, onImport, onExportCalendar, onReset, isDarkMod
                     colorClass="text-indigo-600"
                     bgClass="bg-indigo-50"
                 />
-                 <SettingItem 
-                    icon={Fingerprint} 
-                    label="Biometric / Fingerprint" 
-                    subLabel={appLock ? "Requires device support" : "Enable PIN first"} 
-                    value={biometric} 
-                    setValue={handleBiometricToggle} 
-                    colorClass="text-emerald-600"
-                    bgClass="bg-emerald-50"
-                />
+                <div className="p-4 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                        <div className="p-2 rounded-lg bg-emerald-50 text-emerald-600">
+                            <Lock size={20} />
+                        </div>
+                        <div>
+                            <div className="font-bold text-slate-700 text-sm">Biometric unlock</div>
+                            <div className="text-[10px] text-slate-400">Requires a native secure credential integration</div>
+                        </div>
+                    </div>
+                    <span className="text-[10px] font-bold uppercase text-slate-400">Unavailable</span>
+                </div>
                 <div className="p-4 flex items-center justify-between">
                     <div className="flex items-center gap-3">
                         <div className="p-2 rounded-lg bg-sky-50 text-sky-600">
