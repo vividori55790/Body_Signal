@@ -1,10 +1,33 @@
 import React, { useState } from 'react';
-import { ArrowLeft, Clock, Save, Sparkles, Plus, AlertCircle } from 'lucide-react';
+import { ArrowLeft, Clock, Save, Sparkles, Plus, AlertCircle, AlertTriangle, ShieldAlert } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useHealth } from '../context/HealthContext';
 import { useSettings } from '../context/SettingsContext';
 import BodyMap from '../components/BodyMap';
 import { triggerHaptic } from '../utils/native';
+
+const PAIN_QUALITIES = [
+  '욱신거림',
+  '찌르는 듯함',
+  '타는 듯함',
+  '뻐근/묵직함',
+  '조이는 느낌',
+  '저림/전기',
+  '쥐남/경련',
+];
+
+const RADIATIONS = ['하지(다리) 방사', '상지(팔) 방사', '등/견갑골 방사', '골반으로 뻗침'];
+
+const TRIGGERS = ['보행 시', '오래 앉을 때', '아침 기상 시', '기침/재채기', '스트레스', '날씨/추위'];
+
+const RELIEF_FACTORS = ['누워서 휴식', '온찜질', '냉찜질', '스트레칭', '약 복용 후'];
+
+const RED_FLAGS = [
+  '마비/감각 저하',
+  '다리/팔 근력 약화',
+  '38도 이상 고열 동반',
+  '대소변 장애',
+];
 
 export const EntryFormPage: React.FC = () => {
   const navigate = useNavigate();
@@ -35,6 +58,13 @@ export const EntryFormPage: React.FC = () => {
   const [notes, setNotes] = useState('');
   const [error, setError] = useState('');
 
+  // Clinical PQRST & Red Flag States
+  const [selectedQualities, setSelectedQualities] = useState<string[]>([]);
+  const [selectedRadiation, setSelectedRadiation] = useState<string>('');
+  const [selectedTriggers, setSelectedTriggers] = useState<string[]>([]);
+  const [selectedReliefs, setSelectedReliefs] = useState<string[]>([]);
+  const [selectedRedFlags, setSelectedRedFlags] = useState<string[]>([]);
+
   // Quick Date Helpers
   const setQuickTime = (type: 'now' | '1h' | 'yesterday') => {
     triggerHaptic();
@@ -52,14 +82,42 @@ export const EntryFormPage: React.FC = () => {
     setIntensity(num);
   };
 
+  const handleToggleQuality = (q: string) => {
+    triggerHaptic();
+    setSelectedQualities((prev) =>
+      prev.includes(q) ? prev.filter((item) => item !== q) : [...prev, q]
+    );
+  };
+
+  const handleToggleRadiation = (rad: string) => {
+    triggerHaptic();
+    setSelectedRadiation((prev) => (prev === rad ? '' : rad));
+  };
+
+  const handleToggleTrigger = (tr: string) => {
+    triggerHaptic();
+    setSelectedTriggers((prev) =>
+      prev.includes(tr) ? prev.filter((item) => item !== tr) : [...prev, tr]
+    );
+  };
+
+  const handleToggleRelief = (rel: string) => {
+    triggerHaptic();
+    setSelectedReliefs((prev) =>
+      prev.includes(rel) ? prev.filter((item) => item !== rel) : [...prev, rel]
+    );
+  };
+
+  const handleToggleRedFlag = (rf: string) => {
+    triggerHaptic();
+    setSelectedRedFlags((prev) =>
+      prev.includes(rf) ? prev.filter((item) => item !== rf) : [...prev, rf]
+    );
+  };
+
   const handleAddMedPreset = (name: string) => {
     triggerHaptic();
     setMedication((prev) => (prev ? `${prev}, ${name}` : name));
-  };
-
-  const handleAddSymptomPreset = (phrase: string) => {
-    triggerHaptic();
-    setNotes((prev) => (prev ? `${prev} ${phrase}` : phrase));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -89,6 +147,11 @@ export const EntryFormPage: React.FC = () => {
         intensity,
         medication,
         notes,
+        painQuality: selectedQualities,
+        radiation: selectedRadiation,
+        triggers: selectedTriggers,
+        reliefFactors: selectedReliefs,
+        redFlags: selectedRedFlags,
       },
     };
 
@@ -108,10 +171,10 @@ export const EntryFormPage: React.FC = () => {
   };
 
   const getIntensityDescription = (num: number) => {
-    if (num <= 3) return '가벼운 불편감 (Mild)';
-    if (num <= 6) return '일상생활에 지장 있는 통증 (Moderate)';
-    if (num <= 8) return '매우 심한 통증 (Severe)';
-    return '극심하여 참을 수 없음 (Worst Possible)';
+    if (num <= 3) return '1~3: 가벼운 통증 (일상생활 가능, 수면 지장 없음)';
+    if (num <= 6) return '4~6: 중등도 통증 (일상생활에 지장 발생, 진통제 필요)';
+    if (num <= 8) return '7~8: 매우 심한 통증 (거동 힘들고 집중 불가능)';
+    return '9~10: 극심하여 참을 수 없음 (즉시 응급 진료 요망)';
   };
 
   return (
@@ -161,7 +224,7 @@ export const EntryFormPage: React.FC = () => {
                   : 'text-slate-500 disabled:opacity-40'
               }`}
             >
-              {t('followUpMode')} ({activeConditions.length})
+              {t('followUpMode')}
             </button>
             <button
               type="button"
@@ -180,15 +243,14 @@ export const EntryFormPage: React.FC = () => {
           </div>
 
           {mode === 'existing' ? (
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-600 dark:text-slate-300">
+            <div>
+              <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1">
                 {t('selectCondition')}
               </label>
               <select
-                required
                 value={selectedConditionId}
                 onChange={(e) => setSelectedConditionId(e.target.value)}
-                className="w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/80 p-3 text-sm font-bold text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                className="w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 p-3 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500"
               >
                 {activeConditions.map((c) => (
                   <option key={c.id} value={c.id}>
@@ -283,7 +345,7 @@ export const EntryFormPage: React.FC = () => {
                   key={num}
                   type="button"
                   onClick={() => handleIntensityClick(num)}
-                  className={`h-13 rounded-xl font-black text-lg transition-all flex flex-col items-center justify-center border ${
+                  className={`h-12 rounded-xl font-black text-lg transition-all flex flex-col items-center justify-center border ${
                     isSelected
                       ? `${getIntensityColor(num)} scale-105 shadow-md`
                       : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 active:scale-95'
@@ -339,7 +401,164 @@ export const EntryFormPage: React.FC = () => {
           </div>
         </section>
 
-        {/* Section 3: Medication & Treatment */}
+        {/* Section 3: Clinical PQRST (Pain Quality & Radiation) */}
+        <section className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-sm space-y-3.5">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xs font-bold uppercase tracking-wider text-slate-400">
+              통증 양상 및 방사통 (PQRST 의학 척도)
+            </h2>
+            <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
+              의사 문진 필수 항목
+            </span>
+          </div>
+
+          {/* Quality Chips */}
+          <div className="space-y-1.5">
+            <span className="text-xs font-bold text-slate-600 dark:text-slate-300 block">
+              어떤 느낌으로 아픈가요? (다중 선택 가능)
+            </span>
+            <div className="flex flex-wrap gap-1.5">
+              {PAIN_QUALITIES.map((q) => {
+                const isSelected = selectedQualities.includes(q);
+                return (
+                  <button
+                    key={q}
+                    type="button"
+                    onClick={() => handleToggleQuality(q)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                      isSelected
+                        ? 'bg-emerald-600 text-white shadow-sm scale-102'
+                        : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700/80 active:scale-95'
+                    }`}
+                  >
+                    {q} {isSelected && '✓'}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Radiation Chips */}
+          <div className="space-y-1.5 pt-2 border-t border-slate-100 dark:border-slate-800">
+            <span className="text-xs font-bold text-slate-600 dark:text-slate-300 block">
+              다른 부위로 뻗치는 방사통이 있나요?
+            </span>
+            <div className="flex flex-wrap gap-1.5">
+              {RADIATIONS.map((rad) => {
+                const isSelected = selectedRadiation === rad;
+                return (
+                  <button
+                    key={rad}
+                    type="button"
+                    onClick={() => handleToggleRadiation(rad)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                      isSelected
+                        ? 'bg-blue-600 text-white shadow-sm scale-102'
+                        : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700/80 active:scale-95'
+                    }`}
+                  >
+                    {rad} {isSelected && '✓'}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Triggers & Relief Factors */}
+          <div className="space-y-1.5 pt-2 border-t border-slate-100 dark:border-slate-800">
+            <span className="text-xs font-bold text-slate-600 dark:text-slate-300 block">
+              통증 악화 요인:
+            </span>
+            <div className="flex flex-wrap gap-1.5">
+              {TRIGGERS.map((tr) => {
+                const isSelected = selectedTriggers.includes(tr);
+                return (
+                  <button
+                    key={tr}
+                    type="button"
+                    onClick={() => handleToggleTrigger(tr)}
+                    className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all ${
+                      isSelected
+                        ? 'bg-rose-500 text-white'
+                        : 'bg-slate-100 dark:bg-slate-800 text-slate-500'
+                    }`}
+                  >
+                    {tr}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <span className="text-xs font-bold text-slate-600 dark:text-slate-300 block">
+              통증 완화 요인:
+            </span>
+            <div className="flex flex-wrap gap-1.5">
+              {RELIEF_FACTORS.map((rel) => {
+                const isSelected = selectedReliefs.includes(rel);
+                return (
+                  <button
+                    key={rel}
+                    type="button"
+                    onClick={() => handleToggleRelief(rel)}
+                    className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all ${
+                      isSelected
+                        ? 'bg-teal-600 text-white'
+                        : 'bg-slate-100 dark:bg-slate-800 text-slate-500'
+                    }`}
+                  >
+                    {rel}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </section>
+
+        {/* Section 4: Red Flags Safety Check (Medical Safety Net) */}
+        <section className="rounded-2xl border border-rose-200 dark:border-rose-900/60 bg-rose-50/50 dark:bg-rose-950/20 p-4 shadow-sm space-y-2.5">
+          <div className="flex items-center gap-1.5 text-rose-600 dark:text-rose-400">
+            <ShieldAlert size={16} />
+            <h2 className="text-xs font-bold uppercase tracking-wider">
+              위험 징후 (Red Flags) 확인
+            </h2>
+          </div>
+          <p className="text-[11px] text-rose-800/80 dark:text-rose-300/80">
+            해당되는 응급 증상이 있다면 체크하세요 (의료진에게 최우선 경고 전달):
+          </p>
+
+          <div className="grid grid-cols-2 gap-2 pt-1">
+            {RED_FLAGS.map((rf) => {
+              const isSelected = selectedRedFlags.includes(rf);
+              return (
+                <button
+                  key={rf}
+                  type="button"
+                  onClick={() => handleToggleRedFlag(rf)}
+                  className={`p-2 rounded-xl text-xs font-bold text-left transition-all border ${
+                    isSelected
+                      ? 'bg-rose-600 text-white border-rose-700 shadow-sm'
+                      : 'bg-white dark:bg-slate-800 border-rose-200 dark:border-rose-900/60 text-rose-800 dark:text-rose-300'
+                  }`}
+                >
+                  {rf} {isSelected && '⚠️'}
+                </button>
+              );
+            })}
+          </div>
+
+          {selectedRedFlags.length > 0 && (
+            <div className="p-2.5 rounded-xl bg-rose-100 dark:bg-rose-900/60 text-[11px] font-bold text-rose-900 dark:text-rose-100 flex items-start gap-1.5 animate-in fade-in">
+              <AlertTriangle size={15} className="text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
+              <span>
+                위험 징후가 체크되었습니다. 의무기록에 응급 상태로 표기되며, 진단 전이라도 상태 악화 시 즉시 응급실을 내원하시기 바랍니다.
+              </span>
+            </div>
+          )}
+        </section>
+
+        {/* Section 5: Medication & Treatment */}
         <section className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-sm space-y-3">
           <label className="block text-xs font-bold text-slate-600 dark:text-slate-300">
             {t('medicationLabel')}
@@ -375,30 +594,13 @@ export const EntryFormPage: React.FC = () => {
           />
         </section>
 
-        {/* Section 4: Detailed Notes */}
-        <section className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-sm space-y-3">
+        {/* Section 6: Notes */}
+        <section className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-sm space-y-2">
           <label className="block text-xs font-bold text-slate-600 dark:text-slate-300">
             {t('notesLabel')}
           </label>
-
-          {/* Quick Symptom Descriptors Chips */}
-          {settings.symptomPresets.length > 0 && (
-            <div className="flex flex-wrap gap-1.5">
-              {settings.symptomPresets.map((phrase) => (
-                <button
-                  key={phrase}
-                  type="button"
-                  onClick={() => handleAddSymptomPreset(phrase)}
-                  className="rounded-full bg-slate-100 dark:bg-slate-800 px-2.5 py-1 text-[11px] font-medium text-slate-600 dark:text-slate-400 active:scale-95"
-                >
-                  #{phrase}
-                </button>
-              ))}
-            </div>
-          )}
-
           <textarea
-            rows={3}
+            rows={2}
             placeholder={t('notesPlaceholder')}
             value={notes}
             onChange={(e) => setNotes(e.target.value)}

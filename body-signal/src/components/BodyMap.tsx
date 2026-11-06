@@ -244,9 +244,10 @@ export const BodyMap: React.FC<BodyMapProps> = ({
   const regions = viewSide === 'front' ? FRONT_REGIONS : BACK_REGIONS;
 
   const handleRegionClick = (region: AnatomicalRegion) => {
-    if (readOnly || !onSelectPart) return;
     triggerHaptic();
-    onSelectPart(region.name);
+    if (onSelectPart) {
+      onSelectPart(region.name);
+    }
   };
 
   const getRegionFill = (region: AnatomicalRegion) => {
@@ -349,8 +350,58 @@ export const BodyMap: React.FC<BodyMapProps> = ({
               />
             );
           })}
+
+          {/* Intensity Number Badges on Region Centers */}
+          {regions.map((region) => {
+            const int =
+              intensityMap[region.name] ||
+              intensityMap[region.category] ||
+              intensityMap[region.id] ||
+              0;
+            if (int <= 0) return null;
+
+            return (
+              <g key={`badge-${region.id}`} className="pointer-events-none">
+                <circle
+                  cx={region.center.x}
+                  cy={region.center.y}
+                  r="9"
+                  className={
+                    int >= 8
+                      ? 'fill-rose-600 stroke-white stroke-[1.5] filter drop-shadow'
+                      : int >= 5
+                      ? 'fill-amber-500 stroke-white stroke-[1.5] filter drop-shadow'
+                      : 'fill-teal-500 stroke-white stroke-[1.5] filter drop-shadow'
+                  }
+                />
+                <text
+                  x={region.center.x}
+                  y={region.center.y + 3.5}
+                  textAnchor="middle"
+                  className="fill-white font-black text-[10px] select-none pointer-events-none font-mono"
+                >
+                  {int}
+                </text>
+              </g>
+            );
+          })}
         </svg>
       </div>
+
+      {/* Heatmap Legend if intensity map is active */}
+      {Object.keys(intensityMap).length > 0 && (
+        <div className="flex items-center justify-center gap-3 text-[10px] font-bold text-slate-500 dark:text-slate-400 py-0.5">
+          <span className="flex items-center gap-1">
+            <span className="w-2.5 h-2.5 rounded-full bg-teal-500" /> 경도 (1~4)
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="w-2.5 h-2.5 rounded-full bg-amber-500" /> 중등도 (5~7)
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="w-2.5 h-2.5 rounded-full bg-rose-500" /> 중증 극심 (8~10)
+          </span>
+        </div>
+      )}
 
       {/* Selected Indicator Label */}
       {!readOnly && (

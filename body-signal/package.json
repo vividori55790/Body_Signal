@@ -7,13 +7,17 @@
     "dev": "vite --host",
     "build": "vite build",
     "lint": "eslint .",
+    "test": "node scripts/run-e2e-tests.mjs",
     "test:data": "node scripts/test-data-store.mjs",
+    "test:r2": "node scripts/verify-r2-empirical.mjs",
+    "test:e2e": "node scripts/run-e2e-tests.mjs",
     "preview": "vite preview",
     "predeploy": "npm run build",
     "deploy": "gh-pages -d dist"
   },
   "dependencies": {
     "@capacitor/android": "^8.0.0",
+    "@capacitor/app": "^8.0.0",
     "@capacitor/cli": "^8.0.0",
     "@capacitor/core": "^8.0.0",
     "@capacitor/haptics": "^8.0.2",

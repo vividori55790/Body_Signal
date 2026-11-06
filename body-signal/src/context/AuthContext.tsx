@@ -1,11 +1,13 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { isPinConfigured, verifyAppPin, setAppPin, removeAppPin, checkLockout } from '../utils/pin';
+import { reEncryptHealthData } from '../utils/storage';
 
 interface AuthContextValue {
   isUnlocked: boolean;
   isPinSet: boolean;
   activeSessionPin: string | null;
   lockoutRemainingMs: number;
+  isPrivacyMasked: boolean;
   unlockApp: (pin: string) => Promise<{ success: boolean; message?: string }>;
   setupNewPin: (pin: string) => Promise<void>;
   disablePin: () => Promise<void>;
@@ -14,11 +16,17 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
+// Auto-lock timeout when backgrounded (default 60 seconds)
+const AUTO_LOCK_TIMEOUT_MS = 60_000;
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isUnlocked, setIsUnlocked] = useState(true);
   const [isPinSet, setIsPinSet] = useState(false);
   const [activeSessionPin, setActiveSessionPin] = useState<string | null>(null);
   const [lockoutRemainingMs, setLockoutRemainingMs] = useState(0);
+  const [isPrivacyMasked, setIsPrivacyMasked] = useState(false);
+
+  const backgroundTimeRef = useRef<number | null>(null);
 
   useEffect(() => {
     isPinConfigured().then((configured) => {
@@ -34,7 +42,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setLockoutRemainingMs(remainingMs);
       }
     });
-  }, []);
+
+    // Background Privacy Shield & Auto-lock Listener
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        backgroundTimeRef.current = Date.now();
+        setIsPrivacyMasked(true);
+      } else {
+        setIsPrivacyMasked(false);
+        if (backgroundTimeRef.current && isPinSet) {
+          const elapsed = Date.now() - backgroundTimeRef.current;
+          if (elapsed >= AUTO_LOCK_TIMEOUT_MS) {
+            setActiveSessionPin(null);
+            setIsUnlocked(false);
+          }
+        }
+        backgroundTimeRef.current = null;
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [isPinSet]);
 
   // Lockout countdown timer
   useEffect(() => {
@@ -74,6 +105,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const setupNewPin = async (pin: string) => {
+    await reEncryptHealthData(pin, activeSessionPin || undefined);
     await setAppPin(pin);
     setIsPinSet(true);
     setActiveSessionPin(pin);
@@ -81,6 +113,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const disablePin = async () => {
+    await reEncryptHealthData(undefined, activeSessionPin || undefined);
     await removeAppPin();
     setIsPinSet(false);
     setActiveSessionPin(null);
@@ -101,12 +134,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isPinSet,
         activeSessionPin,
         lockoutRemainingMs,
+        isPrivacyMasked,
         unlockApp,
         setupNewPin,
         disablePin,
         lockApp,
       }}
     >
+      {/* Privacy Mask for App Switcher */}
+      {isPrivacyMasked && isPinSet && (
+        <div className="fixed inset-0 z-[100] bg-slate-900 flex items-center justify-center text-white p-6">
+          <div className="text-center space-y-2">
+            <div className="w-12 h-12 rounded-full bg-emerald-500/20 text-emerald-400 mx-auto flex items-center justify-center font-black">
+              🔒
+            </div>
+            <p className="font-bold text-sm">보안 모드 실행 중</p>
+            <p className="text-xs text-slate-400">의료 데이터 보호를 위해 화면을 가립니다.</p>
+          </div>
+        </div>
+      )}
       {children}
     </AuthContext.Provider>
   );

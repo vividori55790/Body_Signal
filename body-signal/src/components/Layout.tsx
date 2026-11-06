@@ -2,10 +2,12 @@ import React from 'react';
 import { Outlet, NavLink } from 'react-router-dom';
 import { Home, Calendar, History, Stethoscope, Settings } from 'lucide-react';
 import { useSettings } from '../context/SettingsContext';
+import { useAcutePain } from '../context/AcutePainContext';
 import { triggerHaptic } from '../utils/native';
 
 export const Layout: React.FC = () => {
-  const { t } = useSettings();
+  const { settings, t } = useSettings();
+  const { openAcute } = useAcutePain();
 
   const navItems = [
     { path: '/', icon: Home, label: t('navDash') },
@@ -21,6 +23,24 @@ export const Layout: React.FC = () => {
       <main className="flex-1 w-full max-w-md mx-auto">
         <Outlet />
       </main>
+
+      {/* Floating Quick SOS Widget (Always accessible 1-sec acute pain logging) */}
+      {settings.quickSosEnabled !== false && (
+        <aside aria-label="1초 급성 통증 기록 위젯" className="fixed bottom-20 right-4 z-40 max-w-md mx-auto">
+          <button
+            type="button"
+            onClick={() => {
+              triggerHaptic();
+              openAcute();
+            }}
+            aria-label="지금 너무 아파요 1초 급성 통증 기록"
+            className="flex items-center gap-2 pl-3 pr-3.5 py-2 rounded-full bg-rose-600 hover:bg-rose-500 text-white font-black text-xs shadow-xl shadow-rose-600/40 ring-2 ring-rose-300 dark:ring-rose-400 active:scale-95 transition-all"
+          >
+            <span className="flex h-2 w-2 rounded-full bg-white animate-ping" />
+            <span>🚨 1초 긴급 기록</span>
+          </button>
+        </aside>
+      )}
 
       {/* Mobile Safe Area Bottom Navigation */}
       <nav

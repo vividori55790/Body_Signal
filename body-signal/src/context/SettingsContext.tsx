@@ -10,11 +10,13 @@ interface SettingsContextValue {
   setLanguage: (lang: Language) => Promise<void>;
   setTheme: (theme: 'light' | 'dark' | 'system') => Promise<void>;
   setHaptics: (enabled: boolean) => Promise<void>;
+  setQuickSos: (enabled: boolean) => Promise<void>;
   setReminder: (enabled: boolean, time?: string) => Promise<void>;
   addMedicationPreset: (name: string) => Promise<void>;
   removeMedicationPreset: (id: string) => Promise<void>;
   addSymptomPreset: (name: string) => Promise<void>;
   removeSymptomPreset: (name: string) => Promise<void>;
+  updateLocalLlm: (configUpdates: Partial<UserSettings['localLlm']>) => Promise<void>;
 }
 
 const SettingsContext = createContext<SettingsContextValue | null>(null);
@@ -69,6 +71,10 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     await updateAndSave((prev) => ({ ...prev, hapticsEnabled }));
   };
 
+  const setQuickSos = async (quickSosEnabled: boolean) => {
+    await updateAndSave((prev) => ({ ...prev, quickSosEnabled }));
+  };
+
   const setReminder = async (reminderEnabled: boolean, reminderTime?: string) => {
     const time = reminderTime || settings.reminderTime;
     if (reminderEnabled) {
@@ -117,6 +123,13 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }));
   };
 
+  const updateLocalLlm = async (configUpdates: Partial<UserSettings['localLlm']>) => {
+    await updateAndSave((prev) => ({
+      ...prev,
+      localLlm: { ...prev.localLlm, ...configUpdates },
+    }));
+  };
+
   return (
     <SettingsContext.Provider
       value={{
@@ -125,11 +138,13 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         setLanguage,
         setTheme,
         setHaptics,
+        setQuickSos,
         setReminder,
         addMedicationPreset,
         removeMedicationPreset,
         addSymptomPreset,
         removeSymptomPreset,
+        updateLocalLlm,
       }}
     >
       {children}

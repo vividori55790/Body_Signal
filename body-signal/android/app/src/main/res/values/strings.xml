@@ -4,4 +4,10 @@
     <string name="title_activity_main">Body Signal</string>
     <string name="package_name">com.bodysignal.app</string>
     <string name="custom_url_scheme">com.bodysignal.app</string>
+    <string name="shortcut_acute_short">1초 통증 기록</string>
+    <string name="shortcut_acute_long">🚨 1초 급성 통증 기록</string>
+    <string name="shortcut_briefing_short">진료 브리핑</string>
+    <string name="shortcut_briefing_long">🩺 의료진 진료 브리핑</string>
+    <string name="shortcut_med_short">복약 기록</string>
+    <string name="shortcut_med_long">💊 빠른 복약 기록</string>
 </resources>

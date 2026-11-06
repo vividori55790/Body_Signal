@@ -13,6 +13,9 @@ import { SettingsProvider } from './context/SettingsContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { HealthProvider } from './context/HealthContext';
 
+import { AcutePainProvider } from './context/AcutePainContext';
+import DeepLinkHandler from './components/DeepLinkHandler';
+
 const AppContent: React.FC = () => {
   const { isUnlocked } = useAuth();
 
@@ -22,18 +25,22 @@ const AppContent: React.FC = () => {
 
   return (
     <BrowserRouter>
-      <Routes>
-        <Route element={<Layout />}>
-          <Route path="/" element={<DashboardPage />} />
-          <Route path="/calendar" element={<CalendarPage />} />
-          <Route path="/history" element={<HistoryPage />} />
-          <Route path="/briefing" element={<ClinicalBriefingPage />} />
-          <Route path="/entry" element={<EntryFormPage />} />
-          <Route path="/condition/:id" element={<ConditionDetailPage />} />
-          <Route path="/settings" element={<SettingsPage />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Route>
-      </Routes>
+      <AcutePainProvider>
+        <DeepLinkHandler />
+        <Routes>
+          <Route element={<Layout />}>
+            <Route path="/" element={<DashboardPage />} />
+            <Route path="/acute" element={<DashboardPage />} />
+            <Route path="/calendar" element={<CalendarPage />} />
+            <Route path="/history" element={<HistoryPage />} />
+            <Route path="/briefing" element={<ClinicalBriefingPage />} />
+            <Route path="/entry" element={<EntryFormPage />} />
+            <Route path="/condition/:id" element={<ConditionDetailPage />} />
+            <Route path="/settings" element={<SettingsPage />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Route>
+        </Routes>
+      </AcutePainProvider>
     </BrowserRouter>
   );
 };

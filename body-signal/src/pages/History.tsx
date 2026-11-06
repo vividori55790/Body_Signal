@@ -113,11 +113,16 @@ const HistoryItem: React.FC<HistoryItemProps> = ({ log, previousLog, condition, 
             <StatusIcon size={16} strokeWidth={2.5} />
           </div>
           <div>
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1.5 flex-wrap">
               <h3 className="font-bold text-sm text-slate-800 dark:text-slate-100">{condition?.label || '미지정'}</h3>
               {isNewType && (
                 <span className="text-[9px] bg-blue-600 text-white px-1.5 py-0.2 rounded font-bold uppercase">
                   {t('firstOccurrence')}
+                </span>
+              )}
+              {log.postMedIntensity !== undefined && (
+                <span className="text-[10px] bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 px-1.5 py-0.5 rounded font-extrabold border border-emerald-300 dark:border-emerald-800">
+                  복약 효과: {log.intensity}→{log.postMedIntensity}
                 </span>
               )}
             </div>
@@ -239,10 +244,49 @@ const HistoryItem: React.FC<HistoryItemProps> = ({ log, previousLog, condition, 
           )}
 
           {log.medication && (
-            <div className="flex items-center gap-1.5 text-xs text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/60 p-2 rounded-lg border border-blue-100 dark:border-blue-900">
-              <Pill size={14} className="text-blue-500" />
+            <div className="flex items-center gap-1.5 text-xs text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/60 p-2.5 rounded-xl border border-blue-100 dark:border-blue-900">
+              <Pill size={15} className="text-blue-500 shrink-0" />
               <span className="font-bold">{t('treatment')}:</span>
               <span>{log.medication}</span>
+            </div>
+          )}
+
+          {/* Medication Response Badge */}
+          {log.postMedIntensity !== undefined && (
+            <div className="flex flex-wrap items-center justify-between gap-1 text-xs bg-emerald-50 dark:bg-emerald-950/50 p-2.5 rounded-xl border border-emerald-200 dark:border-emerald-800 text-emerald-900 dark:text-emerald-200">
+              <div className="flex items-center gap-1.5 font-bold">
+                <span className="flex h-5 w-5 items-center justify-center rounded bg-emerald-600 text-white text-[10px]">💊</span>
+                <span>복약 효과: NRS {log.intensity} → {log.postMedIntensity}</span>
+                <span className="text-[11px] font-extrabold text-emerald-700 dark:text-emerald-300">
+                  ({log.intensity > log.postMedIntensity
+                    ? `${log.intensity - log.postMedIntensity}점 완화`
+                    : log.intensity === log.postMedIntensity
+                    ? '변화 없음'
+                    : `${log.postMedIntensity - log.intensity}점 악화`})
+                </span>
+              </div>
+              {log.postMedEvaluatedAt && (
+                <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">
+                  {format(new Date(log.postMedEvaluatedAt), 'HH:mm')} 평가
+                </span>
+              )}
+            </div>
+          )}
+
+          {/* Reported Side Effects Chips */}
+          {log.postMedSideEffects && log.postMedSideEffects.length > 0 && (
+            <div className="flex flex-wrap items-center gap-1.5 text-xs bg-amber-50 dark:bg-amber-950/40 p-2.5 rounded-xl border border-amber-200 dark:border-amber-800/60 text-amber-900 dark:text-amber-200">
+              <span className="font-bold text-[11px] text-amber-800 dark:text-amber-300">보고된 부작용:</span>
+              <div className="flex flex-wrap gap-1">
+                {log.postMedSideEffects.map((se) => (
+                  <span
+                    key={se}
+                    className="px-2 py-0.5 rounded-md bg-amber-200/80 dark:bg-amber-900/60 text-amber-900 dark:text-amber-100 text-[10px] font-bold"
+                  >
+                    {se}
+                  </span>
+                ))}
+              </div>
             </div>
           )}
 
