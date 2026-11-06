@@ -4,44 +4,35 @@
 
 @layer base {
   html {
-    @apply h-full bg-slate-50 text-slate-800 antialiased transition-colors duration-300;
+    @apply h-full bg-slate-50 text-slate-800 antialiased transition-colors duration-200;
     -webkit-tap-highlight-color: transparent;
   }
   html.dark {
     @apply bg-slate-950 text-slate-100;
   }
   body {
-    @apply min-h-full overflow-y-auto;
+    @apply min-h-full overflow-y-auto overscroll-none;
+    padding-top: env(safe-area-inset-top);
   }
 }
 
-/* Dark Mode Overrides */
-html.dark .bg-white {
-    @apply bg-slate-800 border-slate-700 text-slate-100;
+/* Custom scrollbar hiding for horizontal chip carousels */
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
 }
-html.dark .bg-bg,
-html.dark .bg-slate-50,
-html.dark .bg-slate-100,
-html.dark .bg-surface {
-    @apply bg-slate-950 border-slate-800;
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
-html.dark .text-slate-800,
-html.dark .text-slate-700,
-html.dark .text-primary {
-    @apply text-slate-100;
-}
-html.dark .text-slate-600, 
-html.dark .text-slate-500,
-html.dark .text-secondary {
-    @apply text-slate-400;
-}
-html.dark .border-slate-200, 
-html.dark .border-slate-100, 
-html.dark .border-border {
-    @apply border-slate-700;
-}
-html.dark input, 
-html.dark select, 
-html.dark textarea {
-    @apply bg-slate-900 border-slate-700 text-slate-100;
+
+/* Print Styles for Clinical Briefing */
+@media print {
+  nav, button, .print\:hidden {
+    display: none !important;
+  }
+  body, main {
+    background-color: white !important;
+    color: black !important;
+    padding: 0 !important;
+  }
 }
