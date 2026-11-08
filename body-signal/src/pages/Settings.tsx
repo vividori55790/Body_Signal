@@ -54,10 +54,12 @@ export const SettingsPage: React.FC = () => {
     isBiometricAvailable,
     isBiometricEnabled,
     toggleBiometric,
+    unlockApp,
   } = useAuth();
 
   // Modals state
-  const [pinModalMode, setPinModalMode] = useState<'set' | 'change' | null>(null);
+  const [pinModalMode, setPinModalMode] = useState<'set' | 'change' | 'unlock' | null>(null);
+  const [pendingSecurityAction, setPendingSecurityAction] = useState<'toggleBiometric' | 'disablePin' | null>(null);
   const [newMedName, setNewMedName] = useState('');
   const [showAddMed, setShowAddMed] = useState(false);
   const [feedbackMsg, setFeedbackMsg] = useState('');
@@ -89,10 +91,9 @@ export const SettingsPage: React.FC = () => {
   const handleTogglePin = async () => {
     triggerHaptic();
     if (isPinSet) {
-      if (window.confirm('앱 잠금을 해제하시겠습니까? 데이터가 암호화되지 않은 일반 상태로 보관됩니다.')) {
-        await disablePin();
-        showToast(t('pinRemoved'));
-      }
+      // Require current PIN verification before disabling (Item 3)
+      setPendingSecurityAction('disablePin');
+      setPinModalMode('unlock');
     } else {
       setPinModalMode('set');
     }
@@ -100,17 +101,15 @@ export const SettingsPage: React.FC = () => {
 
   const handleToggleBiometric = async () => {
     triggerHaptic();
-    if (isBiometricEnabled) {
-      await toggleBiometric(false);
-      showToast('생체인증 잠금 해제가 비활성화되었습니다.');
-    } else {
-      const success = await toggleBiometric(true);
-      if (success) {
-        showToast('생체인증(지문/얼굴 인식)이 등록되었습니다.');
-      } else {
-        showToast('생체인증 등록이 취소되었거나 지원되지 않습니다.');
-      }
+    if (!isPinSet) {
+      showToast('생체인증을 등록하려면 먼저 앱 잠금 PIN을 설정해야 합니다.');
+      setPinModalMode('set');
+      return;
     }
+
+    // Require current PIN verification before enabling/disabling biometrics (Item 3)
+    setPendingSecurityAction('toggleBiometric');
+    setPinModalMode('unlock');
   };
 
   const handleExportJson = () => {
@@ -438,8 +437,8 @@ export const SettingsPage: React.FC = () => {
                   <Fingerprint size={18} />
                 </div>
                 <div>
-                  <span className="font-bold text-xs block">생체인증 / 패스키 잠금 해제</span>
-                  <span className="text-[10px] text-slate-400">지문 또는 얼굴 인식으로 간편하게 잠금 해제</span>
+                  <span className="font-bold text-xs block">{t('biometricsSetting')}</span>
+                  <span className="text-[10px] text-slate-400">{t('biometricsSettingDesc')}</span>
                 </div>
               </div>
               <button
@@ -526,11 +525,12 @@ export const SettingsPage: React.FC = () => {
       {/* Section: Local LLM (Private On-Device AI) */}
       <section className="space-y-2">
         <div className="flex items-center justify-between ml-1">
+          {/* 로컬 LLM (오프라인 프라이빗 AI) */}
           <h2 className="text-xs font-bold uppercase tracking-wider text-slate-400">
-            로컬 LLM (오프라인 프라이빗 AI)
+            {t('localLlmSection')}
           </h2>
           <span className="text-[10px] font-bold text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-950/80 px-2 py-0.5 rounded-full">
-            데이터 유출 0%
+            {t('localLlmBadge')}
           </span>
         </div>
 
@@ -541,11 +541,12 @@ export const SettingsPage: React.FC = () => {
                 <Bot size={18} />
               </div>
               <div>
+                {/* 로컬 LLM 임상 보조 연동 */}
                 <span className="font-bold text-xs block text-slate-800 dark:text-slate-100">
-                  로컬 LLM 임상 보조 연동
+                  {t('localLlmIntegration')}
                 </span>
                 <span className="text-[10px] text-slate-400">
-                  Ollama, LM Studio 등 로컬 인공지능과 연동하여 진료 소견 요약
+                  {t('localLlmDesc')}
                 </span>
               </div>
             </div>
@@ -561,35 +562,52 @@ export const SettingsPage: React.FC = () => {
             <div className="space-y-3 pt-2 border-t border-slate-100 dark:border-slate-800 animate-in fade-in">
               {/* Endpoint */}
               <div>
+                {/* 엔드포인트 URL (OpenAI 호환) */}
                 <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">
-                  엔드포인트 URL (OpenAI 호환)
+                  {t('endpointUrlLabel')}
                 </label>
                 <input
                   type="text"
                   value={settings.localLlm.endpoint}
                   onChange={(e) => updateLocalLlm({ endpoint: e.target.value })}
-                  placeholder="http://localhost:11434/v1"
+                  placeholder="built-in://edge-ai 또는 http://localhost:11434/v1"
                   className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-mono font-medium focus:outline-none focus:ring-2 focus:ring-purple-500"
                 />
                 {/* Quick Endpoint Presets */}
                 <div className="flex flex-wrap gap-1 mt-1.5">
                   <button
                     type="button"
-                    onClick={() => updateLocalLlm({ endpoint: 'http://localhost:11434/v1' })}
+                    onClick={() =>
+                      updateLocalLlm({
+                        endpoint: 'built-in://edge-ai',
+                        model: 'gemini-nano',
+                      })
+                    }
+                    className={`px-2 py-0.5 rounded text-[10px] font-semibold border flex items-center gap-1 transition-all ${
+                      settings.localLlm.endpoint === 'built-in://edge-ai'
+                        ? 'bg-purple-100 dark:bg-purple-900/60 border-purple-300 dark:border-purple-700 text-purple-700 dark:text-purple-300 font-bold'
+                        : 'bg-slate-100 dark:bg-slate-800 border-transparent text-slate-500 hover:text-purple-600'
+                    }`}
+                  >
+                    {t('edgeAiPreset')}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => updateLocalLlm({ endpoint: 'http://localhost:11434/v1', model: 'llama3.2' })}
                     className="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-[10px] font-semibold text-slate-500 hover:text-purple-600"
                   >
                     Ollama 로컬 (11434)
                   </button>
                   <button
                     type="button"
-                    onClick={() => updateLocalLlm({ endpoint: 'http://10.0.2.2:11434/v1' })}
+                    onClick={() => updateLocalLlm({ endpoint: 'http://10.0.2.2:11434/v1', model: 'llama3.2' })}
                     className="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-[10px] font-semibold text-slate-500 hover:text-purple-600"
                   >
                     안드로이드 에뮬레이터 (10.0.2.2)
                   </button>
                   <button
                     type="button"
-                    onClick={() => updateLocalLlm({ endpoint: 'http://localhost:1234/v1' })}
+                    onClick={() => updateLocalLlm({ endpoint: 'http://localhost:1234/v1', model: 'llama3.2' })}
                     className="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-[10px] font-semibold text-slate-500 hover:text-purple-600"
                   >
                     LM Studio (1234)
@@ -599,18 +617,20 @@ export const SettingsPage: React.FC = () => {
 
               {/* Model */}
               <div>
+                {/* 모델명 (Model) */}
                 <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">
-                  모델명 (Model)
+                  {t('modelNameLabel')}
                 </label>
                 <input
                   type="text"
                   value={settings.localLlm.model}
                   onChange={(e) => updateLocalLlm({ model: e.target.value })}
-                  placeholder="llama3.2"
+                  placeholder="gemini-nano 또는 llama3.2"
                   className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-mono font-medium focus:outline-none focus:ring-2 focus:ring-purple-500"
                 />
-                <div className="flex gap-1 mt-1.5">
-                  {['llama3.2', 'phi3', 'mistral', 'gemma2'].map((m) => (
+                <div className="flex flex-wrap gap-1 mt-1.5">
+                  {/* ['llama3.2', 'phi3', 'mistral', 'gemma2'] */}
+                  {['gemini-nano', 'llama3.2', 'phi3', 'mistral', 'gemma2'].map((m) => (
                     <button
                       key={m}
                       type="button"
@@ -628,6 +648,7 @@ export const SettingsPage: React.FC = () => {
               </div>
 
               {/* Test Connection Button */}
+              {/* 로컬 LLM 연결 테스트 */}
               <button
                 type="button"
                 disabled={isTestingLlm}
@@ -637,12 +658,12 @@ export const SettingsPage: React.FC = () => {
                 {isTestingLlm ? (
                   <>
                     <RefreshCw size={13} className="animate-spin" />
-                    서버 핑 확인 중...
+                    {t('testingLlm')}
                   </>
                 ) : (
                   <>
                     <Server size={14} />
-                    로컬 LLM 연결 테스트
+                    {t('testLlmBtn')}
                   </>
                 )}
               </button>
@@ -737,17 +758,57 @@ export const SettingsPage: React.FC = () => {
         </div>
       </section>
 
-      {/* PIN Setup/Change Modal */}
+      {/* PIN Setup/Change/Unlock Verification Modal */}
       {pinModalMode && (
         <PinModal
           isOpen={true}
           mode={pinModalMode}
-          onSuccess={async (newPin) => {
-            await setupNewPin(newPin);
+          title={
+            pinModalMode === 'unlock'
+              ? pendingSecurityAction === 'disablePin'
+                ? '앱 잠금 해제 전 본인 확인'
+                : '생체인증 설정을 위한 본인 확인'
+              : undefined
+          }
+          onSuccess={async (enteredPin) => {
+            if (pinModalMode === 'unlock') {
+              const res = await unlockApp(enteredPin);
+              if (!res.success) {
+                showToast(res.message || 'PIN이 일치하지 않습니다.');
+                return;
+              }
+
+              if (pendingSecurityAction === 'disablePin') {
+                await disablePin();
+                setPendingSecurityAction(null);
+                setPinModalMode(null);
+                showToast(t('pinRemoved'));
+              } else if (pendingSecurityAction === 'toggleBiometric') {
+                const targetState = !isBiometricEnabled;
+                setPendingSecurityAction(null);
+                setPinModalMode(null);
+                const success = await toggleBiometric(targetState);
+                if (success) {
+                  showToast(
+                    targetState
+                      ? '본인 확인 완료: 생체인증(지문/얼굴 인식)이 활성화되었습니다.'
+                      : '본인 확인 완료: 생체인증이 비활성화되었습니다.'
+                  );
+                } else {
+                  showToast('생체인증 설정이 취소되었거나 지원되지 않습니다.');
+                }
+              }
+              return;
+            }
+
+            await setupNewPin(enteredPin);
             setPinModalMode(null);
             showToast(t('pinSetSuccess'));
           }}
-          onCancel={() => setPinModalMode(null)}
+          onCancel={() => {
+            setPinModalMode(null);
+            setPendingSecurityAction(null);
+          }}
         />
       )}
 
@@ -755,7 +816,7 @@ export const SettingsPage: React.FC = () => {
       <div className="text-center pt-2">
         <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-200/60 dark:bg-slate-800 text-[10px] font-bold text-slate-500">
           <Shield size={12} className="text-emerald-500" />
-          Body Signal Mobile v1.0.0 (Encrypted)
+          Body Signal Mobile v1.1.0 (Encrypted)
         </span>
       </div>
     </div>

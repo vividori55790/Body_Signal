@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
+import { App as CapApp } from '@capacitor/app';
 import { isPinConfigured, verifyAppPin, setAppPin, removeAppPin, checkLockout } from '../utils/pin';
 import { reEncryptHealthData } from '../utils/storage';
 import {
@@ -67,27 +68,55 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setIsBiometricEnabled(Boolean(meta && meta.enabled));
     });
 
-    // Background Privacy Shield & Auto-lock Listener
+    // Background Privacy Shield & Auto-lock / Re-entry Lock Listener (Feedback #5)
+    const onAppBackground = () => {
+      backgroundTimeRef.current = Date.now();
+      setIsPrivacyMasked(true);
+    };
+
+    const onAppForeground = () => {
+      setIsPrivacyMasked(false);
+      if (backgroundTimeRef.current && isPinSet) {
+        const elapsed = Date.now() - backgroundTimeRef.current;
+        // When leaving and returning to app (after 1s or timeout), require PIN/Biometric
+        if (elapsed >= 1000 || elapsed >= AUTO_LOCK_TIMEOUT_MS) {
+          setActiveSessionPin(null);
+          setIsUnlocked(false);
+        }
+      }
+      backgroundTimeRef.current = null;
+    };
+
     const handleVisibilityChange = () => {
       if (document.hidden) {
-        backgroundTimeRef.current = Date.now();
-        setIsPrivacyMasked(true);
+        onAppBackground();
       } else {
-        setIsPrivacyMasked(false);
-        if (backgroundTimeRef.current && isPinSet) {
-          const elapsed = Date.now() - backgroundTimeRef.current;
-          if (elapsed >= AUTO_LOCK_TIMEOUT_MS) {
-            setActiveSessionPin(null);
-            setIsUnlocked(false);
-          }
-        }
-        backgroundTimeRef.current = null;
+        onAppForeground();
       }
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    let appStateHandle: { remove: () => Promise<void> } | null = null;
+    CapApp.addListener('appStateChange', ({ isActive }) => {
+      if (!isActive) {
+        onAppBackground();
+      } else {
+        onAppForeground();
+      }
+    })
+      .then((handle) => {
+        appStateHandle = handle;
+      })
+      .catch((err) => {
+        console.debug('CapApp appStateChange listener skipped:', err);
+      });
+
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
+      if (appStateHandle) {
+        appStateHandle.remove().catch(() => {});
+      }
     };
   }, [isPinSet]);
 

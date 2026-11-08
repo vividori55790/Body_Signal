@@ -152,6 +152,42 @@ export const translations = {
     pinSetSuccess: '앱 잠금 PIN이 성공적으로 설정되었습니다.',
     pinRemoved: '앱 잠금이 해제되었습니다.',
     tooManyAttempts: '입력 횟수를 초과했습니다. 잠시 후 다시 시도해 주세요.',
+    biometricsSetting: '생체인식 (지문 / Face ID)',
+    biometricsSettingDesc: '생체인증으로 PIN 입력 없이 안전하고 신속하게 잠금 해제',
+    biometricVerifyPinPrompt: '보안을 위해 현재 설정된 4자리 PIN을 먼저 입력하세요.',
+
+    // Local LLM & Edge AI
+    localLlmSection: '로컬 LLM (오프라인 프라이빗 AI)',
+    localLlmBadge: '데이터 유출 0%',
+    localLlmIntegration: '로컬 LLM 임상 보조 연동',
+    localLlmDesc: 'Ollama, LM Studio 또는 기기 내장 엣지 AI와 연동하여 진료 소견 요약',
+    endpointUrlLabel: '엔드포인트 URL (OpenAI 호환)',
+    modelNameLabel: '모델명 (Model)',
+    testLlmBtn: '로컬 LLM 연결 테스트',
+    testingLlm: '서버 핑 확인 중...',
+    edgeAiPreset: '📱 모바일 내장 엣지 AI (온디바이스 Nano)',
+
+    // Pain Selector
+    painLevelTitle: '통증 레벨',
+    painButtonMode: '버튼 모드',
+    painSliderMode: '슬라이더 모드 (꾹 누르면 전환)',
+    painMild: '경도',
+    painModerate: '중등도',
+    painSevere: '극심',
+    painMildDesc: '🟢 1~3점: 가벼운 경도 통증 (일상생활 가능, 수면 방해 없음)',
+    painModerateDesc: '🟡 4~6점: 중등도 통증 (일상생활 지장, 휴식 및 진통 필요)',
+    painSevereDesc: '🔴 7~10점: 극심한 통증 (즉각 안정 및 의료진 처치 권장)',
+
+    // Condition Detail
+    conditionNotFound: '해당 질환 정보를 찾을 수 없습니다.',
+    goHome: '홈으로 이동',
+    editConditionInfo: '질환 정보 수정',
+    fillAllConditionFields: '질환명과 부위를 모두 입력해 주세요.',
+    currentPainLevel: '현재 통증 강도',
+    cumulativeAvgPain: '누적 평균 통증',
+    painTrendChart: '통증 추이 그래프',
+    logHistoryTitle: '질환별 기록 내역',
+    addLogForCondition: '이 질환 새 기록 추가',
   },
   en: {
     // Common
@@ -304,5 +340,41 @@ export const translations = {
     pinSetSuccess: 'App Lock PIN enabled successfully.',
     pinRemoved: 'App Lock disabled.',
     tooManyAttempts: 'Too many attempts. Please try again later.',
+    biometricsSetting: 'Biometrics (Fingerprint / Face ID)',
+    biometricsSettingDesc: 'Unlock quickly and securely using biometrics instead of PIN',
+    biometricVerifyPinPrompt: 'For security, please enter your current 4-digit PIN first.',
+
+    // Local LLM & Edge AI
+    localLlmSection: 'Local LLM (Private On-Device AI)',
+    localLlmBadge: '0% Cloud Leak',
+    localLlmIntegration: 'Local LLM Clinical Assistant',
+    localLlmDesc: 'Integrate with Ollama, LM Studio, or built-in mobile Edge AI for private summaries',
+    endpointUrlLabel: 'Endpoint URL (OpenAI-compatible)',
+    modelNameLabel: 'Model Name',
+    testLlmBtn: 'Test Local LLM Connection',
+    testingLlm: 'Checking server ping...',
+    edgeAiPreset: '📱 Built-in Edge AI (On-Device Nano)',
+
+    // Pain Selector
+    painLevelTitle: 'Pain Level',
+    painButtonMode: 'Button Mode',
+    painSliderMode: 'Slider Mode (Long-press)',
+    painMild: 'Mild',
+    painModerate: 'Moderate',
+    painSevere: 'Severe',
+    painMildDesc: '🟢 1~3: Mild pain (daily activities normal, sleep undisturbed)',
+    painModerateDesc: '🟡 4~6: Moderate pain (affects daily activities, analgesia helpful)',
+    painSevereDesc: '🔴 7~10: Severe pain (rest immediately, seek clinical evaluation)',
+
+    // Condition Detail
+    conditionNotFound: 'Condition information not found.',
+    goHome: 'Back to Home',
+    editConditionInfo: 'Edit Condition Info',
+    fillAllConditionFields: 'Please enter both condition name and body part.',
+    currentPainLevel: 'Current Pain Intensity',
+    cumulativeAvgPain: 'Cumulative Average Pain',
+    painTrendChart: 'Pain Trend Chart',
+    logHistoryTitle: 'Condition Log History',
+    addLogForCondition: 'Add Log for this Condition',
   },
 };

@@ -20,7 +20,7 @@ interface SettingsContextValue {
   updateLocalLlm: (configUpdates: Partial<UserSettings['localLlm']>) => Promise<void>;
 }
 
-const SettingsContext = createContext<SettingsContextValue | null>(null);
+export const SettingsContext = createContext<SettingsContextValue | null>(null);
 
 export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [settings, setSettings] = useState<UserSettings>(DEFAULT_SETTINGS);

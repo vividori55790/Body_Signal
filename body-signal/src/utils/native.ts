@@ -3,7 +3,30 @@ import { LocalNotifications } from '@capacitor/local-notifications';
 
 export { ImpactStyle };
 
-let hapticsEnabledState = true;
+const HAPTICS_STORAGE_KEY = 'bignal_haptics_enabled';
+
+const getStoredHapticsPreference = (): boolean => {
+  if (typeof window !== 'undefined' && window.localStorage) {
+    try {
+      const explicit = localStorage.getItem(HAPTICS_STORAGE_KEY);
+      if (explicit !== null) {
+        return explicit === 'true';
+      }
+      const settingsStr = localStorage.getItem('bignal_settings_v1') || localStorage.getItem('bignal_settings');
+      if (settingsStr) {
+        const parsed = JSON.parse(settingsStr);
+        if (typeof parsed.hapticsEnabled === 'boolean') {
+          return parsed.hapticsEnabled;
+        }
+      }
+    } catch {
+      // Safe fallback on storage access error
+    }
+  }
+  return true;
+};
+
+let hapticsEnabledState = getStoredHapticsPreference();
 
 /**
  * Configure global haptic feedback permission state.
@@ -11,12 +34,29 @@ let hapticsEnabledState = true;
  */
 export function setHapticsEnabled(enabled: boolean): void {
   hapticsEnabledState = Boolean(enabled);
+  if (typeof window !== 'undefined' && window.localStorage) {
+    try {
+      localStorage.setItem(HAPTICS_STORAGE_KEY, String(hapticsEnabledState));
+    } catch {
+      // Safe fallback
+    }
+  }
 }
 
 /**
  * Query current global haptic feedback permission state.
  */
 export function isHapticsEnabled(): boolean {
+  if (typeof window !== 'undefined' && window.localStorage) {
+    try {
+      const explicit = localStorage.getItem(HAPTICS_STORAGE_KEY);
+      if (explicit !== null) {
+        return explicit === 'true' && hapticsEnabledState;
+      }
+    } catch {
+      // Safe fallback
+    }
+  }
   return hapticsEnabledState;
 }
 
@@ -25,7 +65,7 @@ export function isHapticsEnabled(): boolean {
  * Centralized guard ensures strict compliance with user and system vibration settings.
  */
 export async function triggerHaptic(style: ImpactStyle = ImpactStyle.Light): Promise<void> {
-  if (!hapticsEnabledState) {
+  if (!hapticsEnabledState || !isHapticsEnabled()) {
     return;
   }
 
@@ -35,7 +75,7 @@ export async function triggerHaptic(style: ImpactStyle = ImpactStyle.Light): Pro
     await Haptics.impact({ style: effectiveStyle });
   } catch {
     // Graceful fallback for web/desktop when vibration is supported and enabled
-    if (hapticsEnabledState && typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+    if (hapticsEnabledState && isHapticsEnabled() && typeof navigator !== 'undefined' && 'vibrate' in navigator) {
       try {
         navigator.vibrate(15);
       } catch {

@@ -5,6 +5,7 @@ import { useSettings } from '../context/SettingsContext';
 import { triggerHaptic } from '../utils/native';
 import { formatMedicationPreset } from '../utils/medication';
 import { AddMedicationInline } from './AddMedicationInline';
+import { PainLevelSelector } from './PainLevelSelector';
 
 // Top 6 Most Common Acute Pain Regions with clear, high-contrast emojis & 56dp+ tap targets
 const ACUTE_BODY_PARTS = [
@@ -51,6 +52,7 @@ export const AcutePainMode: React.FC<{ onClose: () => void }> = ({ onClose }) =>
     }
   }, [activeConditions.length]);
 
+  // 10 NRS touch targets: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
   const handleSelectIntensity = (num: number) => {
     triggerHaptic();
     setIntensity(num);
@@ -163,68 +165,14 @@ export const AcutePainMode: React.FC<{ onClose: () => void }> = ({ onClose }) =>
       </div>
 
       <div className="flex-1 p-4 max-w-md mx-auto w-full space-y-6 pb-36">
-        {/* Step 1: 56dp+ NRS Touch Numbers with Clear Visual Distinction */}
-        <section className="space-y-3">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
-              1. 지금 얼마나 아프신가요? (NRS 1~10)
-            </span>
-            <span
-              className={`text-xl font-black px-3.5 py-1 rounded-xl shadow-sm ${
-                intensity >= 7
-                  ? 'bg-rose-600 text-white'
-                  : intensity >= 4
-                  ? 'bg-amber-500 text-white'
-                  : 'bg-emerald-500 text-white'
-              }`}
-            >
-              NRS {intensity} / 10
-            </span>
-          </div>
-
-          {/* Description banner */}
-          <div
-            className={`p-2.5 rounded-xl text-xs font-bold transition-all border ${
-              intensity <= 3
-                ? 'bg-emerald-950/40 border-emerald-800/60 text-emerald-300'
-                : intensity <= 6
-                ? 'bg-amber-950/40 border-amber-800/60 text-amber-300'
-                : 'bg-rose-950/50 border-rose-800/70 text-rose-200 animate-pulse'
-            }`}
-          >
-            {intensity <= 3
-              ? '🟢 1~3점: 가벼운 통증 (일상생활 가능, 수면 방해 없음)'
-              : intensity <= 6
-              ? '🟡 4~6점: 중등도 통증 (일상생활 지장, 휴식 필요)'
-              : '🔴 7~10점: 극심한 통증 (즉각 안정 및 진통 처치 요망)'}
-          </div>
-
-          {/* 10 Huge 56dp+ Touch Numbers (2 Rows x 5 Cols, min-h-[58px]) */}
-          <div className="grid grid-cols-5 gap-2.5">
-            {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => {
-              const isSelected = intensity === num;
-              return (
-                <button
-                  key={num}
-                  type="button"
-                  onClick={() => handleSelectIntensity(num)}
-                  aria-label={`통증 강도 ${num}점`}
-                  className={`min-h-[58px] h-14 rounded-2xl text-xl flex items-center justify-center transition-all select-none ${getNrsButtonStyle(
-                    num,
-                    isSelected
-                  )}`}
-                >
-                  {num}
-                </button>
-              );
-            })}
-          </div>
-
-          <div className="flex justify-between text-[11px] font-bold text-slate-400 px-1">
-            <span className="text-emerald-400 font-extrabold">🟢 1-3 경도</span>
-            <span className="text-amber-400 font-extrabold">🟡 4-6 중등도</span>
-            <span className="text-rose-400 font-extrabold">🔴 7-10 극심</span>
-          </div>
+        {/* Step 1: 1-Row Unified NRS Touch Selector & Continuous Slider (F2 & F6) */}
+        <section className="space-y-3 bg-slate-800/60 p-3.5 rounded-2xl border border-slate-700/60">
+          <PainLevelSelector
+            value={intensity}
+            onChange={setIntensity}
+            variant="dark"
+            showDescription={true}
+          />
         </section>
 
         {/* Step 2: Instant Single-Tap Selection for Primary Body Parts */}

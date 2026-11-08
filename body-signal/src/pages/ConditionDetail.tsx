@@ -37,13 +37,13 @@ export const ConditionDetailPage: React.FC = () => {
   if (!condition) {
     return (
       <div className="p-8 text-center bg-slate-50 dark:bg-slate-950 min-h-screen text-slate-500">
-        <p>해당 질환 정보를 찾을 수 없습니다.</p>
+        <p>{t('conditionNotFound')}</p>
         <button
           type="button"
           onClick={() => navigate('/')}
           className="mt-4 text-emerald-600 font-bold text-sm"
         >
-          홈으로 이동
+          {t('goHome')}
         </button>
       </div>
     );
@@ -56,7 +56,7 @@ export const ConditionDetailPage: React.FC = () => {
 
   const handleSaveEdit = async () => {
     if (!editLabel.trim() || !editBodyPart.trim()) {
-      setEditError('질환명과 부위를 모두 입력해 주세요.');
+      setEditError(t('fillAllConditionFields'));
       return;
     }
     triggerHaptic();
@@ -104,7 +104,7 @@ export const ConditionDetailPage: React.FC = () => {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in">
           <div className="w-full max-w-sm rounded-2xl bg-white dark:bg-slate-900 p-5 shadow-2xl space-y-4">
             <div className="flex items-center justify-between">
-              <h3 className="font-bold text-base">질환 정보 수정</h3>
+              <h3 className="font-bold text-base">{t('editConditionInfo')}</h3>
               <button
                 type="button"
                 onClick={() => setIsEditing(false)}
@@ -116,7 +116,7 @@ export const ConditionDetailPage: React.FC = () => {
 
             <div className="space-y-3 text-xs">
               <div>
-                <label className="block text-slate-400 font-bold mb-1 uppercase">질환/증상명</label>
+                <label className="block text-slate-400 font-bold mb-1 uppercase">{t('conditionLabel')}</label>
                 <input
                   type="text"
                   value={editLabel}
@@ -125,7 +125,7 @@ export const ConditionDetailPage: React.FC = () => {
                 />
               </div>
               <div>
-                <label className="block text-slate-400 font-bold mb-1 uppercase">발생 부위</label>
+                <label className="block text-slate-400 font-bold mb-1 uppercase">{t('bodyPart')}</label>
                 <input
                   type="text"
                   value={editBodyPart}
@@ -141,7 +141,7 @@ export const ConditionDetailPage: React.FC = () => {
               onClick={handleSaveEdit}
               className="w-full py-2.5 rounded-xl bg-emerald-600 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm"
             >
-              <Save size={14} /> 저장 완료
+              <Save size={14} /> {t('save')}
             </button>
           </div>
         </div>
@@ -151,7 +151,7 @@ export const ConditionDetailPage: React.FC = () => {
         {/* Key Stats Grid */}
         <div className="grid grid-cols-2 gap-3">
           <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-sm text-center">
-            <span className="text-[10px] font-bold text-slate-400 uppercase">현재 통증 강도</span>
+            <span className="text-[10px] font-bold text-slate-400 uppercase">{t('currentPainLevel')}</span>
             <div
               className={`mt-1 text-3xl font-black ${
                 (lastLog?.intensity ?? 0) >= 8
@@ -167,7 +167,7 @@ export const ConditionDetailPage: React.FC = () => {
           </div>
 
           <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-sm text-center">
-            <span className="text-[10px] font-bold text-slate-400 uppercase">누적 평균 통증</span>
+            <span className="text-[10px] font-bold text-slate-400 uppercase">{t('cumulativeAvgPain')}</span>
             <div className="mt-1 text-3xl font-black text-slate-700 dark:text-slate-200">
               {avgIntensity}
             </div>
@@ -180,7 +180,7 @@ export const ConditionDetailPage: React.FC = () => {
             <div className="flex items-center justify-between">
               <span className="flex items-center gap-1.5 text-xs font-bold text-slate-700 dark:text-slate-300">
                 <Activity size={16} className="text-emerald-500" />
-                통증 강도 추이
+                {t('painTrendChart')}
               </span>
               <span className="text-[10px] text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-full font-bold">
                 최근 30일
@@ -223,7 +223,7 @@ export const ConditionDetailPage: React.FC = () => {
         {/* Quick Log Action & Logs List */}
         <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <h3 className="font-bold text-sm text-slate-700 dark:text-slate-300">최근 증상 기록</h3>
+            <h3 className="font-bold text-sm text-slate-700 dark:text-slate-300">{t('logHistoryTitle')}</h3>
             <button
               type="button"
               onClick={() => {
@@ -232,7 +232,7 @@ export const ConditionDetailPage: React.FC = () => {
               }}
               className="flex items-center gap-1 rounded-full bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white shadow-sm active:scale-95"
             >
-              <PlusCircle size={14} /> 빠른 기록
+              <PlusCircle size={14} /> {t('quickLog')}
             </button>
           </div>
 

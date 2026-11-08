@@ -5,6 +5,7 @@ import { useSettings } from '../context/SettingsContext';
 import { triggerHaptic } from '../utils/native';
 import { formatMedicationPreset } from '../utils/medication';
 import { AddMedicationInline } from './AddMedicationInline';
+import { PainLevelSelector } from './PainLevelSelector';
 
 const QUICK_BODY_PARTS = [
   '허리/요통',
@@ -147,38 +148,14 @@ export const QuickPainLogger: React.FC<{ onSaved?: () => void }> = ({ onSaved })
         </span>
       </div>
 
-      {/* Step 1: Big NRS Number Touch Grid (1 ~ 10) with Color Distinctions */}
+      {/* Step 1: Unified 1-Row NRS Touch Grid & Continuous Slider */}
       <div className="space-y-1.5">
-        <div className="flex justify-between items-center text-[10px] font-bold text-slate-400 uppercase">
-          <span>1. 통증 강도 (NRS 1~10)</span>
-          <span className="text-slate-700 dark:text-slate-200">
-            선택: <strong className="text-emerald-600 dark:text-emerald-400 text-xs">{selectedIntensity}</strong> / 10
-            {selectedIntensity <= 3
-              ? ' (🟢 경도)'
-              : selectedIntensity <= 6
-              ? ' (🟡 중등도)'
-              : ' (🔴 중증 극심)'}
-          </span>
-        </div>
-        <div className="grid grid-cols-10 gap-1 select-none">
-          {Array.from({ length: 10 }, (_, i) => i + 1).map((num) => {
-            const isSelected = selectedIntensity === num;
-            return (
-              <button
-                key={num}
-                type="button"
-                onClick={() => handleSelectIntensity(num)}
-                aria-label={`통증 강도 ${num}점`}
-                className={`h-11 rounded-xl font-black text-sm flex items-center justify-center transition-all select-none ${getNrsButtonClass(
-                  num,
-                  isSelected
-                )}`}
-              >
-                {num}
-              </button>
-            );
-          })}
-        </div>
+        <PainLevelSelector
+          value={selectedIntensity}
+          onChange={setSelectedIntensity}
+          variant="auto"
+          showDescription={false}
+        />
       </div>
 
       {/* Step 2: Body Part Quick Chips */}

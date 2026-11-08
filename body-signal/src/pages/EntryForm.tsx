@@ -7,6 +7,7 @@ import BodyMap, { parseMultiRegionParts, formatMultiRegionParts } from '../compo
 import { triggerHaptic } from '../utils/native';
 import { formatMedicationPreset } from '../utils/medication';
 import AddMedicationInline from '../components/AddMedicationInline';
+import PainLevelSelector from '../components/PainLevelSelector';
 
 const PAIN_QUALITIES = [
   '욱신거림',
@@ -343,41 +344,20 @@ export const EntryFormPage: React.FC = () => {
           )}
         </section>
 
-        {/* Section 2: Pain Intensity (1-10 Touch Grid) */}
+        {/* Section 2: Pain Intensity (Unified 1-Row Selector & Continuous Slider) */}
         <section className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-sm space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-xs font-bold uppercase tracking-wider text-slate-400">
               {t('painRating')}
             </h2>
-            <span className="text-xs font-bold text-slate-500">
-              선택: <span className="text-base font-black text-emerald-600 dark:text-emerald-400">{intensity}</span> / 10
-            </span>
           </div>
 
-          {/* Large Touch Grid 1-10 */}
-          <div className="grid grid-cols-5 gap-2">
-            {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => {
-              const isSelected = intensity === num;
-              return (
-                <button
-                  key={num}
-                  type="button"
-                  onClick={() => handleIntensityClick(num)}
-                  className={`h-12 rounded-xl font-black text-lg transition-all flex flex-col items-center justify-center border ${
-                    isSelected
-                      ? `${getIntensityColor(num)} scale-105 shadow-md`
-                      : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 active:scale-95'
-                  }`}
-                >
-                  {num}
-                </button>
-              );
-            })}
-          </div>
-
-          <p className="text-center text-xs font-semibold text-slate-500 dark:text-slate-400">
-            {getIntensityDescription(intensity)}
-          </p>
+          <PainLevelSelector
+            value={intensity}
+            onChange={setIntensity}
+            variant="auto"
+            showDescription={true}
+          />
 
           {/* Date & Time with Quick Buttons */}
           <div className="pt-2 border-t border-slate-100 dark:border-slate-800 space-y-2">
