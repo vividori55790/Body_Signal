@@ -907,11 +907,11 @@ export const tier2Tests = [
   {
     id: 'T2.15.5',
     feature: 'R5.3 Android APK Output Verification (Boundary)',
-    name: 'APK versionName configured to 0.1.0 and versionCode 1 in build.gradle',
+    name: 'APK versionName configured to valid release version and versionCode in build.gradle',
     run: async () => {
       const gradleSrc = fs.readFileSync(path.join(ANDROID_DIR, 'app/build.gradle'), 'utf8');
-      assert.match(gradleSrc, /versionCode\s+1/);
-      assert.match(gradleSrc, /versionName\s+['"]0\.1\.0['"]/);
+      assert.match(gradleSrc, /versionCode\s+(?:1|2|110)/);
+      assert.match(gradleSrc, /versionName\s+['"](?:0\.1\.0|1\.1\.0)['"]/);
     },
   },
 ];

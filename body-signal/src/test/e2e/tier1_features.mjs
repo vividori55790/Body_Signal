@@ -902,7 +902,7 @@ export const tier1Tests = [
   {
     id: 'T1.15.1',
     feature: 'R5.3 Android APK Output Verification',
-    name: 'Official APK file Bignal-v0.1.0-debug.apk exists in repository root',
+    name: 'Official APK file exists in repository root',
     run: async () => {
       assert.ok(fs.existsSync(APK_PATH), `Expected APK at ${APK_PATH}`);
     },
