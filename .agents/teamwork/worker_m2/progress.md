@@ -1,22 +1,20 @@
-# Progress - Worker M2
+# Progress: Milestone 2 (worker_m2)
 
-Last visited: 2026-11-06T09:46:30Z
-Status: All Milestone 2 requirements implemented and verified. Writing handoff.
+Last visited: 2026-11-07T03:25:00Z
 
-## Steps
-- [x] 1. Read context files (ORIGINAL_REQUEST.md, Survey Explorer 2 report & handoff, PROJECT.md)
-- [x] 2. Investigate codebase (shortcuts.xml, package.json, App.tsx, Layout.tsx, Settings.tsx, SettingsContext.tsx)
-- [x] 3. Step-by-step implementation plan
-- [x] 4. Implement changes:
-  - [x] 4.1 Fix shortcuts.xml (removed conversation categories from acute_pain, clinical_briefing, quick_med)
-  - [x] 4.2 Add @capacitor/app dependency (^8.0.0) and sync to Android
-  - [x] 4.3 Create DeepLinkHandler.tsx and wire into App.tsx
-  - [x] 4.4 Verify/enhance Floating SOS widget in Layout.tsx & add quickSosEnabled toggle in Settings.tsx & setQuickSos in SettingsContext.tsx
-  - [x] 4.5 Add verify-r2-empirical.mjs test suite
-- [x] 5. Run tests & verification:
-  - [x] 5.1 npx tsc --noEmit (0 errors)
-  - [x] 5.2 npm run test:data (Passed)
-  - [x] 5.3 npm run test:r2 (15/15 Passed)
-  - [x] 5.4 npm test (170/170 Playwright E2E tests Passed)
-  - [x] 5.5 npm run build (Vite build clean, code 0)
-- [x] 6. Write handoff.md and report to parent
+## Status
+- [x] Initialized workspace and briefing
+- [x] Inspect codebase and survey reports
+- [x] Implement F4: Real-time dynamic theme sync (`SettingsContext.tsx`)
+- [x] Implement F7: System font scale inheritance (`MainActivity.java`, `index.css`, `tailwind.config.js`)
+- [x] Implement F13: Guarded haptics (`native.ts`, `SettingsContext.tsx`)
+- [x] Implement Interface Contract 4: `addMedicationPreset(name, dosage)` (`SettingsContext.tsx`)
+- [x] Run TypeScript check (`npx tsc --noEmit` -> 0 errors)
+- [x] Run production build (`npm --prefix body-signal run build` -> PASS)
+- [x] Run F4 feedback tests (14/14 PASS)
+- [x] Run F7 feedback tests (13/13 PASS)
+- [x] Run F13 feedback tests (14/14 PASS)
+- [x] Run complete feedback suite (161/161 PASS)
+- [x] Run core test suite (`npm --prefix body-signal test` -> 170/170 PASS)
+- [x] Run linter (`npx eslint src` -> 0 errors)
+- [x] Document handoff in handoff.md and notify parent

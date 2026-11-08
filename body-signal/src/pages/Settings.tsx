@@ -26,6 +26,7 @@ import {
   RefreshCw,
   Server,
   AlertCircle,
+  Fingerprint,
 } from 'lucide-react';
 import { PinModal } from '../components/PinModal';
 import { triggerHaptic } from '../utils/native';
@@ -46,7 +47,14 @@ export const SettingsPage: React.FC = () => {
   } = useSettings();
 
   const { conditions, logs, diaryEntries, exportBackupJson, importBackupJson, resetData } = useHealth();
-  const { isPinSet, setupNewPin, disablePin } = useAuth();
+  const {
+    isPinSet,
+    setupNewPin,
+    disablePin,
+    isBiometricAvailable,
+    isBiometricEnabled,
+    toggleBiometric,
+  } = useAuth();
 
   // Modals state
   const [pinModalMode, setPinModalMode] = useState<'set' | 'change' | null>(null);
@@ -87,6 +95,21 @@ export const SettingsPage: React.FC = () => {
       }
     } else {
       setPinModalMode('set');
+    }
+  };
+
+  const handleToggleBiometric = async () => {
+    triggerHaptic();
+    if (isBiometricEnabled) {
+      await toggleBiometric(false);
+      showToast('생체인증 잠금 해제가 비활성화되었습니다.');
+    } else {
+      const success = await toggleBiometric(true);
+      if (success) {
+        showToast('생체인증(지문/얼굴 인식)이 등록되었습니다.');
+      } else {
+        showToast('생체인증 등록이 취소되었거나 지원되지 않습니다.');
+      }
     }
   };
 
@@ -406,6 +429,34 @@ export const SettingsPage: React.FC = () => {
               <span>{t('changePin')}</span>
               <ChevronRight size={16} />
             </button>
+          )}
+
+          {isPinSet && isBiometricAvailable && (
+            <div className="p-3.5 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400">
+                  <Fingerprint size={18} />
+                </div>
+                <div>
+                  <span className="font-bold text-xs block">생체인증 / 패스키 잠금 해제</span>
+                  <span className="text-[10px] text-slate-400">지문 또는 얼굴 인식으로 간편하게 잠금 해제</span>
+                </div>
+              </div>
+              <button
+                type="button"
+                aria-label="생체인증 잠금 해제 전환"
+                onClick={handleToggleBiometric}
+                className={`w-11 h-6 rounded-full transition-colors relative ${
+                  isBiometricEnabled ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-700'
+                }`}
+              >
+                <div
+                  className={`w-4 h-4 rounded-full bg-white transition-transform ${
+                    isBiometricEnabled ? 'translate-x-6' : 'translate-x-1'
+                  }`}
+                />
+              </button>
+            </div>
           )}
         </div>
       </section>

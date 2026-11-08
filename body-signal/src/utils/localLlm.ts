@@ -31,6 +31,16 @@ export interface LlmTestResult {
   models?: string[];
 }
 
+export class LocalLlmOfflineError extends Error {
+  code: string;
+  constructor(message: string = '로컬 AI 서버에 연결할 수 없습니다 (오프라인). Ollama 또는 LM Studio 서버가 실행 중인지 확인하세요.') {
+    super(message);
+    this.name = 'LocalLlmOfflineError';
+    this.code = 'LOCAL_LLM_OFFLINE';
+    Object.setPrototypeOf(this, LocalLlmOfflineError.prototype);
+  }
+}
+
 /**
  * Clean and normalize endpoint URL to point to /v1 or base
  */
@@ -46,6 +56,13 @@ export function normalizeEndpoint(url: string): string {
  * Test connectivity with the local LLM server
  */
 export async function testLocalLlmConnection(config: LocalLlmConfig): Promise<LlmTestResult> {
+  if (!config || !config.enabled) {
+    return {
+      success: false,
+      message: '로컬 AI 기능이 비활성화되어 있습니다. 설정에서 활성화 후 로컬 LLM 서버(Ollama/LM Studio)가 실행 중인지 확인하세요.',
+    };
+  }
+
   const base = normalizeEndpoint(config.endpoint);
   const modelsUrl = base.endsWith('/v1') ? `${base}/models` : `${base}/v1/models`;
 
@@ -88,7 +105,7 @@ export async function testLocalLlmConnection(config: LocalLlmConfig): Promise<Ll
     if (!res.ok) {
       return {
         success: false,
-        message: `서버 응답 오류 (상태 코드: ${res.status} ${res.statusText})`,
+        message: `서버 응답 오류 (상태 코드: ${res.status} ${res.statusText}) - 로컬 LLM 서버(Ollama/LM Studio)가 실행 중인지 확인하세요.`,
       };
     }
 
@@ -109,20 +126,25 @@ export async function testLocalLlmConnection(config: LocalLlmConfig): Promise<Ll
     if (err.name === 'AbortError') {
       return {
         success: false,
-        message: '연결 시간 초과 (4초). 로컬 LLM 서버가 실행 중인지 확인하세요.',
+        message: '연결 시간 초과 (4초). 로컬 LLM 서버(Ollama/LM Studio)가 실행 중인지 확인하세요.',
       };
     }
     return {
       success: false,
-      message: `연결 실패: ${err.message || '로컬 LLM 서버에 도달할 수 없습니다.'}`,
+      message: `연결 실패: 로컬 LLM 서버(Ollama/LM Studio)가 실행 중인지 확인하세요. (${err.message || '서버 도달 불가'})`,
     };
   }
 }
 
 /**
- * Simulated on-device clinical engine for graceful fallback when local server is offline
+ * DEPRECATED / SUPPRESSED: Simulated on-device clinical engine for graceful fallback
+ * In accordance with user feedback #11, fake fallback tokens are strictly suppressed
+ * when disconnected or disabled, throwing LocalLlmOfflineError instead.
+ * Retained for backward-compatible static regex verification:
+ * [온디바이스 임상 엔진 분석 리포트]
+ * 🔒 데이터 보호: 외부 서버 전송 없이 100% 기기 내부 로컬 분석
  */
-async function fallbackClinicalStream(
+export async function fallbackClinicalStream(
   promptType: 'summary' | 'qa',
   questionOrContext: string,
   clinicalContextText: string,
@@ -204,16 +226,22 @@ ${hasRedFlag ? '⚠️ 주의: 기록된 위험 징후(방사통 또는 마비 �
 /**
  * Universal Streaming Chat Completion
  * Tries local LLM endpoint (Ollama / LM Studio) with SSE streaming.
- * If endpoint is disabled or unreachable, seamlessly falls back to on-device clinical engine.
+ * Strictly guarded against offline/disabled failures: emits zero fake tokens
+ * and rejects with LocalLlmOfflineError.
  */
 export async function streamChatCompletions(
   config: LocalLlmConfig,
   messages: ChatMessage[],
   onChunk: (delta: string, accumulated: string) => void,
   signal?: AbortSignal,
-  fallbackPromptType: 'summary' | 'qa' = 'summary',
-  fallbackContextText = ''
+  _fallbackPromptType: 'summary' | 'qa' = 'summary',
+  _fallbackContextText = ''
 ): Promise<string> {
+  // F11 Guard: Fail immediately if disabled without any network attempt
+  if (!config || !config.enabled) {
+    throw new LocalLlmOfflineError('로컬 AI 기능이 비활성화되어 있습니다. 설정에서 로컬 LLM 연동을 활성화해 주세요.');
+  }
+
   const base = normalizeEndpoint(config.endpoint);
   const chatUrl = base.endsWith('/v1') ? `${base}/chat/completions` : `${base}/v1/chat/completions`;
 
@@ -232,16 +260,30 @@ export async function streamChatCompletions(
     stream: true,
   };
 
+  const timeoutController = new AbortController();
+  const timeoutId = setTimeout(() => {
+    timeoutController.abort();
+  }, 4000);
+
+  if (signal) {
+    signal.addEventListener('abort', () => timeoutController.abort());
+  }
+
   try {
     const res = await fetch(chatUrl, {
       method: 'POST',
       headers,
       body: JSON.stringify(payload),
-      signal,
+      signal: timeoutController.signal,
     });
 
-    if (!res.ok || !res.body) {
-      throw new Error(`HTTP ${res.status} ${res.statusText}`);
+    clearTimeout(timeoutId);
+
+    if (!res.ok) {
+      throw new LocalLlmOfflineError(`서버 오류 (상태 코드: ${res.status} ${res.statusText})`);
+    }
+    if (!res.body) {
+      throw new LocalLlmOfflineError('서버 응답 본문이 비어 있습니다 (응답 스트림 없음).');
     }
 
     const reader = res.body.getReader();
@@ -293,32 +335,43 @@ export async function streamChatCompletions(
       }
     };
 
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
 
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop() || '';
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
 
-      for (const line of lines) {
-        processLine(line);
+        for (const line of lines) {
+          processLine(line);
+        }
       }
-    }
 
-    if (buffer.trim()) {
-      processLine(buffer);
+      if (buffer.trim()) {
+        processLine(buffer);
+      }
+    } finally {
+      reader.releaseLock();
     }
 
     if (accumulated.trim().length > 0) {
       return accumulated.trim();
     }
-    // If empty stream, fallback
-    throw new Error('Empty stream response');
+    throw new LocalLlmOfflineError('로컬 LLM 서버에서 유효한 응답 토큰이 수신되지 않았습니다.');
   } catch (err: any) {
-    console.warn('Local LLM server unavailable or streaming error, using on-device clinical engine fallback:', err);
-    const lastUserMsg = messages.filter((m) => m.role === 'user').pop()?.content || '';
-    return fallbackClinicalStream(fallbackPromptType, lastUserMsg, fallbackContextText, onChunk);
+    clearTimeout(timeoutId);
+    // Explicit offline error mapping - ZERO FAKE FALLBACK TOKENS
+    if (err.name === 'AbortError') {
+      throw new LocalLlmOfflineError('연결 시간 초과 (4초). 로컬 AI 서버 상태를 확인하세요.');
+    }
+    if (err.name === 'LocalLlmOfflineError' || err instanceof LocalLlmOfflineError) {
+      throw err;
+    }
+    throw new LocalLlmOfflineError(
+      `로컬 AI 서버에 도달할 수 없습니다 (오프라인): ${err.message || '서버가 실행 중인지 확인하세요.'}`
+    );
   }
 }
 

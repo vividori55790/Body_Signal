@@ -1,6 +1,14 @@
-import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import { isPinConfigured, verifyAppPin, setAppPin, removeAppPin, checkLockout } from '../utils/pin';
 import { reEncryptHealthData } from '../utils/storage';
+import {
+  checkBiometricAvailability,
+  getBiometricMeta,
+  enrollBiometrics,
+  disableBiometrics,
+  authenticateWithBiometrics,
+  updateBiometricPinToken,
+} from '../utils/biometrics';
 
 interface AuthContextValue {
   isUnlocked: boolean;
@@ -8,7 +16,12 @@ interface AuthContextValue {
   activeSessionPin: string | null;
   lockoutRemainingMs: number;
   isPrivacyMasked: boolean;
+  isBiometricAvailable: boolean;
+  isBiometricEnabled: boolean;
   unlockApp: (pin: string) => Promise<{ success: boolean; message?: string }>;
+  unlockWithPin: (pin: string) => Promise<boolean>;
+  unlockWithBiometric: () => Promise<boolean>;
+  toggleBiometric: (enable: boolean) => Promise<boolean>;
   setupNewPin: (pin: string) => Promise<void>;
   disablePin: () => Promise<void>;
   lockApp: () => void;
@@ -25,6 +38,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [activeSessionPin, setActiveSessionPin] = useState<string | null>(null);
   const [lockoutRemainingMs, setLockoutRemainingMs] = useState(0);
   const [isPrivacyMasked, setIsPrivacyMasked] = useState(false);
+  const [isBiometricAvailable, setIsBiometricAvailable] = useState(false);
+  const [isBiometricEnabled, setIsBiometricEnabled] = useState(false);
 
   const backgroundTimeRef = useRef<number | null>(null);
 
@@ -41,6 +56,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (isLocked) {
         setLockoutRemainingMs(remainingMs);
       }
+    });
+
+    // Check biometrics availability and enrollment state
+    checkBiometricAvailability().then((avail) => {
+      setIsBiometricAvailable(avail);
+    });
+
+    getBiometricMeta().then((meta) => {
+      setIsBiometricEnabled(Boolean(meta && meta.enabled));
     });
 
     // Background Privacy Shield & Auto-lock Listener
@@ -104,9 +128,50 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   };
 
+  const unlockWithPin = async (pin: string): Promise<boolean> => {
+    const res = await unlockApp(pin);
+    return res.success;
+  };
+
+  const unlockWithBiometric = useCallback(async (): Promise<boolean> => {
+    if (!isBiometricEnabled || lockoutRemainingMs > 0) {
+      return false;
+    }
+
+    const result = await authenticateWithBiometrics();
+    if (result.success && result.pin) {
+      setActiveSessionPin(result.pin);
+      setIsUnlocked(true);
+      return true;
+    }
+
+    return false;
+  }, [isBiometricEnabled, lockoutRemainingMs]);
+
+  const toggleBiometric = async (enable: boolean): Promise<boolean> => {
+    if (enable) {
+      if (!isPinSet || !activeSessionPin) {
+        return false;
+      }
+      const ok = await enrollBiometrics(activeSessionPin);
+      if (ok) {
+        setIsBiometricEnabled(true);
+        return true;
+      }
+      return false;
+    } else {
+      await disableBiometrics();
+      setIsBiometricEnabled(false);
+      return true;
+    }
+  };
+
   const setupNewPin = async (pin: string) => {
     await reEncryptHealthData(pin, activeSessionPin || undefined);
     await setAppPin(pin);
+    if (isBiometricEnabled) {
+      await updateBiometricPinToken(pin);
+    }
     setIsPinSet(true);
     setActiveSessionPin(pin);
     setIsUnlocked(true);
@@ -115,6 +180,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const disablePin = async () => {
     await reEncryptHealthData(undefined, activeSessionPin || undefined);
     await removeAppPin();
+    await disableBiometrics();
+    setIsBiometricEnabled(false);
     setIsPinSet(false);
     setActiveSessionPin(null);
     setIsUnlocked(true);
@@ -135,7 +202,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         activeSessionPin,
         lockoutRemainingMs,
         isPrivacyMasked,
+        isBiometricAvailable,
+        isBiometricEnabled,
         unlockApp,
+        unlockWithPin,
+        unlockWithBiometric,
+        toggleBiometric,
         setupNewPin,
         disablePin,
         lockApp,

@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Lock, Delete, X, AlertCircle } from 'lucide-react';
 import { triggerHaptic } from '../utils/native';
 
@@ -25,6 +26,39 @@ export const PinModal: React.FC<PinModalProps> = ({
   const [firstPin, setFirstPin] = useState(''); // For set/change confirmation
   const [step, setStep] = useState<'enter' | 'confirm'>('enter');
   const [localError, setLocalError] = useState('');
+
+  // Lock background scrolling and handle Escape key while modal is open
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const originalOverflow = document.body.style.overflow;
+    const originalTouchAction = document.body.style.touchAction;
+    document.body.style.overflow = 'hidden';
+    document.body.style.touchAction = 'none';
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && mode !== 'unlock') {
+        handleClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = originalOverflow;
+      document.body.style.touchAction = originalTouchAction;
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isOpen, mode]);
+
+  // Reset internal state when opened
+  useEffect(() => {
+    if (isOpen) {
+      setPin('');
+      setFirstPin('');
+      setStep('enter');
+      setLocalError('');
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -91,13 +125,19 @@ export const PinModal: React.FC<PinModalProps> = ({
       ? `입력 횟수 초과. ${Math.ceil(lockoutRemainingMs / 1000)}초 후 다시 시도해 주세요.`
       : '');
 
-  return (
-    <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-slate-950/95 backdrop-blur-md px-4 animate-in fade-in duration-200">
+  const modalContent = (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="pin-modal-title"
+      className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-slate-950 w-screen h-screen min-h-[100dvh] overflow-hidden select-none px-4 pt-[max(1.5rem,env(safe-area-inset-top,0px))] pb-[max(1.5rem,env(safe-area-inset-bottom,0px))] pl-[max(1rem,env(safe-area-inset-left,0px))] pr-[max(1rem,env(safe-area-inset-right,0px))]"
+    >
       {mode !== 'unlock' && (
         <button
           type="button"
           onClick={handleClose}
-          className="absolute top-6 right-6 p-2 rounded-full bg-slate-800 text-slate-400 hover:text-white"
+          aria-label="닫기"
+          className="absolute top-[max(1.5rem,env(safe-area-inset-top,1.5rem))] right-[max(1.5rem,env(safe-area-inset-right,1.5rem))] p-2.5 rounded-full bg-slate-800 text-slate-400 hover:text-white active:scale-95 transition-all z-10"
         >
           <X size={24} />
         </button>
@@ -108,19 +148,21 @@ export const PinModal: React.FC<PinModalProps> = ({
         <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full border border-slate-700 bg-slate-900 shadow-lg">
           <Lock size={30} className="text-emerald-400" />
         </div>
-        <h2 className="text-xl font-bold tracking-wider">{displayTitle}</h2>
+        <h2 id="pin-modal-title" className="text-xl font-bold tracking-wider">{displayTitle}</h2>
         <p className="mt-1 text-xs text-slate-400">데이터를 안전하게 암호화하여 보호합니다</p>
       </div>
 
       {/* 4 Dots Indicator */}
-      <div className="mb-4 flex gap-4">
+      <div className="mb-4 flex gap-4 sm:gap-5 justify-center">
         {[0, 1, 2, 3].map((i) => (
           <div
             key={i}
-            className={`h-4 w-4 rounded-full transition-all duration-200 ${
-              pin.length > i
-                ? 'scale-110 bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.8)]'
-                : 'border border-slate-600 bg-slate-800'
+            className={`h-4 w-4 sm:h-5 sm:w-5 rounded-full transition-all duration-200 ${
+              errorText
+                ? 'scale-110 bg-rose-500 border-2 border-rose-400 shadow-[0_0_12px_rgba(244,63,94,0.9)]'
+                : pin.length > i
+                ? 'scale-110 bg-emerald-400 border-2 border-emerald-300 shadow-[0_0_12px_rgba(52,211,153,0.9)]'
+                : 'border-2 border-slate-700 bg-slate-900/80'
             }`}
           />
         ))}
@@ -137,38 +179,52 @@ export const PinModal: React.FC<PinModalProps> = ({
       </div>
 
       {/* Mobile Number Keypad */}
-      <div className="grid grid-cols-3 gap-4 max-w-[280px] w-full text-white">
+      <div
+        role="group"
+        aria-label="PIN 입력 키패드"
+        className="grid grid-cols-3 gap-y-4 gap-x-6 w-full max-w-[320px] sm:max-w-[340px] place-items-center text-white mb-6"
+      >
         {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((num) => (
           <button
             key={num}
             type="button"
+            aria-label={`숫자 ${num}`}
             disabled={lockoutRemainingMs > 0}
             onClick={() => handleDigit(num)}
-            className="flex h-18 w-18 items-center justify-center rounded-full bg-slate-800/80 text-2xl font-bold shadow-sm transition-all hover:bg-slate-700 active:scale-90 active:bg-emerald-500/20 disabled:opacity-40"
+            className="flex h-16 w-16 sm:h-20 sm:w-20 min-w-[64px] min-h-[64px] max-w-[80px] max-h-[80px] aspect-square items-center justify-center rounded-full bg-slate-900/90 border border-slate-800 text-2xl sm:text-3xl font-bold text-slate-100 shadow-lg transition-all duration-150 hover:bg-slate-800/80 hover:border-slate-700 active:scale-90 active:bg-emerald-500/25 active:border-emerald-400/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 disabled:opacity-30 disabled:pointer-events-none"
           >
             {num}
           </button>
         ))}
 
-        <div />
+        <div className="h-16 w-16 sm:h-20 sm:w-20 min-w-[64px] min-h-[64px]" />
 
         <button
           type="button"
+          aria-label="숫자 0"
           disabled={lockoutRemainingMs > 0}
           onClick={() => handleDigit('0')}
-          className="flex h-18 w-18 items-center justify-center rounded-full bg-slate-800/80 text-2xl font-bold shadow-sm transition-all hover:bg-slate-700 active:scale-90 active:bg-emerald-500/20 disabled:opacity-40"
+          className="flex h-16 w-16 sm:h-20 sm:w-20 min-w-[64px] min-h-[64px] max-w-[80px] max-h-[80px] aspect-square items-center justify-center rounded-full bg-slate-900/90 border border-slate-800 text-2xl sm:text-3xl font-bold text-slate-100 shadow-lg transition-all duration-150 hover:bg-slate-800/80 hover:border-slate-700 active:scale-90 active:bg-emerald-500/25 active:border-emerald-400/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 disabled:opacity-30 disabled:pointer-events-none"
         >
           0
         </button>
 
         <button
           type="button"
+          aria-label="한 글자 지우기"
           onClick={handleDelete}
-          className="flex h-18 w-18 items-center justify-center rounded-full text-slate-400 transition-all hover:bg-slate-800 hover:text-white active:scale-90"
+          className="flex h-16 w-16 sm:h-20 sm:w-20 min-w-[64px] min-h-[64px] max-w-[80px] max-h-[80px] aspect-square items-center justify-center rounded-full text-slate-400 transition-all duration-150 hover:text-slate-200 hover:bg-slate-900/60 active:scale-90 active:text-rose-400 active:bg-rose-500/15 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-400"
         >
-          <Delete size={26} />
+          <Delete size={28} />
         </button>
       </div>
     </div>
   );
+
+  if (typeof document !== 'undefined') {
+    return createPortal(modalContent, document.body);
+  }
+
+  return modalContent;
 };
+

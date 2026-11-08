@@ -3,8 +3,10 @@ import { ArrowLeft, Clock, Save, Sparkles, Plus, AlertCircle, AlertTriangle, Shi
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useHealth } from '../context/HealthContext';
 import { useSettings } from '../context/SettingsContext';
-import BodyMap from '../components/BodyMap';
+import BodyMap, { parseMultiRegionParts, formatMultiRegionParts } from '../components/BodyMap';
 import { triggerHaptic } from '../utils/native';
+import { formatMedicationPreset } from '../utils/medication';
+import AddMedicationInline from '../components/AddMedicationInline';
 
 const PAIN_QUALITIES = [
   '욱신거림',
@@ -51,10 +53,22 @@ export const EntryFormPage: React.FC = () => {
   const [newOnsetDate, setNewOnsetDate] = useState(new Date().toISOString().split('T')[0]);
   const [showBodyMap, setShowBodyMap] = useState(false);
 
+  // Multi-region BodyMap helper
+  const selectedBodyParts = parseMultiRegionParts(newBodyPart);
+  const handleToggleBodyPart = (part: string) => {
+    triggerHaptic();
+    const exists = selectedBodyParts.includes(part);
+    const next = exists
+      ? selectedBodyParts.filter((p) => p !== part)
+      : [...selectedBodyParts, part];
+    setNewBodyPart(formatMultiRegionParts(next));
+  };
+
   // Clinical Observation Fields
   const [date, setDate] = useState(new Date().toISOString().slice(0, 16));
   const [intensity, setIntensity] = useState<number>(5);
   const [medication, setMedication] = useState('');
+  const [showAddMed, setShowAddMed] = useState(false);
   const [notes, setNotes] = useState('');
   const [error, setError] = useState('');
 
@@ -301,9 +315,13 @@ export const EntryFormPage: React.FC = () => {
               {showBodyMap && (
                 <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 p-2 animate-in fade-in">
                   <BodyMap
+                    selectedParts={selectedBodyParts}
+                    onTogglePart={handleToggleBodyPart}
                     selectedPart={newBodyPart}
                     onSelectPart={(part) => {
-                      setNewBodyPart(part);
+                      if (!selectedBodyParts.includes(part)) {
+                        setNewBodyPart(formatMultiRegionParts([...selectedBodyParts, part]));
+                      }
                     }}
                   />
                 </div>
@@ -565,25 +583,36 @@ export const EntryFormPage: React.FC = () => {
           </label>
 
           {/* Quick Medication Chips */}
-          {settings.medicationPresets.length > 0 && (
-            <div className="space-y-1">
-              <span className="text-[10px] font-bold text-slate-400 uppercase">
-                {t('quickMedPresets')}
-              </span>
-              <div className="flex flex-wrap gap-1.5">
-                {settings.medicationPresets.map((preset) => (
+          <div className="space-y-1">
+            <span className="text-[10px] font-bold text-slate-400 uppercase">
+              {t('quickMedPresets')}
+            </span>
+            <div className="flex flex-wrap gap-1.5">
+              {settings.medicationPresets.map((preset) => {
+                const formattedName = formatMedicationPreset(preset);
+                return (
                   <button
                     key={preset.id}
                     type="button"
-                    onClick={() => handleAddMedPreset(preset.name)}
+                    onClick={() => handleAddMedPreset(formattedName)}
                     className="rounded-full bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-900/60 px-2.5 py-1 text-xs font-bold text-blue-700 dark:text-blue-300 active:scale-95 transition-all"
                   >
-                    + {preset.name}
+                    + {formattedName}
                   </button>
-                ))}
-              </div>
+                );
+              })}
+              <button
+                type="button"
+                onClick={() => {
+                  triggerHaptic();
+                  setShowAddMed(true);
+                }}
+                className="rounded-full bg-emerald-50 dark:bg-emerald-950/60 border border-dashed border-emerald-300 dark:border-emerald-700 px-2.5 py-1 text-xs font-bold text-emerald-700 dark:text-emerald-300 active:scale-95 transition-all flex items-center gap-1"
+              >
+                + 약 추가
+              </button>
             </div>
-          )}
+          </div>
 
           <input
             type="text"
@@ -591,6 +620,15 @@ export const EntryFormPage: React.FC = () => {
             value={medication}
             onChange={(e) => setMedication(e.target.value)}
             className="w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 p-3 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500"
+          />
+
+          <AddMedicationInline
+            isOpen={showAddMed}
+            onClose={() => setShowAddMed(false)}
+            onAdded={(newMed) => {
+              handleAddMedPreset(newMed);
+              setShowAddMed(false);
+            }}
           />
         </section>
 

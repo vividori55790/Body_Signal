@@ -17,21 +17,16 @@ const DetailedConditionCard: React.FC<{
   isArchived?: boolean;
 }> = ({ condition, logs, isArchived = false }) => {
   const navigate = useNavigate();
-  const { updateCondition, saveEntry } = useHealth();
+  const { updateCondition } = useHealth();
   const { t } = useSettings();
   const [isExpanded, setIsExpanded] = useState(false);
-
-  // Inline Quick Form State
-  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 16));
-  const [intensity, setIntensity] = useState(5);
-  const [medication, setMedication] = useState('');
-  const [notes, setNotes] = useState('');
 
   const conditionLogs = logs
     .filter((l) => l.conditionId === condition.id)
     .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
   const lastLog = conditionLogs[conditionLogs.length - 1];
+  const recentThreeLogs = [...conditionLogs].reverse().slice(0, 3);
 
   const avgIntensity = conditionLogs.length
     ? (conditionLogs.reduce((a, b) => a + b.intensity, 0) / conditionLogs.length).toFixed(1)
@@ -43,27 +38,6 @@ const DetailedConditionCard: React.FC<{
       value: l.intensity,
     }))
     .slice(-10);
-
-  const handleSaveLog = async (e: React.FormEvent) => {
-    e.preventDefault();
-    triggerHaptic();
-    await saveEntry({
-      isNewCondition: false,
-      conditionData: { id: condition.id },
-      logData: {
-        date: new Date(date).toISOString(),
-        intensity,
-        medication,
-        notes,
-      },
-    });
-
-    // Reset
-    setDate(new Date().toISOString().slice(0, 16));
-    setMedication('');
-    setNotes('');
-    setIsExpanded(false);
-  };
 
   const handleToggleArchive = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -120,19 +94,19 @@ const DetailedConditionCard: React.FC<{
         </div>
       </div>
 
-      {/* Mini Trend Line Chart if available */}
-      {chartData.length > 1 && !isExpanded && (
-        <div className="h-10 px-4 opacity-70">
+      {/* Mini Trend Sparkline (Always rendered if >1 record) */}
+      {chartData.length > 1 && (
+        <div className={`px-4 opacity-80 ${isExpanded ? 'h-16 py-1' : 'h-10'}`}>
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={chartData}>
               <YAxis domain={[0, 10]} hide />
-              <Line type="monotone" dataKey="value" stroke="#10b981" strokeWidth={2} dot={false} />
+              <Line type="monotone" dataKey="value" stroke="#10b981" strokeWidth={2.5} dot={isExpanded} />
             </LineChart>
           </ResponsiveContainer>
         </div>
       )}
 
-      {/* Card Footer Summary */}
+      {/* Card Footer Summary (Collapsed) */}
       {!isExpanded && (
         <div className="px-4 py-2.5 bg-slate-50 dark:bg-slate-800/40 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center text-xs text-slate-500">
           <div>
@@ -151,79 +125,86 @@ const DetailedConditionCard: React.FC<{
         </div>
       )}
 
-      {/* Expanded Quick Form */}
+      {/* Expanded History & Action Viewer (No duplicate form!) */}
       {isExpanded && (
-        <div className="border-t border-slate-100 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/60 p-4 space-y-4 animate-in fade-in">
+        <div className="border-t border-slate-100 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/60 p-4 space-y-3.5 animate-in fade-in">
           <div className="flex justify-between items-center">
-            <span className="text-xs text-slate-400 font-bold">
+            <span className="text-xs text-slate-500 dark:text-slate-400 font-bold">
               누적 기록 {conditionLogs.length}건 (평균 NRS {avgIntensity})
             </span>
             <button
               type="button"
               onClick={handleToggleArchive}
-              className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300"
+              className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 active:scale-95 transition-all"
             >
               <CheckCircle size={14} />
               {isArchived ? t('restoreCondition') : t('archiveCondition')}
             </button>
           </div>
 
-          <form onSubmit={handleSaveLog} className="space-y-3 bg-white dark:bg-slate-800 p-3.5 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
-            <h4 className="text-xs font-bold text-slate-700 dark:text-slate-200">{condition.label} 빠른 기록</h4>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">일시</label>
-                <input
-                  type="datetime-local"
-                  required
-                  value={date}
-                  onChange={(e) => setDate(e.target.value)}
-                  className="w-full p-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-medium"
-                />
+          {/* Recent Logs Snippet */}
+          {recentThreeLogs.length > 0 && (
+            <div className="space-y-1.5">
+              <span className="text-[10px] font-bold text-slate-400 uppercase block">최근 기록 내역</span>
+              <div className="space-y-1">
+                {recentThreeLogs.map((log) => (
+                  <div
+                    key={log.id}
+                    className="p-2 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-between text-xs"
+                  >
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`px-2 py-0.5 rounded-md font-black text-[11px] ${
+                          log.intensity >= 8
+                            ? 'bg-rose-100 dark:bg-rose-950/80 text-rose-600 dark:text-rose-400'
+                            : log.intensity >= 5
+                            ? 'bg-amber-100 dark:bg-amber-950/80 text-amber-600 dark:text-amber-400'
+                            : 'bg-emerald-100 dark:bg-emerald-950/80 text-emerald-600 dark:text-emerald-400'
+                        }`}
+                      >
+                        NRS {log.intensity}
+                      </span>
+                      <span className="text-slate-500 text-[11px]">
+                        {new Date(log.date).toLocaleDateString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                      {log.medication && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-300 font-bold truncate max-w-[100px]">
+                          💊 {log.medication}
+                        </span>
+                      )}
+                    </div>
+                    {log.notes && (
+                      <span className="text-[11px] text-slate-400 truncate max-w-[120px]">{log.notes}</span>
+                    )}
+                  </div>
+                ))}
               </div>
-              <div>
-                <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">
-                  통증 강도: <span className="text-emerald-500 font-black text-sm">{intensity}</span>
-                </label>
-                <input
-                  type="range"
-                  min="1"
-                  max="10"
-                  value={intensity}
-                  onChange={(e) => setIntensity(Number(e.target.value))}
-                  className="w-full accent-emerald-500 mt-2"
-                />
-              </div>
             </div>
+          )}
 
-            <div>
-              <input
-                type="text"
-                placeholder="복용 약물 (예: 타이레놀 500mg)"
-                value={medication}
-                onChange={(e) => setMedication(e.target.value)}
-                className="w-full p-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-medium"
-              />
-            </div>
-
-            <div>
-              <textarea
-                rows={2}
-                placeholder="간단한 증상 메모..."
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                className="w-full p-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-medium resize-none"
-              />
-            </div>
-
+          {/* Action Row: Link to Tier 3 Entry or Condition Detail */}
+          <div className="grid grid-cols-2 gap-2 pt-1">
             <button
-              type="submit"
-              className="w-full py-2.5 bg-emerald-600 text-white font-bold rounded-lg text-xs flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition-all"
+              type="button"
+              onClick={() => {
+                triggerHaptic();
+                navigate('/entry', { state: { selectedConditionId: condition.id } });
+              }}
+              className="py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition-all"
             >
-              <Save size={14} /> 기록 저장
+              <Plus size={14} /> 이 질환 상세 기록
             </button>
-          </form>
+            <button
+              type="button"
+              onClick={() => {
+                triggerHaptic();
+                navigate(`/condition/${condition.id}`);
+              }}
+              className="py-2.5 px-3 rounded-xl bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs flex items-center justify-center gap-1.5 active:scale-95 transition-all"
+            >
+              전체 차트·분석 <ArrowRight size={14} />
+            </button>
+          </div>
         </div>
       )}
     </div>

@@ -1,83 +1,77 @@
-# BRIEFING — 2026-11-06T10:10:45Z
+# BRIEFING — 2026-11-07T11:35:00Z
 
 ## Mission
-Bignal(Body Signal) 모바일 통증 및 증상 추적 앱 프로젝트를 실제 환자 및 임상 사용 환경에 맞추어 R1~R5 요구사항 고도화 및 품질 검증/공식 안드로이드 APK 빌드 완수
+Bignal 모바일 앱의 14개 사용자 피드백(R1~R5) 전면 반영 및 안드로이드 SDK 표준 준수 공식 릴리스 APK 재빌드 총괄 오케스트레이션
 
 ## 🔒 My Identity
-- Archetype: teamwork_orchestrator
+- Archetype: orchestrator
 - Roles: orchestrator, user_liaison, human_reporter, successor
 - Working directory: c:\Users\vivid\Documents\GitProject\Personal\2025\Bignal\.agents\teamwork\orchestrator
-- Original parent: caller (parent)
-- Original parent conversation ID: 59ac92f7-cda8-4903-9cd5-e5aeed6eb90f
+- Original parent: parent
+- Original parent conversation ID: 1fd06b4e-b797-4981-986a-98dd062f41ab
 
 ## 🔒 My Workflow
-- **Pattern**: Project Pattern (Dual Track: Implementation Track + E2E Testing Track)
-- **Scope document**: c:\Users\vivid\Documents\GitProject\Personal\2025\Bignal\PROJECT.md
-1. **Decompose**:
-   - Phase 0: Survey existing codebase & specifications with 3 Explorers. [COMPLETE]
-   - Phase 1: Synthesize findings into `PROJECT.md`, establish milestones M1~M5 and interface contracts. [COMPLETE]
-   - Phase 2: Dual Track execution (Implementation milestones M1~M4 + E2E Testing Track). [COMPLETE]
-     - M1: Complete & Gate Passed (R1: 1-sec pain mode & medication response)
-     - E2E Testing Track: Complete (170/170 tests passing, TEST_READY.md published)
-     - M2: Complete & Gate Passed (R2: Shortcuts & Floating SOS Widget)
-     - M3: Complete & Gate Passed (R3: AES-GCM 256, SHA-256 signatures, FLAG_SECURE)
-     - M4: Complete & Gate Passed (R4: Cleartext HTTP, SSE/NDJSON streaming, Personas)
-   - Phase 3: Milestone 5 Quality Verification & Official Android APK Build (`Bignal-v0.1.0-debug.apk`). [COMPLETE]
-2. **Dispatch & Execute**:
-   - Direct iteration loop for sub-orchestrators/workers: Explorer (3) -> Worker (1) -> Reviewer (2) -> Challenger (2) -> Auditor (1) -> Gate.
-3. **On failure** (in this order):
-   - Retry: nudge stuck agent or re-send task
-   - Replace: spawn fresh agent with partial progress
-   - Skip: proceed without (only if non-critical, never skip auditor)
-   - Redistribute: split stuck agent's remaining work
-   - Redesign: re-partition decomposition
-   - Escalate: report to parent (sub-orchestrators only, top-level orchestrator redesigns)
-4. **Succession**:
-   - Total spawn count 17 / 128.
+- **Pattern**: Project Pattern
+- **Scope document**: c:\Users\vivid\Documents\GitProject\Personal\2025\Bignal\.agents\teamwork\PROJECT.md
+1. **Decompose**: Survey full scope via 3 Explorers (including spec mining of Feedback_2026-11-06.md and codebase), formulate architecture, milestones, interface contracts, and feature inventory in PROJECT.md.
+2. **Dispatch & Execute**: Delegate milestones to sub-orchestrators and parallel E2E Testing Orchestrator; final milestone verifies 100% E2E test pass + Tier 5 coverage hardening.
+3. **On failure**: Retry -> Replace -> Skip (if non-critical) -> Redistribute -> Redesign -> Escalate.
+4. **Succession**: Threshold 16 spawns, write handoff.md, kill timers, spawn successor.
 - **Work items**:
-  1. Survey codebase architecture & current implementation [done]
-  2. Setup PROJECT.md & TEST_INFRA.md [done]
-  3. M1: AcutePainMode & Medication Response UI [done - Gate PASSED]
-  4. M2: Android Shortcuts & In-App Floating SOS Widget [done - Gate PASSED]
-  5. M3: On-device AES-GCM 256, SHA-256 Signatures, Auto-lock & App Switcher Masking [done - Gate PASSED]
-  6. M4: Local LLM (Ollama/LM Studio) Adapter & SSE Streaming Clinical Summaries [done - Gate PASSED]
-  7. M5: E2E Verification & Capacitor Android APK Build [done - Gate PASSED]
-- **Current phase**: Complete (All milestones finished and verified)
-- **Current focus**: Synthesizing final results and human report for caller parent
+  1. Survey & Scope Mapping (3 Explorers / Spec Miners) [done]
+  2. Project Architecture & Milestone Decomposition [done]
+  3. Milestone 1 (R1 Auth & Keypad UI) [DONE - Gate PASS]
+  4. Milestone 2 (R2 System Environment & Accessibility) [DONE - Gate PASS]
+  5. Milestone 3 (R3 Medication Management & Symptoms & Dashboard) [DONE - Gate PASS]
+  6. Milestone 4 (R4 Local AI Offline Guard & Clinical Briefing) [in-progress - Implementation Replacement]
+  7. Final Milestone (E2E Test 100% pass + Tier 5 hardening + Official APK) [pending]
+- **Current phase**: 4 (Milestone 4 Implementation)
+- **Current focus**: Monitor worker_m4_replacement finalizing F11 & F12 implementation and testing
 
 ## 🔒 Key Constraints
-- Never write, modify, or create source code files directly. Dispatch subagents for all code work.
-- Never run build/test commands directly. Require workers to do so and report.
-- Zero tolerance for cheating: Forensic Auditor report of INTEGRITY VIOLATION is an unconditional binary veto.
-- Always include path to ORIGINAL_REQUEST.md in every subagent dispatch.
+- NEVER write, modify, or create source code files directly.
+- NEVER run build/test commands yourself — require workers to do so.
+- NEVER investigate or explore the problem at the code level — dispatch Explorers for technical investigation.
+- You MAY use file-editing tools ONLY for metadata/state files (.md) in your .agents/teamwork/ folder.
+- Binary veto on integrity violations from Forensic Auditor.
+- Include ORIGINAL_REQUEST.md path in every subagent dispatch.
 - Never reuse a subagent after it has delivered its handoff — always spawn fresh.
 
 ## Current Parent
-- Conversation ID: 59ac92f7-cda8-4903-9cd5-e5aeed6eb90f
-- Updated: 2026-11-06T10:10:45Z
+- Conversation ID: 1fd06b4e-b797-4981-986a-98dd062f41ab
+- Updated: 2026-11-07T08:40:31Z
 
 ## Key Decisions Made
-- All milestones M1 through M5 completed with 100% clean audits and 170 passing tests.
-- Official Android debug APK Bignal-v0.1.0-debug.apk verified at project root directory.
+- Milestones 1, 2, and 3 fully passed their gates with 100% test passes (331 / 331 tests) and CLEAN forensic audits.
+- Milestone 4 technical exploration successfully completed by `explorer_m4_1`, `explorer_m4_2`, and `explorer_m4_3`.
+- `worker_m4` hit transient 429 quota error; spawned `worker_m4_replacement` (`dfaa6316-1006-4307-b7b3-9a1d0fcccf6b`) to finalize and verify F11 & F12.
 
 ## Team Roster
 | Agent | Type | Work Item | Status | Conv ID |
 |-------|------|-----------|--------|---------|
-| worker_m5 | teamwork_worker | M5 Build & Quality | completed | ee51187d-066f-4a46-8322-6b89af46c521 |
+| explorer_m4_1 | teamwork_explorer | Strategy for F11 AI Guard | completed | f8326487-1bbb-4ad4-9737-31e4badf4537 |
+| explorer_m4_2 | teamwork_explorer | Strategy for F12 Dept Classifier | completed | a5d98dcd-f217-489c-9c56-07b43829dbb4 |
+| explorer_m4_3 | teamwork_explorer | Strategy for F12 Briefing UI | completed | 5ca38954-9748-42cf-a0e8-9f4e258e798d |
+| worker_m4_rep | teamwork_worker | Finalize M4 (F11 & F12) | in-progress | dfaa6316-1006-4307-b7b3-9a1d0fcccf6b |
 
 ## Succession Status
 - Succession required: no
-- Spawn count: 17 / 128
-- Pending subagents: none
+- Spawn count: 18 / 128
+- Pending subagents: dfaa6316-1006-4307-b7b3-9a1d0fcccf6b
+- Predecessor: c0c096b2-e043-4359-9001-d946fccdf4ac
+- Successor: not yet spawned
 
 ## Active Timers
-- Heartbeat cron: cancelled (all tasks finished)
+- Heartbeat cron: 43aee747-1459-4945-94e4-1dbe90f2516e/task-288
 - Safety timer: none
+- On succession: kill all timers before spawning successor
+- On context truncation: handle timers as step 4 of the State Recovery section of your prompt says
 
 ## Artifact Index
-- ORIGINAL_REQUEST.md: c:\Users\vivid\Documents\GitProject\Personal\2025\Bignal\.agents\teamwork\ORIGINAL_REQUEST.md
-- PROJECT.md: c:\Users\vivid\Documents\GitProject\Personal\2025\Bignal\PROJECT.md
-- TEST_INFRA.md: c:\Users\vivid\Documents\GitProject\Personal\2025\Bignal\TEST_INFRA.md
-- TEST_READY.md: c:\Users\vivid\Documents\GitProject\Personal\2025\Bignal\TEST_READY.md
-- GATE_STATUS.md: c:\Users\vivid\Documents\GitProject\Personal\2025\Bignal\.agents\teamwork\orchestrator\GATE_STATUS.md
-- APK Artifact: c:\Users\vivid\Documents\GitProject\Personal\2025\Bignal\Bignal-v0.1.0-debug.apk
+- .agents/teamwork/ORIGINAL_REQUEST.md — Verbatim user request
+- .agents/teamwork/PROJECT.md — Global architecture, feature inventory & milestones
+- .agents/teamwork/orchestrator/GATE_STATUS.md — Verifiable gating verdicts for M1, M2, M3
+- .agents/teamwork/orchestrator/progress.md — Liveness & status tracking
+- .agents/teamwork/explorer_m4_1/handoff.md — F11 AI Disconnection Guard blueprint
+- .agents/teamwork/explorer_m4_2/handoff.md — F12 Clinical Departments classifier blueprint
+- .agents/teamwork/explorer_m4_3/handoff.md — F12 30-Sec Doctor Briefing UI blueprint

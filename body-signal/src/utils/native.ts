@@ -1,19 +1,50 @@
 import { Haptics, ImpactStyle } from '@capacitor/haptics';
 import { LocalNotifications } from '@capacitor/local-notifications';
 
+export { ImpactStyle };
+
+let hapticsEnabledState = true;
+
 /**
- * Trigger subtle haptic feedback for mobile interactions
+ * Configure global haptic feedback permission state.
+ * When set to false, all vibrations are suppressed across native and web layers.
+ */
+export function setHapticsEnabled(enabled: boolean): void {
+  hapticsEnabledState = Boolean(enabled);
+}
+
+/**
+ * Query current global haptic feedback permission state.
+ */
+export function isHapticsEnabled(): boolean {
+  return hapticsEnabledState;
+}
+
+/**
+ * Trigger subtle haptic feedback for mobile interactions.
+ * Centralized guard ensures strict compliance with user and system vibration settings.
  */
 export async function triggerHaptic(style: ImpactStyle = ImpactStyle.Light): Promise<void> {
+  if (!hapticsEnabledState) {
+    return;
+  }
+
+  const effectiveStyle = style || ImpactStyle.Light;
+
   try {
-    await Haptics.impact({ style });
+    await Haptics.impact({ style: effectiveStyle });
   } catch {
-    // Graceful fallback for web/desktop
-    if ('vibrate' in navigator) {
-      navigator.vibrate(15);
+    // Graceful fallback for web/desktop when vibration is supported and enabled
+    if (hapticsEnabledState && typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+      try {
+        navigator.vibrate(15);
+      } catch {
+        // Safe no-op if blocked by browser policy
+      }
     }
   }
 }
+
 
 /**
  * Schedule daily recurring reminder

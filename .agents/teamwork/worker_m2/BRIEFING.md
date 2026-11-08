@@ -1,79 +1,68 @@
-# BRIEFING — 2026-11-06T09:46:30Z
+# BRIEFING — 2026-11-07T03:25:00Z
 
 ## Mission
-Implement Milestone 2: Android App Shortcuts XML cleanup, Capacitor App plugin integration, DeepLinkHandler component, and In-App Floating SOS Widget with Settings toggle (Requirement R2).
+Implement Milestone 2 (Features F4, F7, F13): Real-Time Theme Sync, System Font Scale Inheritance, and Guarded Haptics Enforcement.
 
 ## 🔒 My Identity
-- Archetype: worker
-- Roles: implementer, qa
+- Archetype: teamwork_worker
+- Roles: implementer, qa, specialist
 - Working directory: c:\Users\vivid\Documents\GitProject\Personal\2025\Bignal\.agents\teamwork\worker_m2
-- Original parent: 1799b539-02c9-4b03-9d7a-d6838a61bbc2
-- Milestone: Milestone 2 (Shortcuts & In-App Floating SOS Widget - Requirement R2)
+- Original parent: c0c096b2-e043-4359-9001-d946fccdf4ac
+- Milestone: M2 (System Environment & Accessibility Integration)
 
 ## 🔒 Key Constraints
-- DO NOT CHEAT. All implementations must be genuine.
-- Minimal change principle.
-- Full verification: `npx tsc --noEmit`, `npm run test:data`, `npm test` (170 tests), `npm run build`.
-- Android shortcuts: remove invalid `<categories android:name="android.shortcut.conversation" />`.
-- Capacitor App plugin: `@capacitor/app: ^8.0.0`.
-- DeepLinkHandler: handle appUrlOpen and getLaunchUrl for ?mode=acute or /acute, /briefing, /entry.
-- Floating SOS widget & settings toggle `quickSosEnabled`.
+- Exclusive file write ownership:
+  - body-signal/src/context/SettingsContext.tsx
+  - body-signal/src/utils/native.ts
+  - body-signal/android/app/src/main/java/com/bodysignal/app/MainActivity.java
+  - body-signal/src/index.css
+  - body-signal/tailwind.config.js
+- DO NOT touch files outside this list.
+- DO NOT CHEAT: genuine implementations only, no hardcoded test outputs or facade dummy methods.
 
 ## Current Parent
-- Conversation ID: 1799b539-02c9-4b03-9d7a-d6838a61bbc2
-- Updated: 2026-11-06T09:43:01Z
+- Conversation ID: c0c096b2-e043-4359-9001-d946fccdf4ac
+- Updated: 2026-11-07T03:25:00Z
 
 ## Task Summary
 - **What to build**:
-  1. Fix `shortcuts.xml` by stripping conversation categories.
-  2. Install `@capacitor/app: ^8.0.0` and sync to Android project.
-  3. Create `DeepLinkHandler.tsx` and integrate inside `BrowserRouter` and `AcutePainProvider` in `App.tsx`.
-  4. Verify floating SOS widget in `Layout.tsx` and add `quickSosEnabled` toggle in `Settings.tsx` & `SettingsContext.tsx`.
-  5. Empirical test verification script `verify-r2-empirical.mjs`.
+  - F4: Real-time dynamic theme sync via matchMedia in SettingsContext.tsx
+  - F7: System font scale inheritance in MainActivity.java (applyFontScale on onResume and onConfigurationChanged) + responsive text scaling in CSS/Tailwind
+  - F13: System-linked guarded haptics in native.ts & SettingsContext.tsx
 - **Success criteria**:
-  - `npx tsc --noEmit`: 0 errors (PASS)
-  - `npm run test:data`: PASS
-  - `npm run test:r2`: 15/15 PASS
-  - `npm test`: 170/170 E2E tests PASS
-  - `npm run build`: PASS (Vite production bundle built cleanly)
+  - npm --prefix body-signal run build passes (COMPLETED)
+  - node body-signal/test/run-feedback-tests.mjs --feature F4 passes (COMPLETED: 14/14)
+  - node body-signal/test/run-feedback-tests.mjs --feature F7 passes (COMPLETED: 13/13)
+  - node body-signal/test/run-feedback-tests.mjs --feature F13 passes (COMPLETED: 14/14)
+  - npm --prefix body-signal test passes (COMPLETED: 170/170)
+  - npx tsc --noEmit & npx eslint src pass (COMPLETED: 0 errors)
+- **Interface contracts**: PROJECT.md § Interface Contracts
+- **Code layout**: PROJECT.md § Code Layout & Exclusive Write Boundaries
 
 ## Key Decisions Made
-- `shortcuts.xml`: Removed `<categories android:name="android.shortcut.conversation" />` from all three shortcuts to eliminate launcher bubble filtering on standard shortcuts.
-- `DeepLinkHandler.tsx`: Listens to both `CapApp.getLaunchUrl()` (cold start) and `CapApp.addListener('appUrlOpen')` (warm start). Decodes target URI, calling `openAcute()` for `?mode=acute` or `/acute`, and `navigate()` for `/briefing` and `/entry`.
-- `SettingsContext.tsx` & `Settings.tsx`: Added `setQuickSos` method and an accessible toggle switch under General Settings for "상시 긴급 통증 SOS 위젯 표시 (`quickSosEnabled`)".
+- `native.ts`: Implemented centralized guarded haptics policy via `hapticsEnabledState`, `setHapticsEnabled(enabled)`, `isHapticsEnabled()`, and early exit in `triggerHaptic()`.
+- `SettingsContext.tsx`: Added persistent `matchMedia('(prefers-color-scheme: dark)')` listener with change handler and cleanup on unmount; synchronized `setHapticsEnabled` on load, update, and toggle; updated `addMedicationPreset(name, dosage)` per Interface Contract 4.
+- `MainActivity.java`: Added `applyFontScale()` invoking `WebSettings.setTextZoom((int)(fontScale * 100))` on `onCreate`, `onResume`, and `onConfigurationChanged(Configuration newConfig)`.
+- `index.css`: Added root `-webkit-text-size-adjust: 100%`, `text-size-adjust: 100%`, `font-size: 16px`, and `body text-base` for fluid relative font scaling.
+- `tailwind.config.js`: Extended spacing `18: '4.5rem'` (72px), `minWidth`, and `minHeight` for ergonomic touch targets.
 
 ## Artifact Index
-- DISPATCH.md
-- BRIEFING.md
-- progress.md
-- handoff.md
-- `body-signal/android/app/src/main/res/xml/shortcuts.xml`
-- `body-signal/package.json`
-- `body-signal/src/components/DeepLinkHandler.tsx`
-- `body-signal/src/App.tsx`
-- `body-signal/src/components/Layout.tsx`
-- `body-signal/src/pages/Settings.tsx`
-- `body-signal/src/context/SettingsContext.tsx`
-- `body-signal/src/i18n/translations.ts`
-- `body-signal/scripts/verify-r2-empirical.mjs`
+- DISPATCH.md — Task assignment & updates
+- BRIEFING.md — Persistent context index
+- progress.md — Liveness heartbeat & checklist
+- handoff.md — 5-component handoff report
 
 ## Change Tracker
 - **Files modified**:
-  - `android/app/src/main/res/xml/shortcuts.xml`: Removed conversation categories
-  - `package.json`: Added `@capacitor/app: ^8.0.0` dependency & `test:r2` script
-  - `src/components/DeepLinkHandler.tsx`: New component handling deep linking & shortcut intents
-  - `src/App.tsx`: Mounted `<DeepLinkHandler />` within `BrowserRouter` and `AcutePainProvider`
-  - `src/context/SettingsContext.tsx`: Added `setQuickSos` updater and context exposure
-  - `src/pages/Settings.tsx`: Added `quickSosEnabled` toggle UI
-  - `src/i18n/translations.ts`: Added `quickSosSetting` and `quickSosSettingDesc` for ko and en
-  - `scripts/verify-r2-empirical.mjs`: Added R2 verification test suite
-- **Build status**: PASS (`tsc --noEmit` 0 errors, `npm run build` code 0)
+  - `body-signal/src/context/SettingsContext.tsx`: Real-time theme sync listener, haptics sync, addMedicationPreset dosage parameter
+  - `body-signal/src/utils/native.ts`: Guarded triggerHaptic, setHapticsEnabled, isHapticsEnabled
+  - `body-signal/android/app/src/main/java/com/bodysignal/app/MainActivity.java`: applyFontScale on resume and configuration change
+  - `body-signal/src/index.css`: Accessible base typography and text-size-adjust
+  - `body-signal/tailwind.config.js`: Extended spacing 18 and min touch dimensions
+- **Build status**: All builds and tests passing cleanly (100% pass)
 - **Pending issues**: None
 
 ## Quality Status
-- **Build/test result**: All 170 E2E tests passed, 15 R2 empirical tests passed, data store tests passed.
-- **Lint status**: 0 errors
-- **Tests added/modified**: `scripts/verify-r2-empirical.mjs` (15 empirical verification tests)
-
-## Loaded Skills
-None
+- **Build/test result**: PASS (Vite build OK, TypeScript 0 errors, Feedback tests 161/161 PASS, Core E2E 170/170 PASS)
+- **Lint status**: PASS (0 violations in `npx eslint src`)
+- **Tests added/modified**: Verified all tests for F4, F7, F13 across Tiers 1-4

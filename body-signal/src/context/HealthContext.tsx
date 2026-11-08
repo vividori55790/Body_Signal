@@ -326,16 +326,22 @@ export const HealthProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       };
     });
 
-    // Body Part distribution
+    // Body Part distribution (split comma-separated multi-region parts)
     const bodyPartDist: Record<string, { count: number; maxIntensity: number }> = {};
     logs.forEach((log) => {
       const cond = conditions.find((c) => c.id === log.conditionId);
-      const part = log.bodyPartOverride || cond?.bodyPart || '미지정';
-      if (!bodyPartDist[part]) {
-        bodyPartDist[part] = { count: 0, maxIntensity: 0 };
-      }
-      bodyPartDist[part].count += 1;
-      bodyPartDist[part].maxIntensity = Math.max(bodyPartDist[part].maxIntensity, log.intensity);
+      const rawPart = log.bodyPartOverride || cond?.bodyPart || '미지정';
+      const parts = rawPart.includes(',')
+        ? rawPart.split(',').map((s) => s.trim()).filter(Boolean)
+        : [rawPart];
+
+      parts.forEach((part) => {
+        if (!bodyPartDist[part]) {
+          bodyPartDist[part] = { count: 0, maxIntensity: 0 };
+        }
+        bodyPartDist[part].count += 1;
+        bodyPartDist[part].maxIntensity = Math.max(bodyPartDist[part].maxIntensity, log.intensity);
+      });
     });
 
     // Medication response

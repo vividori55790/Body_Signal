@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Zap, Check, AlertCircle, HeartPulse, Pill, ArrowLeft, ShieldAlert } from 'lucide-react';
+import { Zap, Check, AlertCircle, HeartPulse, Pill, ArrowLeft, ShieldAlert, Plus } from 'lucide-react';
 import { useHealth } from '../context/HealthContext';
+import { useSettings } from '../context/SettingsContext';
 import { triggerHaptic } from '../utils/native';
+import { formatMedicationPreset } from '../utils/medication';
+import { AddMedicationInline } from './AddMedicationInline';
 
 // Top 6 Most Common Acute Pain Regions with clear, high-contrast emojis & 56dp+ tap targets
 const ACUTE_BODY_PARTS = [
@@ -13,20 +16,20 @@ const ACUTE_BODY_PARTS = [
   { id: 'stomach', name: '배/복부', icon: '🫄', desc: '위경련, 체함, 복통' },
 ];
 
-const COMMON_ACUTE_MEDS = [
-  '타이레놀(아세트아미노펜)',
-  '이부프로펜/소염제',
-  '병원 처방 진통제',
-  '근육이완제',
-];
-
 export const AcutePainMode: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const { conditions, saveEntry } = useHealth();
+  const { settings } = useSettings();
+
+  const effectiveMeds =
+    settings?.medicationPresets && settings.medicationPresets.length > 0
+      ? settings.medicationPresets.map(formatMedicationPreset)
+      : ['타이레놀 500mg', '이부프로펜 400mg', '소염진통제', '병원 처방약', '근육이완제'];
 
   const [intensity, setIntensity] = useState<number>(7); // Default to acute distress level
   const [selectedPart, setSelectedPart] = useState<string>('허리/요통');
   const [tookMed, setTookMed] = useState<boolean>(false);
-  const [selectedMed, setSelectedMed] = useState<string>('타이레놀(아세트아미노펜)');
+  const [selectedMed, setSelectedMed] = useState<string>(effectiveMeds[0] || '타이레놀 500mg');
+  const [showAddMed, setShowAddMed] = useState<boolean>(false);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [isSaved, setIsSaved] = useState<boolean>(false);
 
@@ -295,7 +298,7 @@ export const AcutePainMode: React.FC<{ onClose: () => void }> = ({ onClose }) =>
             <div className="space-y-2 pt-2 border-t border-slate-700/60 animate-in fade-in">
               <span className="text-[11px] font-bold text-slate-300 block">복용한 약 선택:</span>
               <div className="grid grid-cols-2 gap-2">
-                {COMMON_ACUTE_MEDS.map((med) => {
+                {effectiveMeds.map((med) => {
                   const isSelected = selectedMed === med;
                   return (
                     <button
@@ -305,21 +308,41 @@ export const AcutePainMode: React.FC<{ onClose: () => void }> = ({ onClose }) =>
                         triggerHaptic();
                         setSelectedMed(med);
                       }}
-                      className={`min-h-[44px] p-2 rounded-xl text-xs font-bold transition-all text-left truncate flex items-center justify-between border ${
+                      className={`min-h-[44px] p-2 rounded-xl text-xs font-bold transition-all text-left flex items-center justify-between border break-words ${
                         isSelected
                           ? 'bg-blue-600 text-white border-blue-400 shadow-sm ring-1 ring-blue-300'
                           : 'bg-slate-700/60 text-slate-300 border-slate-600/50 hover:bg-slate-700'
                       }`}
                     >
-                      <span className="truncate">{med}</span>
+                      <span className="break-words line-clamp-2">{med}</span>
                       {isSelected && <Check size={14} className="shrink-0 ml-1" />}
                     </button>
                   );
                 })}
+                <button
+                  type="button"
+                  onClick={() => {
+                    triggerHaptic();
+                    setShowAddMed(true);
+                  }}
+                  className="min-h-[44px] p-2 rounded-xl text-xs font-bold transition-all text-left flex items-center justify-center gap-1.5 border border-dashed border-blue-400/60 bg-blue-950/30 text-blue-300 hover:bg-blue-900/40 active:scale-95"
+                >
+                  <Plus size={14} /> + 약 추가
+                </button>
               </div>
             </div>
           )}
         </section>
+
+        <AddMedicationInline
+          isOpen={showAddMed}
+          onClose={() => setShowAddMed(false)}
+          onAdded={(newMed) => {
+            setTookMed(true);
+            setSelectedMed(newMed);
+            setShowAddMed(false);
+          }}
+        />
       </div>
 
       {/* Floating Bottom Massive 3-Second Quick Save Bar */}

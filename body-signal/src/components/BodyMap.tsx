@@ -1,7 +1,30 @@
 import React, { useState } from 'react';
 import { triggerHaptic } from '../utils/native';
 
-interface BodyMapProps {
+/**
+ * Deserializes a comma-separated bodyPart string into a cleaned string array.
+ * Tolerates messy punctuation, redundant commas, and extra whitespace.
+ */
+export function parseMultiRegionParts(bodyPartStr?: string | null): string[] {
+  if (!bodyPartStr || typeof bodyPartStr !== 'string') return [];
+  return bodyPartStr
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+/**
+ * Serializes an array of body part names into a clean comma-separated string.
+ * Deduplicates entries and removes blank strings.
+ */
+export function formatMultiRegionParts(parts: string[]): string {
+  if (!Array.isArray(parts)) return '';
+  return Array.from(new Set(parts.map((p) => p.trim()).filter(Boolean))).join(', ');
+}
+
+export interface BodyMapProps {
+  selectedParts?: string[];
+  onTogglePart?: (partLabel: string) => void;
   selectedPart?: string;
   onSelectPart?: (partLabel: string) => void;
   intensityMap?: Record<string, number>;
@@ -234,6 +257,8 @@ const COMMON_CHIPS = [
 ];
 
 export const BodyMap: React.FC<BodyMapProps> = ({
+  selectedParts,
+  onTogglePart,
   selectedPart,
   onSelectPart,
   intensityMap = {},
@@ -243,30 +268,60 @@ export const BodyMap: React.FC<BodyMapProps> = ({
 
   const regions = viewSide === 'front' ? FRONT_REGIONS : BACK_REGIONS;
 
+  const effectiveSelectedParts: string[] = React.useMemo(() => {
+    if (Array.isArray(selectedParts)) {
+      return selectedParts;
+    }
+    if (selectedPart) {
+      return parseMultiRegionParts(selectedPart);
+    }
+    return [];
+  }, [selectedParts, selectedPart]);
+
   const handleRegionClick = (region: AnatomicalRegion) => {
+    if (readOnly) return;
     triggerHaptic();
+    if (onTogglePart) {
+      onTogglePart(region.name);
+    }
     if (onSelectPart) {
       onSelectPart(region.name);
     }
   };
 
-  const getRegionFill = (region: AnatomicalRegion) => {
-    const isSelected =
-      selectedPart &&
-      (selectedPart.includes(region.category) ||
-        selectedPart.includes(region.name) ||
-        region.name.includes(selectedPart));
+  const isRegionSelected = (region: AnatomicalRegion): boolean => {
+    return effectiveSelectedParts.some((part) => {
+      const trimmed = part.trim();
+      if (!trimmed) return false;
+      return (
+        trimmed === region.name ||
+        region.name.includes(trimmed) ||
+        trimmed.includes(region.name) ||
+        trimmed === region.category ||
+        trimmed.split('/')[0] === region.category
+      );
+    });
+  };
 
-    if (isSelected) {
+  const getRegionFill = (region: AnatomicalRegion) => {
+    if (isRegionSelected(region)) {
       return 'fill-emerald-500 stroke-emerald-300 stroke-[2.5] filter drop-shadow-[0_0_8px_rgba(16,185,129,0.8)]';
     }
 
     // Check intensity map
-    const int =
+    let int =
       intensityMap[region.name] ||
       intensityMap[region.category] ||
       intensityMap[region.id] ||
       0;
+
+    if (!int) {
+      for (const [key, val] of Object.entries(intensityMap)) {
+        if (key.includes(region.name) || region.name.includes(key) || key.includes(region.category)) {
+          int = Math.max(int, val);
+        }
+      }
+    }
 
     if (int >= 8) return 'fill-rose-500/80 stroke-rose-400 stroke-1 hover:fill-rose-500';
     if (int >= 5) return 'fill-amber-500/80 stroke-amber-400 stroke-1 hover:fill-amber-500';
@@ -334,11 +389,7 @@ export const BodyMap: React.FC<BodyMapProps> = ({
 
           {/* Region Anchor Indicators on hover/selected */}
           {regions.map((region) => {
-            const isSelected =
-              selectedPart &&
-              (selectedPart.includes(region.category) || selectedPart.includes(region.name));
-
-            if (!isSelected) return null;
+            if (!isRegionSelected(region)) return null;
 
             return (
               <circle
@@ -403,17 +454,64 @@ export const BodyMap: React.FC<BodyMapProps> = ({
         </div>
       )}
 
-      {/* Selected Indicator Label */}
+      {/* Selected Indicator Label & Multi-Region Badges */}
       {!readOnly && (
-        <div className="text-center">
-          {selectedPart ? (
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/80 border border-emerald-200 dark:border-emerald-800 text-xs font-bold text-emerald-700 dark:text-emerald-300 shadow-sm animate-in fade-in">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              선택 부위: {selectedPart}
-            </span>
+        <div className="w-full text-center space-y-2">
+          {effectiveSelectedParts.length > 0 ? (
+            <div className="space-y-1.5 animate-in fade-in">
+              <div className="flex items-center justify-center gap-2">
+                <span className="text-xs font-bold text-emerald-700 dark:text-emerald-300">
+                  선택 부위 ({effectiveSelectedParts.length}곳):
+                </span>
+                {effectiveSelectedParts.length > 3 && (
+                  <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+                    {effectiveSelectedParts.slice(0, 3).join(', ')} 외 {effectiveSelectedParts.length - 3}곳
+                  </span>
+                )}
+                {onTogglePart && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      triggerHaptic();
+                      effectiveSelectedParts.forEach((p) => onTogglePart(p));
+                    }}
+                    className="text-[10px] text-slate-400 hover:text-rose-500 underline ml-1"
+                  >
+                    전체 해제
+                  </button>
+                )}
+              </div>
+
+              {/* Tag Badges with X buttons */}
+              <div className="flex flex-wrap gap-1.5 justify-center max-w-sm mx-auto px-2">
+                {effectiveSelectedParts.map((part) => (
+                  <span
+                    key={part}
+                    className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/80 border border-emerald-300 dark:border-emerald-700 text-xs font-bold text-emerald-700 dark:text-emerald-300 shadow-sm"
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                    {part}
+                    {onTogglePart && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          triggerHaptic();
+                          onTogglePart(part);
+                        }}
+                        className="hover:text-rose-500 ml-0.5 font-bold"
+                        aria-label={`${part} 선택 해제`}
+                      >
+                        ×
+                      </button>
+                    )}
+                  </span>
+                ))}
+              </div>
+            </div>
           ) : (
             <span className="text-[11px] font-medium text-slate-400">
-              인체도에서 통증 부위를 직접 터치하거나 아래 칩을 선택하세요
+              인체도에서 통증 부위를 직접 터치하거나 아래 칩을 선택하세요 (다중 선택 가능)
             </span>
           )}
         </div>
@@ -424,7 +522,9 @@ export const BodyMap: React.FC<BodyMapProps> = ({
         <div className="w-full pt-1">
           <div className="flex flex-wrap gap-1.5 justify-center">
             {COMMON_CHIPS.map((chip) => {
-              const isSelected = selectedPart && selectedPart.includes(chip.split('/')[0]);
+              const isSelected = effectiveSelectedParts.some(
+                (p) => p.includes(chip.split('/')[0]) || chip.includes(p.split('/')[0])
+              );
               return (
                 <button
                   key={chip}
@@ -436,6 +536,9 @@ export const BodyMap: React.FC<BodyMapProps> = ({
                     } else if (chip.includes('가슴') || chip.includes('복부')) {
                       setViewSide('front');
                     }
+                    if (onTogglePart) {
+                      onTogglePart(chip);
+                    }
                     onSelectPart?.(chip);
                   }}
                   className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all ${
@@ -444,7 +547,7 @@ export const BodyMap: React.FC<BodyMapProps> = ({
                       : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 active:scale-95'
                   }`}
                 >
-                  {chip}
+                  {chip} {isSelected && '✓'}
                 </button>
               );
             })}

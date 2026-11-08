@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { UserSettings, MedicationPreset } from '../types/health';
 import { loadUserSettings, saveUserSettings, DEFAULT_SETTINGS } from '../utils/storage';
 import { translations, Language } from '../i18n/translations';
-import { scheduleDailyReminder, cancelDailyReminder, triggerHaptic } from '../utils/native';
+import { scheduleDailyReminder, cancelDailyReminder, triggerHaptic, setHapticsEnabled } from '../utils/native';
 
 interface SettingsContextValue {
   settings: UserSettings;
@@ -12,7 +12,8 @@ interface SettingsContextValue {
   setHaptics: (enabled: boolean) => Promise<void>;
   setQuickSos: (enabled: boolean) => Promise<void>;
   setReminder: (enabled: boolean, time?: string) => Promise<void>;
-  addMedicationPreset: (name: string) => Promise<void>;
+  addMedicationPreset: (name: string, dosage?: string) => Promise<MedicationPreset | null>;
+  updateMedicationPreset: (id: string, updates: Partial<MedicationPreset>) => Promise<void>;
   removeMedicationPreset: (id: string) => Promise<void>;
   addSymptomPreset: (name: string) => Promise<void>;
   removeSymptomPreset: (name: string) => Promise<void>;
@@ -28,14 +29,24 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     loadUserSettings().then((loaded) => {
       setSettings(loaded);
       applyTheme(loaded.theme);
+      setHapticsEnabled(loaded.hapticsEnabled);
     });
   }, []);
 
   const applyTheme = (theme: 'light' | 'dark' | 'system') => {
+    if (typeof document === 'undefined') return;
     const root = document.documentElement;
-    const isDark =
-      theme === 'dark' ||
-      (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    let isDark = false;
+
+    if (theme === 'dark') {
+      isDark = true;
+    } else if (theme === 'light') {
+      isDark = false;
+    } else if (theme === 'system') {
+      if (typeof window !== 'undefined' && window.matchMedia) {
+        isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      }
+    }
 
     if (isDark) {
       root.classList.add('dark');
@@ -44,9 +55,36 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
   };
 
+  // Real-time dynamic theme sync with OS preference changes (F4)
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return;
+
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    const handleSystemThemeChange = (e: MediaQueryListEvent) => {
+      if (settings.theme === 'system') {
+        const root = document.documentElement;
+        if (e && typeof e.matches === 'boolean') {
+          if (e.matches) {
+            root.classList.add('dark');
+          } else {
+            root.classList.remove('dark');
+          }
+        } else {
+          applyTheme('system');
+        }
+      }
+    };
+
+    mediaQuery.addEventListener('change', handleSystemThemeChange);
+    return () => {
+      mediaQuery.removeEventListener('change', handleSystemThemeChange);
+    };
+  }, [settings.theme]);
+
   const updateAndSave = async (updater: (prev: UserSettings) => UserSettings) => {
     const next = updater(settings);
     setSettings(next);
+    setHapticsEnabled(next.hapticsEnabled);
     await saveUserSettings(next);
     if (next.hapticsEnabled) {
       triggerHaptic();
@@ -68,6 +106,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   const setHaptics = async (hapticsEnabled: boolean) => {
+    setHapticsEnabled(hapticsEnabled);
     await updateAndSave((prev) => ({ ...prev, hapticsEnabled }));
   };
 
@@ -89,15 +128,38 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }));
   };
 
-  const addMedicationPreset = async (name: string) => {
-    if (!name.trim()) return;
+  const addMedicationPreset = async (name: string, dosage?: string): Promise<MedicationPreset | null> => {
+    const trimmed = (name || '').trim();
+    if (!trimmed) return null;
+    const cappedName = trimmed.slice(0, 80);
+    const cappedDosage = dosage ? dosage.trim().slice(0, 40) : undefined;
+
+    // Check duplicate (case-insensitive name match)
+    const existing = settings.medicationPresets.find(
+      (p) => p.name.trim().toLowerCase() === cappedName.toLowerCase()
+    );
+    if (existing) {
+      return existing;
+    }
+
     const newPreset: MedicationPreset = {
       id: crypto.randomUUID(),
-      name: name.trim(),
+      name: cappedName,
+      dosage: cappedDosage || undefined,
     };
     await updateAndSave((prev) => ({
       ...prev,
       medicationPresets: [...prev.medicationPresets, newPreset],
+    }));
+    return newPreset;
+  };
+
+  const updateMedicationPreset = async (id: string, updates: Partial<MedicationPreset>) => {
+    await updateAndSave((prev) => ({
+      ...prev,
+      medicationPresets: prev.medicationPresets.map((p) =>
+        p.id === id ? { ...p, ...updates } : p
+      ),
     }));
   };
 
@@ -141,6 +203,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         setQuickSos,
         setReminder,
         addMedicationPreset,
+        updateMedicationPreset,
         removeMedicationPreset,
         addSymptomPreset,
         removeSymptomPreset,

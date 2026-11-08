@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Zap, Check, AlertCircle, Sparkles, HeartPulse } from 'lucide-react';
+import { Zap, Check, AlertCircle, Sparkles, HeartPulse, Plus } from 'lucide-react';
 import { useHealth } from '../context/HealthContext';
+import { useSettings } from '../context/SettingsContext';
 import { triggerHaptic } from '../utils/native';
+import { formatMedicationPreset } from '../utils/medication';
+import { AddMedicationInline } from './AddMedicationInline';
 
 const QUICK_BODY_PARTS = [
   '허리/요통',
@@ -18,11 +21,18 @@ const QUICK_MEDS = ['타이레놀', '소염진통제', '처방약', '근이완�
 
 export const QuickPainLogger: React.FC<{ onSaved?: () => void }> = ({ onSaved }) => {
   const { conditions, saveEntry } = useHealth();
+  const { settings } = useSettings();
   const [selectedIntensity, setSelectedIntensity] = useState<number>(5);
   const [selectedPart, setSelectedPart] = useState<string>('허리/요통');
   const [selectedMed, setSelectedMed] = useState<string>('');
+  const [showAddMed, setShowAddMed] = useState<boolean>(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [justSaved, setJustSaved] = useState(false);
+
+  const availableMeds =
+    settings?.medicationPresets && settings.medicationPresets.length > 0
+      ? settings.medicationPresets.map(formatMedicationPreset)
+      : QUICK_MEDS;
 
   const activeConditions = conditions.filter((c) => !c.isArchived);
 
@@ -203,14 +213,14 @@ export const QuickPainLogger: React.FC<{ onSaved?: () => void }> = ({ onSaved })
           3. 복약 여부 (선택)
         </span>
         <div className="flex flex-wrap gap-1.5">
-          {QUICK_MEDS.map((med) => {
+          {availableMeds.map((med) => {
             const isSelected = selectedMed === med;
             return (
               <button
                 key={med}
                 type="button"
                 onClick={() => handleToggleMed(med)}
-                className={`min-h-[32px] px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all ${
+                className={`min-h-[32px] px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all break-words ${
                   isSelected
                     ? 'bg-blue-600 text-white shadow-sm ring-1 ring-blue-300'
                     : 'bg-slate-100 dark:bg-slate-800/70 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700/60 active:scale-95'
@@ -220,8 +230,27 @@ export const QuickPainLogger: React.FC<{ onSaved?: () => void }> = ({ onSaved })
               </button>
             );
           })}
+          <button
+            type="button"
+            onClick={() => {
+              triggerHaptic();
+              setShowAddMed(true);
+            }}
+            className="min-h-[32px] px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border border-dashed border-emerald-300 dark:border-emerald-700 active:scale-95 flex items-center gap-1"
+          >
+            <Plus size={12} /> + 약 추가
+          </button>
         </div>
       </div>
+
+      <AddMedicationInline
+        isOpen={showAddMed}
+        onClose={() => setShowAddMed(false)}
+        onAdded={(newMed) => {
+          setSelectedMed(newMed);
+          setShowAddMed(false);
+        }}
+      />
 
       {/* Instant Submit Button */}
       <button

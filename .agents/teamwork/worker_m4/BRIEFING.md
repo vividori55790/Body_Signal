@@ -1,55 +1,50 @@
-# BRIEFING — 2026-11-06T09:43:00Z
+# BRIEFING — 2026-11-07T11:03:00Z
 
 ## Mission
-Implement Milestone 4: Local LLM Integration & Dual Streaming (SSE/Ollama NDJSON), Android cleartext LAN config, and Doctor/Patient clinical persona selection.
+Implement Milestone 4 (R4: Local AI Offline Guard & Doctor-Facing Clinical Briefing) covering F11 and F12.
 
 ## 🔒 My Identity
 - Archetype: teamwork_worker
-- Roles: implementer, qa
+- Roles: implementer, qa, specialist
 - Working directory: c:\Users\vivid\Documents\GitProject\Personal\2025\Bignal\.agents\teamwork\worker_m4
-- Original parent: 1799b539-02c9-4b03-9d7a-d6838a61bbc2
-- Milestone: Milestone 4 (Local LLM Integration & Streaming - Requirement R4)
+- Original parent: 43aee747-1459-4945-94e4-1dbe90f2516e
+- Milestone: M4 (R4: Local AI Offline Guard & Doctor-Facing Clinical Briefing)
 
 ## 🔒 Key Constraints
-- Add `android:usesCleartextTraffic="true"` to `<application ...>` in `body-signal/android/app/src/main/AndroidManifest.xml`
-- Enhance `streamChatCompletions` in `body-signal/src/utils/localLlm.ts` to seamlessly decode standard SSE (`data: ...`) and native Ollama NDJSON lines (`{ "message": { "content": "..." }, "done": false }`)
-- Preserve offline mock fallback (`fallbackClinicalStream`) when endpoint is unreachable
-- In `body-signal/src/pages/ClinicalBriefing.tsx`, add persona selection tabs/buttons ("의사용 전문 임상 요약 (SOAP)" -> `doctor`, "환자용 쉬운 소견 요약" -> `patient`)
-- Wire active persona into `generateClinicalAiAnalysisStream`
-- Only modify exclusively owned files: `AndroidManifest.xml`, `localLlm.ts`, `ClinicalBriefing.tsx`
-- Must pass `npx tsc --noEmit`, `npm run test:data`, `npm test` (all 170 E2E tests), `npm run build`
+- File Ownership Boundaries:
+  - `body-signal/src/utils/localLlm.ts`
+  - `body-signal/src/utils/clinicalDepartments.ts` (new file)
+  - `body-signal/src/pages/ClinicalBriefing.tsx`
+- Genuine implementation required (No cheating, no fake tokens emitted on offline, true classification logic).
+- CRITICAL BASELINE CONSTRAINT: Retain `fallbackClinicalStream` function declaration (with original strings `온디바이스 임상 엔진 분석 리포트` and `외부 서버 전송 없이 100% 기기 내부 로컬 분석`) as deprecated/uncalled so baseline tests pass.
+- Verification pass criteria:
+  - `node body-signal/test/run-feedback-tests.mjs --feature F11`
+  - `node body-signal/test/run-feedback-tests.mjs --feature F12`
+  - `node body-signal/test/run-feedback-tests.mjs` (All 161 tests pass)
+  - `npm --prefix body-signal test` (All 170 baseline tests pass)
+  - `npm --prefix body-signal run build` (Succeed with zero TS/Vite errors)
 
 ## Current Parent
-- Conversation ID: 1799b539-02c9-4b03-9d7a-d6838a61bbc2
-- Updated: 2026-11-06T09:43:00Z
+- Conversation ID: 43aee747-1459-4945-94e4-1dbe90f2516e
+- Updated: 2026-11-07T11:03:00Z
 
 ## Task Summary
-- **What to build**: Android cleartext LAN config, Dual streaming SSE/NDJSON parser in localLlm.ts, Doctor/Patient persona selector in ClinicalBriefing.tsx.
-- **Success criteria**: All checks passing (typecheck, data tests, 170 E2E tests, build).
-- **Interface contracts**: PROJECT.md & localLlm.ts types
-- **Code layout**: body-signal/src/...
-
-## Key Decisions Made
-- `AndroidManifest.xml`: Added `android:usesCleartextTraffic="true"` to `<application>` tag so WebViews & Capacitor can connect to LAN endpoints (`http://192.168.x.x:11434`, `http://10.0.2.2:11434`).
-- `localLlm.ts`: Unified stream line processor `processLine` handling standard SSE (`data: { choices: [{ delta: { content } }] }` and `data: [DONE]`) and Ollama native NDJSON lines (`{ "message": { "content" }, "done": false }` or `{ "response" }`). Buffer flushed at stream end. Added probe fallback to `/api/tags` in `testLocalLlmConnection`. Preserved offline mock `fallbackClinicalStream`.
-- `ClinicalBriefing.tsx`: Introduced `activePersona` state (`'doctor' | 'patient'`). Added persona selection buttons ("의사용 전문 임상 요약 (SOAP)" & "환자용 쉬운 소견 요약"). Wired active persona into `generateClinicalAiAnalysisStream`.
-
-## Artifact Index
-- DISPATCH.md — Orchestrator dispatch assignment
-- progress.md — Liveness heartbeat and step tracker
-- BRIEFING.md — Persistent working memory
-- verify_m4.mjs — Verification test script for M4 requirements
-- handoff.md — 5-component handoff report
+- **What to build**:
+  1. F11 Local AI Disconnection Guard in `localLlm.ts`: `LocalLlmOfflineError`, upfront config.enabled check, timeout (4000ms), 500 error handling, zero fake tokens, testLocalLlmConnection offline handling.
+  2. F12 Medical Department Classification Engine in `clinicalDepartments.ts`: `DepartmentType`, priority-based anatomical classification (Neurology > Orthopedics for nerve/headache terms), multi-region string parsing, `categorizeByDepartment` and summary generators.
+  3. F12 Doctor-Facing 30-Sec Clinical Briefing Screen in `ClinicalBriefing.tsx`: High-contrast on-screen presentation screen for clinicians with glanceable metrics, immediate Red Flags, horizontal specialty filter pills, department cards, slim offline banner with recovery guidance & zero-reload retry, secondary toolbar for copy/print.
+- **Success criteria**: All feedback tests (161) pass, all baseline tests (170) pass, build succeeds.
+- **Interface contracts**: `handoff.md` blueprints from explorer_m4_1, explorer_m4_2, explorer_m4_3.
 
 ## Change Tracker
-- **Files modified**:
-  - `body-signal/android/app/src/main/AndroidManifest.xml`: added `android:usesCleartextTraffic="true"`
-  - `body-signal/src/utils/localLlm.ts`: implemented dual streaming parser (SSE + Ollama NDJSON) & probe fallback
-  - `body-signal/src/pages/ClinicalBriefing.tsx`: added persona tab selection & wired persona into stream call
-- **Build status**: PASS (`tsc --noEmit` 0 errors, `npm run test:data` pass, `npm test` 170/170 pass, `npm run build` pass)
-- **Pending issues**: none
+- **Files modified**: None yet
+- **Build status**: Untested
+- **Pending issues**: None
 
 ## Quality Status
-- **Build/test result**: PASS (170/170 tests pass)
-- **Lint status**: clean
-- **Tests added/modified**: `verify_m4.mjs` unit verification of M4 requirements
+- **Build/test result**: Pending
+- **Lint status**: Pending
+- **Tests added/modified**: Pending
+
+## Loaded Skills
+None requested.

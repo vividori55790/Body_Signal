@@ -1,22 +1,38 @@
-## 2026-11-06T09:24:59Z
-You are Challenger M1_1 (teamwork_challenger).
-Your working directory is: c:\Users\vivid\Documents\GitProject\Personal\2025\Bignal\.agents\teamwork\challenger_m1_1
+# Task Assignment: Challenger 1 for Milestone 1 (M1)
 
-Read ORIGINAL_REQUEST.md at: c:\Users\vivid\Documents\GitProject\Personal\2025\Bignal\.agents\teamwork\ORIGINAL_REQUEST.md
-Read PROJECT.md at: c:\Users\vivid\Documents\GitProject\Personal\2025\Bignal\PROJECT.md
-Read Worker M1 Handoff at: c:\Users\vivid\Documents\GitProject\Personal\2025\Bignal\.agents\teamwork\worker_m1\handoff.md
+**Working Directory**: `c:\Users\vivid\Documents\GitProject\Personal\2025\Bignal\.agents\teamwork\challenger_m1_1`
+**Identity**: `challenger_m1_1` (Type: `teamwork_challenger`)
+**Parent**: Top-level Project Orchestrator (`c0c096b2-e043-4359-9001-d946fccdf4ac`)
 
-Empirical Verification Task:
-Empirically test Requirement R1 (UI & Rapid Pain Tracking):
-1. Write and execute an automated test script (e.g. Node.js script using zod / component logic) that verifies:
-   - Valid and boundary `PainLogSchema` instances (with postMedSideEffects empty, populated, missing, invalid types).
-   - AcutePainMode state transitions: intensity 1-10 boundary values, body part overrides, fast medication toggle.
-   - Medication response logic: delta calculation (NRS before vs after), elapsed time formatting, side-effect array persistence.
-2. Verify that `npx tsc --noEmit` exits with 0 errors.
-3. Record empirical test results and verdict (APPROVE / REQUEST_CHANGES) in `handoff.md`. Notify parent when done.
+## Objective
+Adversarially challenge Milestone 1 (Features F1, F2, F3). Empirically stress-test the authentication flow, full-bleed portal, biometric state transitions, and keypad touch interactions.
+
+## Focus Areas
+1. **Adversarial Stress Test on Biometric Fallback**: Trigger multiple cancellations, rapid clicks on biometric icon, sensor unavailable conditions, invalid credentials, and verify PIN keypad remains 100% operational.
+2. **Full-Bleed Portal & DOM Isolation**: Validate that `PinModal` mounts to `document.body` outside `#root`, has zero transparent pixels (`bg-slate-950`), locks body scroll on open, and restores scroll on close.
+3. **Execution**: Execute targeted test scripts against F1, F2, F3:
+   `node body-signal/test/run-feedback-tests.mjs --tier 1`
+   `node body-signal/test/run-feedback-tests.mjs --tier 2`
+
+## Output Requirements
+State your verdict explicitly as `APPROVE` or `REQUEST_CHANGES` in `handoff.md` and notify parent via `send_message`.
 
 
-## 2026-11-06T09:29:57Z
-**Context**: Milestone 1 Empirical Verification
-**Content**: Note on file locations: The type schema is in `body-signal/src/types/health.ts` (PainLogSchema), AcutePainMode is in `body-signal/src/components/AcutePainMode.tsx`, and the medication response tracking is in `body-signal/src/pages/Dashboard.tsx`.
-**Action**: Please run your empirical tests against these files and deliver your verdict in handoff.md.
+## 2026-11-07T02:50:09Z
+[Message] sender=c0c096b2-e043-4359-9001-d946fccdf4ac priority=MESSAGE_PRIORITY_HIGH
+You are challenger_m1_1, operating in c:\Users\vivid\Documents\GitProject\Personal\2025\Bignal\.agents\teamwork\challenger_m1_1.
+Your parent orchestrator is c0c096b2-e043-4359-9001-d946fccdf4ac.
+
+Read the following instructions carefully:
+1. Read ORIGINAL_REQUEST.md at:
+   c:\Users\vivid\Documents\GitProject\Personal\2025\Bignal\.agents\teamwork\ORIGINAL_REQUEST.md
+2. Read PROJECT.md at:
+   c:\Users\vivid\Documents\GitProject\Personal\2025\Bignal\.agents\teamwork\PROJECT.md
+3. Read DISPATCH.md at:
+   c:\Users\vivid\Documents\GitProject\Personal\2025\Bignal\.agents\teamwork\challenger_m1_1\DISPATCH.md
+4. Adversarially challenge M1: biometric cancellation recovery, portal DOM isolation outside #root, scroll locking, and run:
+   - node body-signal/test/run-feedback-tests.mjs --tier 1
+   - node body-signal/test/run-feedback-tests.mjs --tier 2
+5. Create progress.md in your working directory.
+6. Write your report to handoff.md with explicit verdict APPROVE or REQUEST_CHANGES.
+7. Notify parent via send_message.

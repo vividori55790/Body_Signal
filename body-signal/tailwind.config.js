@@ -26,7 +26,20 @@ export default {
       },
       fontFamily: {
         sans: ['Inter', 'system-ui', 'sans-serif'],
-      }
+      },
+      spacing: {
+        '18': '4.5rem',
+      },
+      minWidth: {
+        '18': '4.5rem',
+        'touch': '48px',
+        'keypad': '64px',
+      },
+      minHeight: {
+        '18': '4.5rem',
+        'touch': '48px',
+        'keypad': '64px',
+      },
     },
   },
   plugins: [],
