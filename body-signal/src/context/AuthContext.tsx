@@ -10,6 +10,12 @@ import {
   authenticateWithBiometrics,
   updateBiometricPinToken,
 } from '../utils/biometrics';
+import {
+  getTotpMeta,
+  enableTotp2FA,
+  disableTotp2FA,
+  verifyStoredTotpOrRecovery,
+} from '../utils/totp';
 
 interface AuthContextValue {
   isAuthReady: boolean;
@@ -20,10 +26,17 @@ interface AuthContextValue {
   isPrivacyMasked: boolean;
   isBiometricAvailable: boolean;
   isBiometricEnabled: boolean;
-  unlockApp: (pin: string) => Promise<{ success: boolean; message?: string }>;
+  isTotpEnabled: boolean;
+  pendingTwoFactor: boolean;
+  unlockApp: (pin: string) => Promise<{ success: boolean; message?: string; requiresTwoFactor?: boolean }>;
   unlockWithPin: (pin: string) => Promise<boolean>;
   unlockWithBiometric: () => Promise<boolean>;
+  verifyTwoFactorAndUnlock: (code: string) => Promise<{ success: boolean; usedRecovery?: boolean; message?: string }>;
+  cancelTwoFactor: () => void;
   toggleBiometric: (enable: boolean) => Promise<boolean>;
+  setupOsCredentialLock: () => Promise<boolean>;
+  enableTotp: (secret: string, recoveryCodes: string[]) => Promise<void>;
+  disableTotp: () => Promise<void>;
   setupNewPin: (pin: string) => Promise<void>;
   disablePin: () => Promise<void>;
   lockApp: () => void;
@@ -43,13 +56,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isPrivacyMasked, setIsPrivacyMasked] = useState(false);
   const [isBiometricAvailable, setIsBiometricAvailable] = useState(false);
   const [isBiometricEnabled, setIsBiometricEnabled] = useState(false);
+  const [isTotpEnabled, setIsTotpEnabled] = useState(false);
+  const [pendingTwoFactor, setPendingTwoFactor] = useState(false);
 
   const backgroundTimeRef = useRef<number | null>(null);
   const isPinSetRef = useRef<boolean>(false);
+  const isTotpEnabledRef = useRef<boolean>(false);
+  const pendingPinRef = useRef<string | null>(null);
 
   useEffect(() => {
     isPinSetRef.current = isPinSet;
   }, [isPinSet]);
+
+  useEffect(() => {
+    isTotpEnabledRef.current = isTotpEnabled;
+  }, [isTotpEnabled]);
 
   useEffect(() => {
     let mounted = true;
@@ -59,8 +80,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       checkLockout(),
       checkBiometricAvailability(),
       getBiometricMeta(),
+      getTotpMeta(),
     ])
-      .then(([configured, lockout, bioAvail, bioMeta]) => {
+      .then(([configured, lockout, bioAvail, bioMeta, totpMeta]) => {
         if (!mounted) return;
         isPinSetRef.current = configured;
         setIsPinSet(configured);
@@ -70,6 +92,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
         setIsBiometricAvailable(bioAvail);
         setIsBiometricEnabled(Boolean(bioMeta && bioMeta.enabled));
+        const totpOn = Boolean(totpMeta && totpMeta.enabled);
+        isTotpEnabledRef.current = totpOn;
+        setIsTotpEnabled(totpOn);
       })
       .catch(() => {
         if (!mounted) return;
@@ -94,6 +119,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const elapsed = Date.now() - backgroundTimeRef.current;
         // When leaving and returning to app (after 1s or timeout), require PIN/Biometric
         if (elapsed >= 1000 || elapsed >= AUTO_LOCK_TIMEOUT_MS) {
+          pendingPinRef.current = null;
+          setPendingTwoFactor(false);
           setActiveSessionPin(null);
           setIsUnlocked(false);
         }
@@ -150,12 +177,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => clearInterval(timer);
   }, [lockoutRemainingMs]);
 
-  const unlockApp = async (pin: string): Promise<{ success: boolean; message?: string }> => {
+  const completePrimaryFactor = (pin: string, bypassSecondFactor = false): boolean => {
+    if (isTotpEnabledRef.current && !bypassSecondFactor) {
+      pendingPinRef.current = pin;
+      setPendingTwoFactor(true);
+      return false;
+    }
+    pendingPinRef.current = null;
+    setPendingTwoFactor(false);
+    setActiveSessionPin(pin);
+    setIsUnlocked(true);
+    return true;
+  };
+
+  const unlockApp = async (
+    pin: string
+  ): Promise<{ success: boolean; message?: string; requiresTwoFactor?: boolean }> => {
     const result = await verifyAppPin(pin);
     if (result.success) {
-      setActiveSessionPin(pin);
-      setIsUnlocked(true);
-      return { success: true };
+      const fullyUnlocked = completePrimaryFactor(pin, isUnlocked);
+      return { success: true, requiresTwoFactor: !fullyUnlocked };
     }
 
     if (result.lockoutMs) {
@@ -184,13 +225,72 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const result = await authenticateWithBiometrics();
     if (result.success && result.pin) {
-      setActiveSessionPin(result.pin);
-      setIsUnlocked(true);
+      completePrimaryFactor(result.pin, isUnlocked);
       return true;
     }
 
     return false;
-  }, [isBiometricEnabled, lockoutRemainingMs]);
+  }, [isBiometricEnabled, lockoutRemainingMs, isUnlocked]);
+
+  const verifyTwoFactorAndUnlock = async (
+    code: string
+  ): Promise<{ success: boolean; usedRecovery?: boolean; message?: string }> => {
+    const res = await verifyStoredTotpOrRecovery(code);
+    if (!res.valid) {
+      return {
+        success: false,
+        message: '2단계 인증 코드 또는 복구 코드가 일치하지 않습니다.',
+      };
+    }
+    if (pendingPinRef.current) {
+      setActiveSessionPin(pendingPinRef.current);
+      pendingPinRef.current = null;
+    }
+    setPendingTwoFactor(false);
+    setIsUnlocked(true);
+    return { success: true, usedRecovery: res.usedRecovery };
+  };
+
+  const cancelTwoFactor = () => {
+    pendingPinRef.current = null;
+    setPendingTwoFactor(false);
+  };
+
+  const setupOsCredentialLock = async (): Promise<boolean> => {
+    if (!isBiometricAvailable) return false;
+    // Generate a strong 16-digit cryptographically random internal PIN sealed by AndroidKeyStore
+    const bytes = crypto.getRandomValues(new Uint8Array(16));
+    const randomPin = Array.from(bytes, (b) => String(b % 10)).join('');
+    await reEncryptHealthData(randomPin, activeSessionPin || undefined);
+    await setAppPin(randomPin);
+    const enrolled = await enrollBiometrics(randomPin);
+    if (!enrolled) {
+      await reEncryptHealthData(activeSessionPin || undefined, randomPin);
+      if (!activeSessionPin) {
+        await removeAppPin();
+      }
+      return false;
+    }
+    setIsPinSet(true);
+    setIsBiometricEnabled(true);
+    setActiveSessionPin(randomPin);
+    setIsUnlocked(true);
+    return true;
+  };
+
+  const enableTotp = async (secret: string, recoveryCodes: string[]) => {
+    await enableTotp2FA(secret, recoveryCodes);
+    isTotpEnabledRef.current = true;
+    setIsTotpEnabled(true);
+  };
+
+  const disableTotp = async () => {
+    await disableTotp2FA();
+    isTotpEnabledRef.current = false;
+    setIsTotpEnabled(false);
+    pendingPinRef.current = null;
+    setPendingTwoFactor(false);
+  };
 
   const toggleBiometric = async (enable: boolean): Promise<boolean> => {
     if (enable) {
@@ -225,7 +325,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     await reEncryptHealthData(undefined, activeSessionPin || undefined);
     await removeAppPin();
     await disableBiometrics();
+    await disableTotp2FA();
     setIsBiometricEnabled(false);
+    isTotpEnabledRef.current = false;
+    setIsTotpEnabled(false);
+    pendingPinRef.current = null;
+    setPendingTwoFactor(false);
     setIsPinSet(false);
     setActiveSessionPin(null);
     setIsUnlocked(true);
@@ -233,6 +338,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const lockApp = () => {
     if (isPinSet) {
+      pendingPinRef.current = null;
+      setPendingTwoFactor(false);
       setActiveSessionPin(null);
       setIsUnlocked(false);
     }
@@ -249,10 +356,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isPrivacyMasked,
         isBiometricAvailable,
         isBiometricEnabled,
+        isTotpEnabled,
+        pendingTwoFactor,
         unlockApp,
         unlockWithPin,
         unlockWithBiometric,
+        verifyTwoFactorAndUnlock,
+        cancelTwoFactor,
         toggleBiometric,
+        setupOsCredentialLock,
+        enableTotp,
+        disableTotp,
         setupNewPin,
         disablePin,
         lockApp,

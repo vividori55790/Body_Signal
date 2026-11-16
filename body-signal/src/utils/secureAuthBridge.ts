@@ -1,8 +1,13 @@
 import { Capacitor, registerPlugin } from '@capacitor/core';
 
 export interface SecureAuthPlugin {
-  isBiometricAvailable(): Promise<{ available: boolean; status?: number }>;
-  isBiometricEnrolled(): Promise<{ enrolled: boolean; enrolledAt?: string }>;
+  isBiometricAvailable(): Promise<{
+    available: boolean;
+    strongBiometric?: boolean;
+    deviceCredential?: boolean;
+    status?: number;
+  }>;
+  isBiometricEnrolled(): Promise<{ enrolled: boolean; enrolledAt?: string; mode?: string }>;
   enrollBiometricPin(options: {
     pin: string;
     title?: string;

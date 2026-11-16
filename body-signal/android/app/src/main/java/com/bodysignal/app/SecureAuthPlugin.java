@@ -1,12 +1,17 @@
 package com.bodysignal.app;
 
+import android.app.Activity;
+import android.app.KeyguardManager;
 import android.content.Context;
+import android.content.Intent;
 import android.content.SharedPreferences;
+import android.os.Build;
 import android.security.keystore.KeyGenParameterSpec;
 import android.security.keystore.KeyPermanentlyInvalidatedException;
 import android.security.keystore.KeyProperties;
 import android.util.Base64;
 
+import androidx.activity.result.ActivityResult;
 import androidx.annotation.NonNull;
 import androidx.biometric.BiometricManager;
 import androidx.biometric.BiometricPrompt;
@@ -17,6 +22,7 @@ import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
+import com.getcapacitor.annotation.ActivityCallback;
 import com.getcapacitor.annotation.CapacitorPlugin;
 
 import java.nio.charset.StandardCharsets;
@@ -37,6 +43,7 @@ public class SecureAuthPlugin extends Plugin {
     private static final String PREFS_NAME = "bignal_secure_keystore_prefs";
     private static final String PREF_BIO_CT = "bio_pin_ct";
     private static final String PREF_BIO_IV = "bio_pin_iv";
+    private static final String PREF_BIO_MODE = "bio_auth_mode"; // "keystore_auth" | "legacy_keyguard"
     private static final String PREF_BIO_ENROLLED_AT = "bio_enrolled_at";
     private static final String PREF_DEVICE_KEY_CT = "device_key_ct";
     private static final String PREF_DEVICE_KEY_IV = "device_key_iv";
@@ -45,6 +52,27 @@ public class SecureAuthPlugin extends Plugin {
 
     private SharedPreferences getPrefs() {
         return getContext().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+    }
+
+    private boolean isStrongBiometricAvailable() {
+        BiometricManager manager = BiometricManager.from(getContext());
+        return manager.canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_STRONG)
+            == BiometricManager.BIOMETRIC_SUCCESS;
+    }
+
+    private boolean isDeviceCredentialAvailable() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            BiometricManager manager = BiometricManager.from(getContext());
+            int status = manager.canAuthenticate(
+                BiometricManager.Authenticators.BIOMETRIC_STRONG
+                    | BiometricManager.Authenticators.DEVICE_CREDENTIAL
+            );
+            if (status == BiometricManager.BIOMETRIC_SUCCESS) {
+                return true;
+            }
+        }
+        KeyguardManager km = (KeyguardManager) getContext().getSystemService(Context.KEYGUARD_SERVICE);
+        return km != null && km.isDeviceSecure();
     }
 
     private SecretKey getOrCreateBioKey(boolean recreate) throws Exception {
@@ -60,7 +88,7 @@ public class SecureAuthPlugin extends Plugin {
                 KeyProperties.KEY_ALGORITHM_AES,
                 ANDROID_KEYSTORE
             );
-            KeyGenParameterSpec spec = new KeyGenParameterSpec.Builder(
+            KeyGenParameterSpec.Builder builder = new KeyGenParameterSpec.Builder(
                 BIO_KEY_ALIAS,
                 KeyProperties.PURPOSE_ENCRYPT | KeyProperties.PURPOSE_DECRYPT
             )
@@ -68,9 +96,16 @@ public class SecureAuthPlugin extends Plugin {
                 .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
                 .setKeySize(256)
                 .setUserAuthenticationRequired(true)
-                .setInvalidatedByBiometricEnrollment(true)
-                .build();
-            keyGenerator.init(spec);
+                .setInvalidatedByBiometricEnrollment(true);
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                builder.setUserAuthenticationParameters(
+                    0,
+                    KeyProperties.AUTH_BIOMETRIC_STRONG | KeyProperties.AUTH_DEVICE_CREDENTIAL
+                );
+            }
+
+            keyGenerator.init(builder.build());
             return keyGenerator.generateKey();
         }
 
@@ -106,6 +141,7 @@ public class SecureAuthPlugin extends Plugin {
         getPrefs().edit()
             .remove(PREF_BIO_CT)
             .remove(PREF_BIO_IV)
+            .remove(PREF_BIO_MODE)
             .remove(PREF_BIO_ENROLLED_AT)
             .apply();
         try {
@@ -120,11 +156,12 @@ public class SecureAuthPlugin extends Plugin {
 
     @PluginMethod
     public void isBiometricAvailable(PluginCall call) {
-        BiometricManager manager = BiometricManager.from(getContext());
-        int status = manager.canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_STRONG);
+        boolean strong = isStrongBiometricAvailable();
+        boolean deviceCred = isDeviceCredentialAvailable();
         JSObject ret = new JSObject();
-        ret.put("available", status == BiometricManager.BIOMETRIC_SUCCESS);
-        ret.put("status", status);
+        ret.put("available", strong || deviceCred);
+        ret.put("strongBiometric", strong);
+        ret.put("deviceCredential", deviceCred);
         call.resolve(ret);
     }
 
@@ -135,6 +172,7 @@ public class SecureAuthPlugin extends Plugin {
         JSObject ret = new JSObject();
         ret.put("enrolled", enrolled);
         ret.put("enrolledAt", prefs.getString(PREF_BIO_ENROLLED_AT, ""));
+        ret.put("mode", prefs.getString(PREF_BIO_MODE, "keystore_auth"));
         call.resolve(ret);
     }
 
@@ -155,76 +193,147 @@ public class SecureAuthPlugin extends Plugin {
             return;
         }
 
-        String title = call.getString("title", "생체인증 등록");
-        String subtitle = call.getString("subtitle", "지문 또는 생체정보로 앱 잠금을 안전하게 보호합니다.");
+        String title = call.getString("title", "생체인증 / 기기 잠금 등록");
+        String subtitle = call.getString("subtitle", "안드로이드에 저장된 지문·PIN·비밀번호로 잠금을 보호합니다.");
         String negativeButtonText = call.getString("negativeButtonText", "취소");
 
-        try {
-            SecretKey key = getOrCreateBioKey(true);
-            Cipher cipher = Cipher.getInstance(TRANSFORMATION);
-            cipher.init(Cipher.ENCRYPT_MODE, key);
+        // API 30+: Unified BiometricStrong + DeviceCredential hardware-backed CryptoObject
+        // API 24-29 with strong biometric: Strong biometric CryptoObject
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R || isStrongBiometricAvailable()) {
+            try {
+                SecretKey key = getOrCreateBioKey(true);
+                Cipher cipher = Cipher.getInstance(TRANSFORMATION);
+                cipher.init(Cipher.ENCRYPT_MODE, key);
 
-            FragmentActivity activity = (FragmentActivity) getActivity();
-            activity.runOnUiThread(() -> {
-                Executor executor = ContextCompat.getMainExecutor(getContext());
-                BiometricPrompt prompt = new BiometricPrompt(
-                    activity,
-                    executor,
-                    new BiometricPrompt.AuthenticationCallback() {
-                        @Override
-                        public void onAuthenticationSucceeded(@NonNull BiometricPrompt.AuthenticationResult result) {
-                            super.onAuthenticationSucceeded(result);
-                            try {
-                                Cipher authCipher = result.getCryptoObject() != null
-                                    ? result.getCryptoObject().getCipher()
-                                    : null;
-                                if (authCipher == null) {
+                FragmentActivity activity = (FragmentActivity) getActivity();
+                activity.runOnUiThread(() -> {
+                    Executor executor = ContextCompat.getMainExecutor(getContext());
+                    BiometricPrompt prompt = new BiometricPrompt(
+                        activity,
+                        executor,
+                        new BiometricPrompt.AuthenticationCallback() {
+                            @Override
+                            public void onAuthenticationSucceeded(@NonNull BiometricPrompt.AuthenticationResult result) {
+                                super.onAuthenticationSucceeded(result);
+                                try {
+                                    Cipher authCipher = result.getCryptoObject() != null
+                                        ? result.getCryptoObject().getCipher()
+                                        : null;
+                                    if (authCipher == null) {
+                                        JSObject ret = new JSObject();
+                                        ret.put("success", false);
+                                        call.resolve(ret);
+                                        return;
+                                    }
+
+                                    byte[] encrypted = authCipher.doFinal(pin.getBytes(StandardCharsets.UTF_8));
+                                    byte[] iv = authCipher.getIV();
+
+                                    getPrefs().edit()
+                                        .putString(PREF_BIO_CT, Base64.encodeToString(encrypted, Base64.NO_WRAP))
+                                        .putString(PREF_BIO_IV, Base64.encodeToString(iv, Base64.NO_WRAP))
+                                        .putString(PREF_BIO_MODE, "keystore_auth")
+                                        .putString(PREF_BIO_ENROLLED_AT, String.valueOf(System.currentTimeMillis()))
+                                        .apply();
+
+                                    JSObject ret = new JSObject();
+                                    ret.put("success", true);
+                                    call.resolve(ret);
+                                } catch (Exception e) {
+                                    clearBioState();
                                     JSObject ret = new JSObject();
                                     ret.put("success", false);
                                     call.resolve(ret);
-                                    return;
                                 }
+                            }
 
-                                byte[] encrypted = authCipher.doFinal(pin.getBytes(StandardCharsets.UTF_8));
-                                byte[] iv = authCipher.getIV();
-
-                                getPrefs().edit()
-                                    .putString(PREF_BIO_CT, Base64.encodeToString(encrypted, Base64.NO_WRAP))
-                                    .putString(PREF_BIO_IV, Base64.encodeToString(iv, Base64.NO_WRAP))
-                                    .putString(PREF_BIO_ENROLLED_AT, String.valueOf(System.currentTimeMillis()))
-                                    .apply();
-
-                                JSObject ret = new JSObject();
-                                ret.put("success", true);
-                                call.resolve(ret);
-                            } catch (Exception e) {
-                                clearBioState();
+                            @Override
+                            public void onAuthenticationError(int errorCode, @NonNull CharSequence errString) {
+                                super.onAuthenticationError(errorCode, errString);
                                 JSObject ret = new JSObject();
                                 ret.put("success", false);
+                                ret.put("errorCode", errorCode);
                                 call.resolve(ret);
                             }
                         }
+                    );
 
-                        @Override
-                        public void onAuthenticationError(int errorCode, @NonNull CharSequence errString) {
-                            super.onAuthenticationError(errorCode, errString);
-                            JSObject ret = new JSObject();
-                            ret.put("success", false);
-                            ret.put("errorCode", errorCode);
-                            call.resolve(ret);
-                        }
+                    BiometricPrompt.PromptInfo.Builder promptBuilder = new BiometricPrompt.PromptInfo.Builder()
+                        .setTitle(title)
+                        .setSubtitle(subtitle);
+
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                        promptBuilder.setAllowedAuthenticators(
+                            BiometricManager.Authenticators.BIOMETRIC_STRONG
+                                | BiometricManager.Authenticators.DEVICE_CREDENTIAL
+                        );
+                    } else {
+                        promptBuilder
+                            .setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG)
+                            .setNegativeButtonText(negativeButtonText);
                     }
-                );
 
-                BiometricPrompt.PromptInfo promptInfo = new BiometricPrompt.PromptInfo.Builder()
-                    .setTitle(title)
-                    .setSubtitle(subtitle)
-                    .setNegativeButtonText(negativeButtonText)
-                    .setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG)
-                    .build();
+                    prompt.authenticate(promptBuilder.build(), new BiometricPrompt.CryptoObject(cipher));
+                });
+                return;
+            } catch (Exception e) {
+                clearBioState();
+                JSObject ret = new JSObject();
+                ret.put("success", false);
+                call.resolve(ret);
+                return;
+            }
+        }
 
-                prompt.authenticate(promptInfo, new BiometricPrompt.CryptoObject(cipher));
-            });
+        // API 24-29 without strong biometric: fall back to OS ConfirmDeviceCredential + AndroidKeyStore device wrap key
+        KeyguardManager km = (KeyguardManager) getContext().getSystemService(Context.KEYGUARD_SERVICE);
+        if (km != null && km.isDeviceSecure()) {
+            @SuppressWarnings("deprecation")
+            Intent intent = km.createConfirmDeviceCredentialIntent(title, subtitle);
+            if (intent != null) {
+                startActivityForResult(call, intent, "onLegacyEnrollCredentialResult");
+                return;
+            }
+        }
+
+        JSObject ret = new JSObject();
+        ret.put("success", false);
+        call.resolve(ret);
+    }
+
+    @ActivityCallback
+    private void onLegacyEnrollCredentialResult(PluginCall call, ActivityResult result) {
+        if (call == null) return;
+        if (result.getResultCode() != Activity.RESULT_OK) {
+            JSObject ret = new JSObject();
+            ret.put("success", false);
+            call.resolve(ret);
+            return;
+        }
+        String pin = call.getString("pin");
+        if (pin == null || pin.isEmpty()) {
+            JSObject ret = new JSObject();
+            ret.put("success", false);
+            call.resolve(ret);
+            return;
+        }
+        try {
+            SecretKey wrapKey = getOrCreateDeviceWrapKey();
+            Cipher cipher = Cipher.getInstance(TRANSFORMATION);
+            cipher.init(Cipher.ENCRYPT_MODE, wrapKey);
+            byte[] encrypted = cipher.doFinal(pin.getBytes(StandardCharsets.UTF_8));
+            byte[] iv = cipher.getIV();
+
+            getPrefs().edit()
+                .putString(PREF_BIO_CT, Base64.encodeToString(encrypted, Base64.NO_WRAP))
+                .putString(PREF_BIO_IV, Base64.encodeToString(iv, Base64.NO_WRAP))
+                .putString(PREF_BIO_MODE, "legacy_keyguard")
+                .putString(PREF_BIO_ENROLLED_AT, String.valueOf(System.currentTimeMillis()))
+                .apply();
+
+            JSObject ret = new JSObject();
+            ret.put("success", true);
+            call.resolve(ret);
         } catch (Exception e) {
             clearBioState();
             JSObject ret = new JSObject();
@@ -238,6 +347,7 @@ public class SecureAuthPlugin extends Plugin {
         SharedPreferences prefs = getPrefs();
         String ctB64 = prefs.getString(PREF_BIO_CT, null);
         String ivB64 = prefs.getString(PREF_BIO_IV, null);
+        String mode = prefs.getString(PREF_BIO_MODE, "keystore_auth");
 
         if (ctB64 == null || ivB64 == null || !(getActivity() instanceof FragmentActivity)) {
             JSObject ret = new JSObject();
@@ -246,9 +356,25 @@ public class SecureAuthPlugin extends Plugin {
             return;
         }
 
-        String title = call.getString("title", "생체인증 잠금 해제");
-        String subtitle = call.getString("subtitle", "건강 데이터 접근을 위해 본인 인증이 필요합니다.");
-        String negativeButtonText = call.getString("negativeButtonText", "PIN 입력");
+        String title = call.getString("title", "생체인증 / 기기 잠금 해제");
+        String subtitle = call.getString("subtitle", "건강 데이터 접근을 위해 안드로이드 본인 인증이 필요합니다.");
+        String negativeButtonText = call.getString("negativeButtonText", "앱 PIN 입력");
+
+        if ("legacy_keyguard".equals(mode)) {
+            KeyguardManager km = (KeyguardManager) getContext().getSystemService(Context.KEYGUARD_SERVICE);
+            if (km != null && km.isDeviceSecure()) {
+                @SuppressWarnings("deprecation")
+                Intent intent = km.createConfirmDeviceCredentialIntent(title, subtitle);
+                if (intent != null) {
+                    startActivityForResult(call, intent, "onLegacyAuthCredentialResult");
+                    return;
+                }
+            }
+            JSObject ret = new JSObject();
+            ret.put("success", false);
+            call.resolve(ret);
+            return;
+        }
 
         try {
             SecretKey key = getOrCreateBioKey(false);
@@ -304,20 +430,66 @@ public class SecureAuthPlugin extends Plugin {
                     }
                 );
 
-                BiometricPrompt.PromptInfo promptInfo = new BiometricPrompt.PromptInfo.Builder()
+                BiometricPrompt.PromptInfo.Builder promptBuilder = new BiometricPrompt.PromptInfo.Builder()
                     .setTitle(title)
-                    .setSubtitle(subtitle)
-                    .setNegativeButtonText(negativeButtonText)
-                    .setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG)
-                    .build();
+                    .setSubtitle(subtitle);
 
-                prompt.authenticate(promptInfo, new BiometricPrompt.CryptoObject(cipher));
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    promptBuilder.setAllowedAuthenticators(
+                        BiometricManager.Authenticators.BIOMETRIC_STRONG
+                            | BiometricManager.Authenticators.DEVICE_CREDENTIAL
+                    );
+                } else {
+                    promptBuilder
+                        .setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG)
+                        .setNegativeButtonText(negativeButtonText);
+                }
+
+                prompt.authenticate(promptBuilder.build(), new BiometricPrompt.CryptoObject(cipher));
             });
         } catch (KeyPermanentlyInvalidatedException invalidEx) {
             clearBioState();
             JSObject ret = new JSObject();
             ret.put("success", false);
             ret.put("invalidated", true);
+            call.resolve(ret);
+        } catch (Exception e) {
+            JSObject ret = new JSObject();
+            ret.put("success", false);
+            call.resolve(ret);
+        }
+    }
+
+    @ActivityCallback
+    private void onLegacyAuthCredentialResult(PluginCall call, ActivityResult result) {
+        if (call == null) return;
+        if (result.getResultCode() != Activity.RESULT_OK) {
+            JSObject ret = new JSObject();
+            ret.put("success", false);
+            call.resolve(ret);
+            return;
+        }
+        SharedPreferences prefs = getPrefs();
+        String ctB64 = prefs.getString(PREF_BIO_CT, null);
+        String ivB64 = prefs.getString(PREF_BIO_IV, null);
+        if (ctB64 == null || ivB64 == null) {
+            JSObject ret = new JSObject();
+            ret.put("success", false);
+            call.resolve(ret);
+            return;
+        }
+        try {
+            SecretKey wrapKey = getOrCreateDeviceWrapKey();
+            Cipher cipher = Cipher.getInstance(TRANSFORMATION);
+            cipher.init(
+                Cipher.DECRYPT_MODE,
+                wrapKey,
+                new GCMParameterSpec(GCM_TAG_BITS, Base64.decode(ivB64, Base64.NO_WRAP))
+            );
+            byte[] plain = cipher.doFinal(Base64.decode(ctB64, Base64.NO_WRAP));
+            JSObject ret = new JSObject();
+            ret.put("success", true);
+            ret.put("pin", new String(plain, StandardCharsets.UTF_8));
             call.resolve(ret);
         } catch (Exception e) {
             JSObject ret = new JSObject();

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Lock, Delete, AlertCircle, Fingerprint } from 'lucide-react';
+import { Lock, Delete, AlertCircle, Fingerprint, ShieldCheck, ArrowLeft } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { triggerHaptic } from '../utils/native';
 
@@ -10,14 +10,19 @@ export const LockScreen: React.FC = () => {
     isBiometricEnabled,
     isBiometricAvailable,
     lockoutRemainingMs,
+    pendingTwoFactor,
+    verifyTwoFactorAndUnlock,
+    cancelTwoFactor,
   } = useAuth();
   const [pin, setPin] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
+  const [totpInput, setTotpInput] = useState('');
+  const [totpError, setTotpError] = useState('');
 
-  // Auto-prompt biometrics once on mount if enabled & not locked out
+  // Auto-prompt biometrics once on mount if enabled & not locked out & not already awaiting 2FA
   useEffect(() => {
     let active = true;
-    if (isBiometricEnabled && isBiometricAvailable && lockoutRemainingMs === 0) {
+    if (!pendingTwoFactor && isBiometricEnabled && isBiometricAvailable && lockoutRemainingMs === 0) {
       const timer = setTimeout(async () => {
         if (!active) return;
         await unlockWithBiometric();
@@ -27,7 +32,76 @@ export const LockScreen: React.FC = () => {
         clearTimeout(timer);
       };
     }
-  }, [isBiometricEnabled, isBiometricAvailable, lockoutRemainingMs, unlockWithBiometric]);
+  }, [pendingTwoFactor, isBiometricEnabled, isBiometricAvailable, lockoutRemainingMs, unlockWithBiometric]);
+
+  const handleTwoFactorSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    triggerHaptic();
+    const res = await verifyTwoFactorAndUnlock(totpInput);
+    if (!res.success) {
+      setTotpError(res.message || '2단계 인증 코드가 올바르지 않습니다.');
+      return;
+    }
+    setTotpInput('');
+    setTotpError('');
+  };
+
+  if (pendingTwoFactor) {
+    return (
+      <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-slate-950 px-6 text-white">
+        <div className="w-full max-w-xs space-y-6 text-center">
+          <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full border border-emerald-500/40 bg-slate-900 shadow-xl">
+            <ShieldCheck size={38} className="text-emerald-400" />
+          </div>
+          <div>
+            <h1 className="text-xl font-bold tracking-wider">2단계 인증 (2FA)</h1>
+            <p className="mt-1.5 text-xs text-slate-400 leading-relaxed">
+              인증 앱(Aegis 등)의 6자리 코드 또는 일회용 복구 코드(`XXXX-XXXX`)를 입력하세요.
+            </p>
+          </div>
+
+          <form onSubmit={handleTwoFactorSubmit} className="space-y-4">
+            <input
+              type="text"
+              autoFocus
+              value={totpInput}
+              onChange={(e) => {
+                setTotpInput(e.target.value);
+                setTotpError('');
+              }}
+              placeholder="6자리 코드 또는 복구 코드"
+              className="w-full rounded-2xl border border-slate-700 bg-slate-900 px-4 py-3.5 text-center font-mono text-lg font-bold tracking-widest text-white placeholder:text-slate-500 placeholder:text-xs placeholder:tracking-normal focus:border-emerald-400 focus:outline-none"
+            />
+            {totpError && (
+              <p className="flex items-center justify-center gap-1.5 text-xs font-bold text-rose-400">
+                <AlertCircle size={14} /> {totpError}
+              </p>
+            )}
+            <button
+              type="submit"
+              className="w-full rounded-2xl bg-emerald-600 py-3.5 text-sm font-bold text-white shadow-lg active:scale-95 transition-all"
+            >
+              인증 완료 및 잠금 해제
+            </button>
+          </form>
+
+          <button
+            type="button"
+            onClick={() => {
+              triggerHaptic();
+              setTotpInput('');
+              setTotpError('');
+              setPin('');
+              cancelTwoFactor();
+            }}
+            className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-400 hover:text-white"
+          >
+            <ArrowLeft size={14} /> 첫 번째 인증으로 돌아가기
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   const handleDigit = async (digit: string) => {
     if (lockoutRemainingMs > 0) return;

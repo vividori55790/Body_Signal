@@ -13,7 +13,7 @@ import {
 import SecureAuth, { isNativeAndroidSecureAuth } from './secureAuthBridge';
 
 const DB_NAME = 'bignal_mobile_db';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 const LEGACY_STORAGE_KEY = 'bs-data-v2';
 
 interface BignalDBSchema extends DBSchema {
@@ -25,11 +25,15 @@ interface BignalDBSchema extends DBSchema {
     key: string;
     value: any;
   };
+  encrypted_media: {
+    key: string;
+    value: any;
+  };
 }
 
 let dbPromise: Promise<IDBPDatabase<BignalDBSchema>> | null = null;
 
-function getDB(): Promise<IDBPDatabase<BignalDBSchema>> {
+export function getDB(): Promise<IDBPDatabase<BignalDBSchema>> {
   if (!dbPromise) {
     dbPromise = openDB<BignalDBSchema>(DB_NAME, DB_VERSION, {
       upgrade(db) {
@@ -38,6 +42,9 @@ function getDB(): Promise<IDBPDatabase<BignalDBSchema>> {
         }
         if (!db.objectStoreNames.contains('device_key_store')) {
           db.createObjectStore('device_key_store');
+        }
+        if (!db.objectStoreNames.contains('encrypted_media')) {
+          db.createObjectStore('encrypted_media');
         }
       },
     });
@@ -402,6 +409,11 @@ export async function resetAllData(): Promise<void> {
   if (db.objectStoreNames.contains('device_key_store')) {
     try {
       await db.clear('device_key_store');
+    } catch {}
+  }
+  if (db.objectStoreNames.contains('encrypted_media')) {
+    try {
+      await db.clear('encrypted_media');
     } catch {}
   }
   if (typeof localStorage !== 'undefined') {

@@ -4,6 +4,7 @@ import { useHealth } from '../context/HealthContext';
 import { useAuth } from '../context/AuthContext';
 import {
   Shield,
+  ShieldCheck,
   Bell,
   Moon,
   Sun,
@@ -27,11 +28,20 @@ import {
   Server,
   AlertCircle,
   Fingerprint,
+  KeyRound,
+  Copy,
+  EyeOff,
 } from 'lucide-react';
 import { PinModal } from '../components/PinModal';
 import { triggerHaptic } from '../utils/native';
 import { testLocalLlmConnection } from '../utils/localLlm';
 import { encryptBackupWithPassphrase, decryptBackupWithPassphrase } from '../utils/crypto';
+import {
+  generateTotpSecret,
+  buildOtpAuthUri,
+  generateRecoveryCodes,
+  verifyTotpCode,
+} from '../utils/totp';
 
 export const SettingsPage: React.FC = () => {
   const {
@@ -55,15 +65,28 @@ export const SettingsPage: React.FC = () => {
     isBiometricAvailable,
     isBiometricEnabled,
     toggleBiometric,
+    setupOsCredentialLock,
+    isTotpEnabled,
+    enableTotp,
+    disableTotp,
     unlockApp,
   } = useAuth();
 
   // Modals state
   const [pinModalMode, setPinModalMode] = useState<'set' | 'change' | 'unlock' | null>(null);
-  const [pendingSecurityAction, setPendingSecurityAction] = useState<'toggleBiometric' | 'disablePin' | null>(null);
+  const [pendingSecurityAction, setPendingSecurityAction] = useState<
+    'toggleBiometric' | 'disablePin' | 'disableTotp' | null
+  >(null);
   const [newMedName, setNewMedName] = useState('');
   const [showAddMed, setShowAddMed] = useState(false);
   const [feedbackMsg, setFeedbackMsg] = useState('');
+
+  // TOTP 2FA Modal State
+  const [totpModalOpen, setTotpModalOpen] = useState(false);
+  const [totpSecret, setTotpSecret] = useState('');
+  const [totpRecoveryCodes, setTotpRecoveryCodes] = useState<string[]>([]);
+  const [totpVerifyCode, setTotpVerifyCode] = useState('');
+  const [totpSetupError, setTotpSetupError] = useState('');
 
   // Local LLM State
   const [isTestingLlm, setIsTestingLlm] = useState(false);
@@ -125,6 +148,48 @@ export const SettingsPage: React.FC = () => {
     // Require current PIN verification before enabling/disabling biometrics (Item 3)
     setPendingSecurityAction('toggleBiometric');
     setPinModalMode('unlock');
+  };
+
+  const handleEnableOsCredentialDirect = async () => {
+    triggerHaptic();
+    const ok = await setupOsCredentialLock();
+    if (ok) {
+      showToast('안드로이드 지문·PIN·비밀번호 잠금이 활성화되었습니다.');
+    } else {
+      showToast('안드로이드 기기 잠금 등록이 취소되었거나 기기에 잠금 화면이 설정되어 있지 않습니다.');
+    }
+  };
+
+  const handleToggleTotp = () => {
+    triggerHaptic();
+    if (!isPinSet) {
+      showToast('2단계 인증(2FA)을 설정하려면 먼저 앱 잠금(PIN 또는 OS 잠금)을 활성화하세요.');
+      return;
+    }
+    if (isTotpEnabled) {
+      setPendingSecurityAction('disableTotp');
+      setPinModalMode('unlock');
+      return;
+    }
+    setTotpSecret(generateTotpSecret());
+    setTotpRecoveryCodes(generateRecoveryCodes(8));
+    setTotpVerifyCode('');
+    setTotpSetupError('');
+    setTotpModalOpen(true);
+  };
+
+  const confirmEnableTotp = async () => {
+    const valid = await verifyTotpCode(totpSecret, totpVerifyCode);
+    if (!valid) {
+      setTotpSetupError('인증 앱에 표시된 6자리 코드가 일치하지 않습니다.');
+      return;
+    }
+    await enableTotp(totpSecret, totpRecoveryCodes);
+    setTotpModalOpen(false);
+    setTotpSecret('');
+    setTotpRecoveryCodes([]);
+    setTotpVerifyCode('');
+    showToast('2단계 인증(TOTP 2FA)이 활성화되었습니다.');
   };
 
   const resetBackupModal = () => {
@@ -538,6 +603,27 @@ export const SettingsPage: React.FC = () => {
             </button>
           )}
 
+          {!isPinSet && isBiometricAvailable && (
+            <button
+              type="button"
+              onClick={handleEnableOsCredentialDirect}
+              className="w-full text-left p-3.5 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+            >
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400">
+                  <Fingerprint size={18} />
+                </div>
+                <div>
+                  <span className="font-bold text-xs block">안드로이드 지문·기기 잠금 바로 사용</span>
+                  <span className="text-[10px] text-slate-400">
+                    별도 앱 PIN 없이 기기에 저장된 지문·PIN·비밀번호로 잠금
+                  </span>
+                </div>
+              </div>
+              <ChevronRight size={16} className="text-slate-300" />
+            </button>
+          )}
+
           {isPinSet && isBiometricAvailable && (
             <div className="p-3.5 flex items-center justify-between">
               <div className="flex items-center gap-3">
@@ -565,6 +651,53 @@ export const SettingsPage: React.FC = () => {
               </button>
             </div>
           )}
+
+          {/* 2FA (TOTP) Toggle */}
+          <div className="p-3.5 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-purple-50 dark:bg-purple-950/50 text-purple-600 dark:text-purple-400">
+                <ShieldCheck size={18} />
+              </div>
+              <div>
+                <span className="font-bold text-xs block">2단계 인증 (TOTP 2FA)</span>
+                <span className="text-[10px] text-slate-400">
+                  PIN/생체인증 후 인증 앱(Aegis 등) 6자리 코드 추가 요구
+                </span>
+              </div>
+            </div>
+            <button
+              type="button"
+              aria-label="2단계 인증 토글"
+              onClick={handleToggleTotp}
+              className={`w-11 h-6 rounded-full transition-colors relative ${
+                isTotpEnabled ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-700'
+              }`}
+            >
+              <div
+                className={`w-4 h-4 rounded-full bg-white transition-transform ${
+                  isTotpEnabled ? 'translate-x-6' : 'translate-x-1'
+                }`}
+              />
+            </button>
+          </div>
+
+          {/* Screenshot & Gemini Share Shield Status */}
+          <div className="p-3.5 flex items-center justify-between bg-slate-50/70 dark:bg-slate-800/30">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-slate-200/70 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                <EyeOff size={18} />
+              </div>
+              <div>
+                <span className="font-bold text-xs block">스크린샷 & Gemini 화면 공유 차단</span>
+                <span className="text-[10px] text-slate-400">
+                  FLAG_SECURE · Assist/화면 캡처 차단 상시 적용 중
+                </span>
+              </div>
+            </div>
+            <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800">
+              ON
+            </span>
+          </div>
         </div>
       </section>
 
@@ -1024,6 +1157,99 @@ export const SettingsPage: React.FC = () => {
         </div>
       )}
 
+      {/* TOTP 2FA Setup Modal */}
+      {totpModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-sm rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <KeyRound size={18} className="text-emerald-500" />
+                <h3 className="font-bold text-sm text-slate-800 dark:text-slate-100">
+                  2단계 인증 (TOTP 2FA) 설정
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setTotpModalOpen(false)}
+                className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="space-y-2 text-xs text-slate-500 dark:text-slate-400">
+              <p>
+                1. Aegis 등 오픈소스 TOTP 인증 앱에 아래 시크릿 키를 등록하세요.
+              </p>
+              <div className="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 font-mono text-[11px] text-slate-800 dark:text-slate-100 break-all flex items-center justify-between gap-2">
+                <span>{totpSecret}</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard?.writeText(buildOtpAuthUri(totpSecret));
+                    showToast('otpauth URI가 복사되었습니다.');
+                  }}
+                  className="shrink-0 px-2 py-1 rounded bg-emerald-600 text-white text-[10px] font-bold flex items-center gap-1"
+                >
+                  <Copy size={11} /> URI 복사
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <p className="text-xs font-bold text-amber-600 dark:text-amber-400">
+                2. 일회용 복구 코드 (안전한 곳에 보관하세요)
+              </p>
+              <div className="grid grid-cols-2 gap-1.5 p-2.5 rounded-xl bg-amber-50/70 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 font-mono text-[11px] text-amber-900 dark:text-amber-200">
+                {totpRecoveryCodes.map((code) => (
+                  <div key={code}>{code}</div>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <p className="text-xs font-bold text-slate-700 dark:text-slate-200">
+                3. 인증 앱에 표시된 6자리 코드 입력 확인
+              </p>
+              <input
+                type="text"
+                inputMode="numeric"
+                maxLength={6}
+                value={totpVerifyCode}
+                onChange={(e) => {
+                  setTotpVerifyCode(e.target.value);
+                  setTotpSetupError('');
+                }}
+                placeholder="6자리 숫자 입력"
+                className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-center font-mono text-sm font-bold tracking-widest focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              />
+              {totpSetupError && (
+                <p className="text-xs font-bold text-rose-500 flex items-center gap-1">
+                  <AlertCircle size={13} /> {totpSetupError}
+                </p>
+              )}
+            </div>
+
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setTotpModalOpen(false)}
+                className="flex-1 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold text-xs"
+              >
+                {t('cancel')}
+              </button>
+              <button
+                type="button"
+                onClick={confirmEnableTotp}
+                className="flex-1 py-2.5 rounded-xl bg-emerald-600 text-white font-bold text-xs shadow-sm"
+              >
+                2FA 활성화
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* PIN Setup/Change/Unlock Verification Modal */}
       {pinModalMode && (
         <PinModal
@@ -1033,6 +1259,8 @@ export const SettingsPage: React.FC = () => {
             pinModalMode === 'unlock'
               ? pendingSecurityAction === 'disablePin'
                 ? '앱 잠금 해제 전 본인 확인'
+                : pendingSecurityAction === 'disableTotp'
+                ? '2단계 인증 해제를 위한 본인 확인'
                 : '생체인증 설정을 위한 본인 확인'
               : undefined
           }
@@ -1049,6 +1277,11 @@ export const SettingsPage: React.FC = () => {
                 setPendingSecurityAction(null);
                 setPinModalMode(null);
                 showToast(t('pinRemoved'));
+              } else if (pendingSecurityAction === 'disableTotp') {
+                await disableTotp();
+                setPendingSecurityAction(null);
+                setPinModalMode(null);
+                showToast('2단계 인증(2FA)이 해제되었습니다.');
               } else if (pendingSecurityAction === 'toggleBiometric') {
                 const targetState = !isBiometricEnabled;
                 setPendingSecurityAction(null);

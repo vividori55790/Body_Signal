@@ -18,7 +18,7 @@ export interface BiometricMeta {
 }
 
 const DB_NAME = 'bignal_mobile_db';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 
 let memoryMeta: BiometricMeta | null = null;
 let mockModeOverride: boolean | null = null;
