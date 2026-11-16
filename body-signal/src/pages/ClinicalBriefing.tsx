@@ -45,7 +45,7 @@ import {
   testLocalLlmConnection,
 } from '../utils/localLlm';
 
-export const ClinicalBriefingPage: React.FC = () => {
+export const ClinicalBriefingPage: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
   const navigate = useNavigate();
   const { conditions, logs, getClinicalBriefing, generateEMRSummaryText } = useHealth();
   const { settings, t } = useSettings();
@@ -242,7 +242,13 @@ export const ClinicalBriefingPage: React.FC = () => {
   });
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-4 pb-28 text-slate-800 dark:text-slate-100 space-y-4">
+    <div
+      className={
+        embedded
+          ? 'space-y-4'
+          : 'min-h-screen bg-slate-50 dark:bg-slate-950 p-4 pb-28 text-slate-800 dark:text-slate-100 space-y-4'
+      }
+    >
       {/* 1. Clinical Header with 30-Sec Doctor Mode & Secondary Actions */}
       <header className="flex items-start justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
         <div>
@@ -250,7 +256,11 @@ export const ClinicalBriefingPage: React.FC = () => {
             <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 shrink-0">
               <Stethoscope size={20} />
             </span>
-            <h1 className="text-xl font-black tracking-tight">{t('briefingTitle')}</h1>
+            {embedded ? (
+              <h2 className="text-base font-black tracking-tight">{t('briefingTitle')}</h2>
+            ) : (
+              <h1 className="text-xl font-black tracking-tight">{t('briefingTitle')}</h1>
+            )}
             <span className="text-[10px] font-extrabold uppercase bg-emerald-600 text-white px-2 py-0.5 rounded-full shadow-sm">
               30초 요약
             </span>

@@ -1,4 +1,5 @@
 import React, { useMemo, useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { format, isToday, isYesterday, startOfWeek, endOfWeek } from 'date-fns';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
@@ -16,6 +17,14 @@ import {
   Pill,
   ChevronDown,
   ChevronRight,
+  FolderPlus,
+  Check,
+  CheckSquare,
+  Square,
+  AlertCircle,
+  BarChart3,
+  // Stethoscope, // 진료 브리핑은 질병 추적·관리 집중을 위해 일시 비활성화
+  ArrowRight,
 } from 'lucide-react';
 import { useHealth } from '../context/HealthContext';
 import { useSettings } from '../context/SettingsContext';
@@ -23,16 +32,32 @@ import { PainLog, Condition, UNASSIGNED_CONDITION_ID } from '../types/health';
 import { triggerHaptic } from '../utils/native';
 import CalendarPage from './CalendarPage';
 import DiagnosticsPage from './DiagnosticsPage';
+import StatsPage from './StatsPage';
+// import ClinicalBriefingPage from './ClinicalBriefing'; // 일시 주석 처리
 
 interface HistoryItemProps {
   log: PainLog;
   previousLog?: PainLog;
   condition?: Condition;
+  showFullDate?: boolean;
+  selectable?: boolean;
+  selected?: boolean;
+  onToggleSelect?: (id: string) => void;
   onDelete: (id: string) => Promise<boolean>;
   onUpdate: (id: string, updates: Partial<PainLog>) => Promise<boolean>;
 }
 
-const HistoryItem: React.FC<HistoryItemProps> = ({ log, previousLog, condition, onDelete, onUpdate }) => {
+const HistoryItem: React.FC<HistoryItemProps> = ({
+  log,
+  previousLog,
+  condition,
+  showFullDate = false,
+  selectable = false,
+  selected = false,
+  onToggleSelect,
+  onDelete,
+  onUpdate,
+}) => {
   const navigate = useNavigate();
   const { t } = useSettings();
   const [expanded, setExpanded] = useState(false);
@@ -60,10 +85,17 @@ const HistoryItem: React.FC<HistoryItemProps> = ({ log, previousLog, condition, 
     }
   }
 
-  const handleNavigate = (e: React.MouseEvent) => {
+  const handlePrimaryRowClick = (e: React.MouseEvent) => {
     e.stopPropagation();
+    triggerHaptic();
+    if (selectable) {
+      onToggleSelect?.(log.id);
+      return;
+    }
     if (condition?.id) {
       navigate(`/condition/${condition.id}`);
+    } else {
+      setExpanded(!expanded);
     }
   };
 
@@ -104,23 +136,52 @@ const HistoryItem: React.FC<HistoryItemProps> = ({ log, previousLog, condition, 
     }
   };
 
+  const hasQuality = Boolean(log.painQuality && log.painQuality.length > 0);
+  const hasTriggers = Boolean(log.triggers && log.triggers.length > 0);
+  const hasRelief = Boolean(log.reliefFactors && log.reliefFactors.length > 0);
+  const hasRedFlags = Boolean(log.redFlags && log.redFlags.length > 0);
+
   return (
-    <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm overflow-hidden transition-all">
+    <div
+      className={`rounded-2xl border bg-white dark:bg-slate-900 shadow-sm overflow-hidden transition-all ${
+        selectable && selected
+          ? 'border-teal-500 ring-2 ring-teal-500/20 dark:border-teal-400'
+          : 'border-slate-200 dark:border-slate-800'
+      }`}
+    >
       <div className={`flex justify-between items-stretch ${expanded ? 'bg-slate-50 dark:bg-slate-800/40' : ''}`}>
         <div
-          onClick={handleNavigate}
-          className="flex-1 p-3.5 flex items-center gap-3 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+          onClick={handlePrimaryRowClick}
+          className="flex-1 min-w-0 p-3.5 flex items-start gap-3 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors"
         >
-          <div className={`p-2 rounded-full border ${statusColor}`}>
-            <StatusIcon size={16} strokeWidth={2.5} />
-          </div>
-          <div>
+          {selectable ? (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                triggerHaptic();
+                onToggleSelect?.(log.id);
+              }}
+              aria-label={selected ? '선택 해제' : '질병 묶기 선택'}
+              className={`mt-1 shrink-0 transition-colors ${
+                selected ? 'text-teal-600 dark:text-teal-400' : 'text-slate-300 dark:text-slate-600'
+              }`}
+            >
+              {selected ? <CheckSquare size={20} /> : <Square size={20} />}
+            </button>
+          ) : (
+            <div className={`p-2 rounded-full border shrink-0 mt-0.5 ${statusColor}`}>
+              <StatusIcon size={16} strokeWidth={2.5} />
+            </div>
+          )}
+
+          <div className="min-w-0 flex-1 space-y-1">
             <div className="flex items-center gap-1.5 flex-wrap">
               <h3 className="font-bold text-sm text-slate-800 dark:text-slate-100">
                 {log.conditionId === UNASSIGNED_CONDITION_ID ? '원인 미상 증상' : condition?.label || '미지정'}
               </h3>
               {isNewType && (
-                <span className="text-[9px] bg-blue-600 text-white px-1.5 py-0.2 rounded font-bold uppercase">
+                <span className="text-[9px] bg-blue-600 text-white px-1.5 py-0.5 rounded font-bold uppercase">
                   {t('firstOccurrence')}
                 </span>
               )}
@@ -129,16 +190,59 @@ const HistoryItem: React.FC<HistoryItemProps> = ({ log, previousLog, condition, 
                   복약 효과: {log.intensity}→{log.postMedIntensity}
                 </span>
               )}
+              {hasRedFlags && (
+                <span className="inline-flex items-center gap-0.5 text-[10px] bg-rose-100 dark:bg-rose-950 text-rose-700 dark:text-rose-300 px-1.5 py-0.5 rounded font-bold">
+                  <AlertCircle size={10} /> 위험징후
+                </span>
+              )}
             </div>
-            <div className="text-[11px] text-slate-400 mt-0.5">
-              {log.bodyPartOverride || condition?.bodyPart || '미지정'} • {format(new Date(log.date), 'a h:mm')}
+
+            <div className="text-[11px] text-slate-400">
+              {log.bodyPartOverride || condition?.bodyPart || '미지정'} •{' '}
+              {format(new Date(log.date), showFullDate ? 'yyyy.M.d a h:mm' : 'a h:mm')}
             </div>
+
+            {/* Inline summary so user clearly identifies what was recorded even before expanding */}
+            {(hasQuality || log.medication || hasTriggers || log.notes) && (
+              <div className="pt-0.5 space-y-1">
+                {(hasQuality || log.medication || hasTriggers) && (
+                  <div className="flex flex-wrap items-center gap-1">
+                    {log.painQuality?.slice(0, 3).map((q) => (
+                      <span
+                        key={q}
+                        className="px-1.5 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-[10px] font-semibold text-slate-600 dark:text-slate-300"
+                      >
+                        {q}
+                      </span>
+                    ))}
+                    {log.medication && (
+                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-blue-50 dark:bg-blue-950/60 text-[10px] font-semibold text-blue-700 dark:text-blue-300">
+                        <Pill size={10} /> {log.medication}
+                      </span>
+                    )}
+                    {log.triggers?.slice(0, 2).map((tr) => (
+                      <span
+                        key={tr}
+                        className="px-1.5 py-0.5 rounded-md bg-amber-50 dark:bg-amber-950/50 text-[10px] font-semibold text-amber-700 dark:text-amber-300"
+                      >
+                        유발: {tr}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {log.notes && (
+                  <p className="text-[11px] text-slate-600 dark:text-slate-300 line-clamp-2 leading-snug">
+                    “{log.notes}”
+                  </p>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
         <div
           onClick={handleToggle}
-          className="flex items-center gap-3 p-3.5 pl-2 cursor-pointer border-l border-slate-100 dark:border-slate-800"
+          className="flex items-center gap-3 p-3.5 pl-2 cursor-pointer border-l border-slate-100 dark:border-slate-800 shrink-0"
         >
           <div className="text-right">
             <div
@@ -247,6 +351,41 @@ const HistoryItem: React.FC<HistoryItemProps> = ({ log, previousLog, condition, 
             </div>
           )}
 
+          {(hasQuality || hasTriggers || hasRelief || log.radiation || hasRedFlags) && (
+            <div className="rounded-xl border border-slate-200 dark:border-slate-700/70 bg-white dark:bg-slate-900 p-2.5 space-y-1.5 text-[11px]">
+              {hasQuality && (
+                <div>
+                  <span className="font-bold text-slate-500 mr-1.5">양상:</span>
+                  <span className="text-slate-700 dark:text-slate-200">{log.painQuality?.join(', ')}</span>
+                </div>
+              )}
+              {log.radiation && (
+                <div>
+                  <span className="font-bold text-slate-500 mr-1.5">방사통:</span>
+                  <span className="text-slate-700 dark:text-slate-200">{log.radiation}</span>
+                </div>
+              )}
+              {hasTriggers && (
+                <div>
+                  <span className="font-bold text-amber-600 dark:text-amber-400 mr-1.5">악화/유발:</span>
+                  <span className="text-slate-700 dark:text-slate-200">{log.triggers?.join(', ')}</span>
+                </div>
+              )}
+              {hasRelief && (
+                <div>
+                  <span className="font-bold text-emerald-600 dark:text-emerald-400 mr-1.5">완화 요인:</span>
+                  <span className="text-slate-700 dark:text-slate-200">{log.reliefFactors?.join(', ')}</span>
+                </div>
+              )}
+              {hasRedFlags && (
+                <div>
+                  <span className="font-bold text-rose-600 dark:text-rose-400 mr-1.5">위험 징후:</span>
+                  <span className="text-rose-700 dark:text-rose-300 font-semibold">{log.redFlags?.join(', ')}</span>
+                </div>
+              )}
+            </div>
+          )}
+
           {log.medication && (
             <div className="flex items-center gap-1.5 text-xs text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/60 p-2.5 rounded-xl border border-blue-100 dark:border-blue-900">
               <Pill size={15} className="text-blue-500 shrink-0" />
@@ -255,7 +394,6 @@ const HistoryItem: React.FC<HistoryItemProps> = ({ log, previousLog, condition, 
             </div>
           )}
 
-          {/* Medication Response Badge */}
           {log.postMedIntensity !== undefined && (
             <div className="flex flex-wrap items-center justify-between gap-1 text-xs bg-emerald-50 dark:bg-emerald-950/50 p-2.5 rounded-xl border border-emerald-200 dark:border-emerald-800 text-emerald-900 dark:text-emerald-200">
               <div className="flex items-center gap-1.5 font-bold">
@@ -277,7 +415,6 @@ const HistoryItem: React.FC<HistoryItemProps> = ({ log, previousLog, condition, 
             </div>
           )}
 
-          {/* Reported Side Effects Chips */}
           {log.postMedSideEffects && log.postMedSideEffects.length > 0 && (
             <div className="flex flex-wrap items-center gap-1.5 text-xs bg-amber-50 dark:bg-amber-950/40 p-2.5 rounded-xl border border-amber-200 dark:border-amber-800/60 text-amber-900 dark:text-amber-200">
               <span className="font-bold text-[11px] text-amber-800 dark:text-amber-300">보고된 부작용:</span>
@@ -296,7 +433,7 @@ const HistoryItem: React.FC<HistoryItemProps> = ({ log, previousLog, condition, 
 
           {log.notes && (
             <div className="text-xs text-slate-600 dark:text-slate-300 italic bg-white dark:bg-slate-900 p-2.5 rounded-lg border border-slate-200 dark:border-slate-800 leading-relaxed">
-              "{log.notes}"
+              &ldquo;{log.notes}&rdquo;
             </div>
           )}
         </div>
@@ -305,35 +442,121 @@ const HistoryItem: React.FC<HistoryItemProps> = ({ log, previousLog, condition, 
   );
 };
 
-export const HistoryPage: React.FC<{ initialTab?: 'list' | 'calendar' | 'diagnostics' }> = ({
+export const HistoryPage: React.FC<{ initialTab?: 'list' | 'calendar' | 'diagnostics' | 'stats' }> = ({
   initialTab = 'list',
 }) => {
-  const { logs, conditions, deleteLog, updateLog } = useHealth();
+  const navigate = useNavigate();
+  const { logs, conditions, deleteLog, updateLog, assignLogsToCondition } = useHealth();
   const { t } = useSettings();
   const [searchParams, setSearchParams] = useSearchParams();
   const paramTab = searchParams.get('tab');
-  const [activeTab, setActiveTab] = useState<'list' | 'calendar' | 'diagnostics'>(
-    paramTab === 'calendar' || paramTab === 'diagnostics' ? paramTab : initialTab
+  const paramGroup = searchParams.get('group');
+  const [activeTab, setActiveTab] = useState<'list' | 'calendar' | 'diagnostics' | 'stats'>(
+    paramTab === 'calendar' || paramTab === 'diagnostics' || paramTab === 'stats'
+      ? paramTab
+      : initialTab
   );
-  const [listViewMode, setListViewMode] = useState<'day' | 'week' | 'month'>('day');
+  const [listViewMode, setListViewMode] = useState<'day' | 'week' | 'month' | 'condition'>('day');
+
+  // Disease-grouping selection mode inside History screen
+  const [selectionMode, setSelectionMode] = useState(
+    paramGroup === 'unassigned' || paramGroup === 'all'
+  );
+  const [groupFilter, setGroupFilter] = useState<'unassigned' | 'all'>(
+    paramGroup === 'unassigned' ? 'unassigned' : 'all'
+  );
+  const [selectedIds, setSelectedIds] = useState<string[]>(() =>
+    paramGroup === 'unassigned'
+      ? logs.filter((l) => l.conditionId === UNASSIGNED_CONDITION_ID).map((l) => l.id)
+      : []
+  );
+
+  // Target disease picker dialog
+  const [assignDialogOpen, setAssignDialogOpen] = useState(false);
+  const [targetMode, setTargetMode] = useState<'existing' | 'new'>('new');
+  const [targetCondId, setTargetCondId] = useState('');
+  const [newLabel, setNewLabel] = useState('');
+  const [newBodyPart, setNewBodyPart] = useState('');
+  const [overwriteConfirmed, setOverwriteConfirmed] = useState(false);
+  const [assignError, setAssignError] = useState('');
+  const [toastMsg, setToastMsg] = useState('');
+
+  const activeConditions = useMemo(() => conditions.filter((c) => !c.isArchived), [conditions]);
+  const unassignedLogs = useMemo(
+    () => logs.filter((l) => l.conditionId === UNASSIGNED_CONDITION_ID),
+    [logs]
+  );
 
   useEffect(() => {
-    if (paramTab === 'calendar' || paramTab === 'diagnostics' || paramTab === 'list') {
+    if (paramGroup === 'unassigned') {
+      setActiveTab('list');
+      setSelectionMode(true);
+      setGroupFilter('unassigned');
+      setSelectedIds(logs.filter((l) => l.conditionId === UNASSIGNED_CONDITION_ID).map((l) => l.id));
+    } else if (paramGroup === 'all') {
+      setActiveTab('list');
+      setSelectionMode(true);
+      setGroupFilter('all');
+    } else if (
+      paramTab === 'calendar' ||
+      paramTab === 'diagnostics' ||
+      paramTab === 'stats' ||
+      // paramTab === 'briefing' ||
+      paramTab === 'list'
+    ) {
       setActiveTab(paramTab);
     } else {
       setActiveTab(initialTab);
     }
-  }, [paramTab, initialTab]);
+  }, [paramTab, paramGroup, initialTab, logs]);
 
-  const handleTabSwitch = (tab: 'list' | 'calendar' | 'diagnostics') => {
+  useEffect(() => {
+    if (!assignDialogOpen) return;
+    const prevBody = document.body.style.overflow;
+    const prevHtml = document.documentElement.style.overflow;
+    document.body.style.overflow = 'hidden';
+    document.documentElement.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prevBody;
+      document.documentElement.style.overflow = prevHtml;
+    };
+  }, [assignDialogOpen]);
+
+  const handleTabSwitch = (tab: 'list' | 'calendar' | 'diagnostics' | 'stats') => {
     triggerHaptic();
     setActiveTab(tab);
+    setSelectionMode(false);
     setSearchParams(tab === 'list' ? {} : { tab }, { replace: true });
   };
 
-  const sortedLogs = useMemo(() => {
-    return [...logs].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }, [logs]);
+  const startGroupingMode = (mode: 'unassigned' | 'all') => {
+    triggerHaptic();
+    setActiveTab('list');
+    setSelectionMode(true);
+    setGroupFilter(mode);
+    if (mode === 'unassigned') {
+      setSelectedIds(unassignedLogs.map((l) => l.id));
+    } else {
+      setSelectedIds([]);
+    }
+    setSearchParams({ group: mode }, { replace: true });
+  };
+
+  const exitGroupingMode = () => {
+    triggerHaptic();
+    setSelectionMode(false);
+    setSelectedIds([]);
+    setAssignDialogOpen(false);
+    setSearchParams({}, { replace: true });
+  };
+
+  const visibleLogs = useMemo(() => {
+    const base =
+      selectionMode && groupFilter === 'unassigned'
+        ? logs.filter((l) => l.conditionId === UNASSIGNED_CONDITION_ID)
+        : logs;
+    return [...base].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }, [logs, selectionMode, groupFilter]);
 
   const logHistoryMap = useMemo(() => {
     const map: Record<string, PainLog> = {};
@@ -351,9 +574,41 @@ export const HistoryPage: React.FC<{ initialTab?: 'list' | 'calendar' | 'diagnos
     return map;
   }, [logs, conditions]);
 
-  const groupedLogs = useMemo(() => {
+  interface GroupedLogSection {
+    key: string;
+    title: string;
+    subtitle?: string;
+    conditionId?: string;
+    avgIntensity?: string;
+    logs: PainLog[];
+  }
+
+  const groupedSections = useMemo((): GroupedLogSection[] => {
+    if (listViewMode === 'condition') {
+      const byCond = new Map<string, PainLog[]>();
+      visibleLogs.forEach((log) => {
+        const cid = log.conditionId || UNASSIGNED_CONDITION_ID;
+        const arr = byCond.get(cid) || [];
+        arr.push(log);
+        byCond.set(cid, arr);
+      });
+
+      return Array.from(byCond.entries()).map(([cid, condLogs]) => {
+        const cond = conditions.find((c) => c.id === cid);
+        const avg = (condLogs.reduce((acc, l) => acc + l.intensity, 0) / condLogs.length).toFixed(1);
+        return {
+          key: cid,
+          title: cid === UNASSIGNED_CONDITION_ID ? '원인 미상 증상' : cond?.label || '미지정',
+          subtitle: cond?.bodyPart,
+          conditionId: cid !== UNASSIGNED_CONDITION_ID && cond ? cid : undefined,
+          avgIntensity: avg,
+          logs: condLogs,
+        };
+      });
+    }
+
     const groups: Record<string, PainLog[]> = {};
-    sortedLogs.forEach((log) => {
+    visibleLogs.forEach((log) => {
       const date = new Date(log.date);
       let key = '';
 
@@ -372,103 +627,385 @@ export const HistoryPage: React.FC<{ initialTab?: 'list' | 'calendar' | 'diagnos
       if (!groups[key]) groups[key] = [];
       groups[key].push(log);
     });
-    return groups;
-  }, [sortedLogs, listViewMode]);
+    return Object.entries(groups).map(([title, items]) => ({
+      key: title,
+      title,
+      logs: items,
+    }));
+  }, [visibleLogs, listViewMode, conditions]);
+
+  const toggleSelectLog = (id: string) => {
+    setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  };
+
+  const allVisibleSelected =
+    visibleLogs.length > 0 && visibleLogs.every((l) => selectedIds.includes(l.id));
+
+  const toggleSelectAllVisible = () => {
+    triggerHaptic();
+    if (allVisibleSelected) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(visibleLogs.map((l) => l.id));
+    }
+  };
+
+  const openAssignDialog = () => {
+    if (selectedIds.length === 0) return;
+    triggerHaptic();
+    const chosenLogs = logs.filter((l) => selectedIds.includes(l.id));
+    const inferredParts = Array.from(
+      new Set(
+        chosenLogs.map((l) => {
+          if (l.bodyPartOverride) return l.bodyPartOverride;
+          const c = conditions.find((cond) => cond.id === l.conditionId);
+          return c?.bodyPart;
+        }).filter(Boolean)
+      )
+    ).join(', ');
+    setTargetMode(activeConditions.length > 0 ? 'existing' : 'new');
+    setTargetCondId(activeConditions[0]?.id || '');
+    setNewBodyPart(inferredParts || '허리/요통');
+    setNewLabel('');
+    setOverwriteConfirmed(false);
+    setAssignError('');
+    setAssignDialogOpen(true);
+  };
+
+  const overwriteTargets = useMemo(() => {
+    const selectedSet = new Set(selectedIds);
+    return logs.filter((l) => {
+      if (!selectedSet.has(l.id)) return false;
+      if (l.conditionId === UNASSIGNED_CONDITION_ID) return false;
+      if (!conditions.some((c) => c.id === l.conditionId)) return false;
+      if (targetMode === 'existing' && targetCondId && l.conditionId === targetCondId) return false;
+      return true;
+    });
+  }, [logs, selectedIds, conditions, targetMode, targetCondId]);
+
+  const overwriteConditionNames = useMemo(() => {
+    const names = overwriteTargets
+      .map((l) => conditions.find((c) => c.id === l.conditionId)?.label)
+      .filter((v): v is string => Boolean(v));
+    return Array.from(new Set(names));
+  }, [overwriteTargets, conditions]);
+
+  const handleConfirmAssign = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (selectedIds.length === 0) {
+      setAssignError('묶을 기록을 1개 이상 선택하세요.');
+      return;
+    }
+    if (targetMode === 'new' && (!newLabel.trim() || !newBodyPart.trim())) {
+      setAssignError('확정된 질병명과 부위를 입력하세요.');
+      return;
+    }
+    if (targetMode === 'existing' && !targetCondId) {
+      setAssignError('연결할 질병을 선택하세요.');
+      return;
+    }
+    if (overwriteTargets.length > 0 && !overwriteConfirmed) {
+      setAssignError(
+        `이미 다른 질병에 연결된 기록 ${overwriteTargets.length}건을 덮어쓸지 먼저 체크해 주세요.`
+      );
+      return;
+    }
+
+    const resultId = await assignLogsToCondition(
+      selectedIds,
+      targetMode === 'existing'
+        ? { existingConditionId: targetCondId }
+        : { newCondition: { label: newLabel.trim(), bodyPart: newBodyPart.trim() } }
+    );
+    if (resultId) {
+      const count = selectedIds.length;
+      triggerHaptic();
+      setAssignDialogOpen(false);
+      setSelectionMode(false);
+      setSelectedIds([]);
+      setSearchParams({}, { replace: true });
+      setToastMsg(`${count}건의 기록을 질병으로 묶었습니다.`);
+      window.setTimeout(() => setToastMsg(''), 3000);
+    }
+  };
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-4 pb-28 text-slate-800 dark:text-slate-100 space-y-4">
-      <header className="flex items-center justify-between gap-2">
+    <div
+      className={`min-h-screen bg-slate-50 dark:bg-slate-950 p-4 text-slate-800 dark:text-slate-100 space-y-4 ${
+        selectionMode ? 'pb-40' : 'pb-28'
+      }`}
+    >
+      <header className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-xl font-bold">
           {activeTab === 'list'
-            ? t('historyTitle')
+            ? selectionMode
+              ? '질병으로 묶을 기록 선택'
+              : t('historyTitle')
             : activeTab === 'calendar'
             ? t('calendarTitle')
-            : '진단·실손'}
+            : activeTab === 'stats'
+            ? '사용 · 치료 통계'
+            : /* activeTab === 'briefing' ? t('briefingTitle') : */ '진단·실손'}
         </h1>
 
-        {/* Unified Visualization & Archive Switcher */}
-        <div className="flex bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-1 text-xs shadow-sm">
-          <button
-            type="button"
-            onClick={() => handleTabSwitch('list')}
-            className={`flex items-center gap-1 px-2.5 py-1 rounded-lg font-bold transition-all ${
-              activeTab === 'list'
-                ? 'bg-teal-700 text-white'
-                : 'text-slate-500'
-            }`}
-          >
-            <ListIcon size={13} /> 목록
-          </button>
-          <button
-            type="button"
-            onClick={() => handleTabSwitch('calendar')}
-            className={`flex items-center gap-1 px-2.5 py-1 rounded-lg font-bold transition-all ${
-              activeTab === 'calendar'
-                ? 'bg-teal-700 text-white'
-                : 'text-slate-500'
-            }`}
-          >
-            <CalendarIcon size={13} /> 캘린더
-          </button>
-          <button
-            type="button"
-            onClick={() => handleTabSwitch('diagnostics')}
-            className={`flex items-center gap-1 px-2.5 py-1 rounded-lg font-bold transition-all ${
-              activeTab === 'diagnostics'
-                ? 'bg-teal-700 text-white'
-                : 'text-slate-500'
-            }`}
-          >
-            <FileCheck2 size={13} /> 진단·실손
-          </button>
-        </div>
+        {!selectionMode && (
+          <div className="flex bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-1 text-xs shadow-sm overflow-x-auto">
+            <button
+              type="button"
+              onClick={() => handleTabSwitch('list')}
+              className={`flex items-center gap-1 px-2.5 py-1 rounded-lg font-bold whitespace-nowrap transition-all ${
+                activeTab === 'list' ? 'bg-teal-700 text-white' : 'text-slate-500'
+              }`}
+            >
+              <ListIcon size={13} /> 목록
+            </button>
+            <button
+              type="button"
+              onClick={() => handleTabSwitch('calendar')}
+              className={`flex items-center gap-1 px-2.5 py-1 rounded-lg font-bold whitespace-nowrap transition-all ${
+                activeTab === 'calendar' ? 'bg-teal-700 text-white' : 'text-slate-500'
+              }`}
+            >
+              <CalendarIcon size={13} /> 캘린더
+            </button>
+            <button
+              type="button"
+              onClick={() => handleTabSwitch('stats')}
+              className={`flex items-center gap-1 px-2.5 py-1 rounded-lg font-bold whitespace-nowrap transition-all ${
+                activeTab === 'stats' ? 'bg-teal-700 text-white' : 'text-slate-500'
+              }`}
+            >
+              <BarChart3 size={13} /> 통계
+            </button>
+            <button
+              type="button"
+              onClick={() => handleTabSwitch('diagnostics')}
+              className={`flex items-center gap-1 px-2.5 py-1 rounded-lg font-bold whitespace-nowrap transition-all ${
+                activeTab === 'diagnostics' ? 'bg-teal-700 text-white' : 'text-slate-500'
+              }`}
+            >
+              <FileCheck2 size={13} /> 진단·실손
+            </button>
+            {/* 진료 브리핑은 질병별 상세 화면의 '의료진 요약'으로 이동하고, 일시 주석 처리함
+            <button
+              type="button"
+              onClick={() => handleTabSwitch('briefing')}
+              className={`flex items-center gap-1 px-2.5 py-1 rounded-lg font-bold whitespace-nowrap transition-all ${
+                activeTab === 'briefing' ? 'bg-teal-700 text-white' : 'text-slate-500'
+              }`}
+            >
+              <Stethoscope size={13} /> 브리핑
+            </button>
+            */}
+          </div>
+        )}
       </header>
+
+      {toastMsg && (
+        <div className="rounded-xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/60 px-3.5 py-2.5 text-xs font-bold text-emerald-700 dark:text-emerald-300 flex items-center gap-2">
+          <Check size={14} />
+          <span>{toastMsg}</span>
+        </div>
+      )}
 
       {activeTab === 'calendar' ? (
         <CalendarPage embedded />
+      ) : activeTab === 'stats' ? (
+        <StatsPage embedded />
       ) : activeTab === 'diagnostics' ? (
         <DiagnosticsPage embedded />
+      /* ) : activeTab === 'briefing' ? (
+        <ClinicalBriefingPage embedded /> */
       ) : (
         <>
-          <div className="flex justify-end">
-            <div className="flex bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-1 text-xs shadow-sm">
-              {(['day', 'week', 'month'] as const).map((mode) => (
+          {/* Selection Mode Guide Banner OR Unassigned Prompt */}
+          {selectionMode ? (
+            <div className="rounded-2xl border border-teal-200 dark:border-teal-800/80 bg-teal-50/70 dark:bg-teal-950/30 p-3.5 space-y-2.5">
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <p className="text-xs font-extrabold text-teal-900 dark:text-teal-200">
+                    기록 상세를 확인하며 질병으로 묶을 항목을 고르세요
+                  </p>
+                  <p className="text-[11px] text-teal-700 dark:text-teal-400">
+                    카드를 누르면 선택/해제되고, 오른쪽 화살표(›)로 전체 메모와 증상을 펼쳐 볼 수 있습니다
+                  </p>
+                </div>
                 <button
-                  key={mode}
                   type="button"
-                  onClick={() => {
-                    triggerHaptic();
-                    setListViewMode(mode);
-                  }}
-                  className={`px-2.5 py-1 rounded-lg font-bold transition-all ${
-                    listViewMode === mode
-                      ? 'bg-slate-800 dark:bg-slate-200 text-white dark:text-slate-900'
-                      : 'text-slate-400'
-                  }`}
+                  onClick={exitGroupingMode}
+                  className="shrink-0 px-2.5 py-1 rounded-lg border border-teal-200 dark:border-teal-800 bg-white dark:bg-slate-900 text-[11px] font-bold text-slate-600 dark:text-slate-300"
                 >
-                  {mode === 'day' ? '일별' : mode === 'week' ? '주별' : '월별'}
+                  취소
                 </button>
-              ))}
+              </div>
+
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex rounded-lg bg-white/80 dark:bg-slate-900 p-0.5 border border-teal-200/80 dark:border-teal-800/60 text-[11px] font-bold">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      triggerHaptic();
+                      setGroupFilter('unassigned');
+                    }}
+                    className={`px-2.5 py-1 rounded-md transition-colors ${
+                      groupFilter === 'unassigned'
+                        ? 'bg-teal-700 text-white'
+                        : 'text-slate-500 dark:text-slate-400'
+                    }`}
+                  >
+                    원인 미상 ({unassignedLogs.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      triggerHaptic();
+                      setGroupFilter('all');
+                    }}
+                    className={`px-2.5 py-1 rounded-md transition-colors ${
+                      groupFilter === 'all'
+                        ? 'bg-teal-700 text-white'
+                        : 'text-slate-500 dark:text-slate-400'
+                    }`}
+                  >
+                    전체 기록 ({logs.length})
+                  </button>
+                </div>
+
+                {visibleLogs.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={toggleSelectAllVisible}
+                    className="px-2.5 py-1 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-[11px] font-bold text-slate-700 dark:text-slate-200"
+                  >
+                    {allVisibleSelected ? '전체 해제' : '현재 목록 전체 선택'}
+                  </button>
+                )}
+              </div>
             </div>
-          </div>
+          ) : (
+            unassignedLogs.length > 0 && (
+              <div className="rounded-2xl border border-amber-200 dark:border-amber-900/70 bg-amber-50/70 dark:bg-amber-950/25 p-3.5 flex items-center justify-between gap-2">
+                <div>
+                  <p className="text-xs font-bold text-amber-900 dark:text-amber-200">
+                    원인 미상 증상 {unassignedLogs.length}건
+                  </p>
+                  <p className="text-[11px] text-amber-700 dark:text-amber-400">
+                    기록 내역을 보며 체크해서 하나의 질병으로 묶을 수 있습니다
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => startGroupingMode('unassigned')}
+                  className="shrink-0 px-3 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold flex items-center gap-1"
+                >
+                  <FolderPlus size={14} /> 질병으로 묶기
+                </button>
+              </div>
+            )
+          )}
+
+          {/* Controls row (hidden in selection mode for cleaner focus) */}
+          {!selectionMode && (
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              {logs.length > 0 ? (
+                <button
+                  type="button"
+                  onClick={() => startGroupingMode(unassignedLogs.length > 0 ? 'unassigned' : 'all')}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-bold text-teal-700 dark:text-teal-400 shadow-sm hover:bg-slate-50 dark:hover:bg-slate-800"
+                >
+                  <FolderPlus size={14} /> 선택해서 질병 묶기
+                </button>
+              ) : (
+                <div />
+              )}
+
+              <div className="flex bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-1 text-xs shadow-sm">
+                {(
+                  [
+                    { id: 'day', label: '일별' },
+                    { id: 'week', label: '주별' },
+                    { id: 'month', label: '월별' },
+                    { id: 'condition', label: '질병별' },
+                  ] as const
+                ).map((mode) => (
+                  <button
+                    key={mode.id}
+                    type="button"
+                    onClick={() => {
+                      triggerHaptic();
+                      setListViewMode(mode.id);
+                    }}
+                    className={`px-2.5 py-1 rounded-lg font-bold transition-all ${
+                      listViewMode === mode.id
+                        ? 'bg-slate-800 dark:bg-slate-200 text-white dark:text-slate-900'
+                        : 'text-slate-400'
+                    }`}
+                  >
+                    {mode.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Grouped Logs List */}
           <div className="space-y-4">
-            {Object.keys(groupedLogs).length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-slate-300 dark:border-slate-800 bg-white dark:bg-slate-900 p-8 text-center text-xs text-slate-400">
-                기록된 통증 내역이 없습니다.
+            {groupedSections.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-slate-300 dark:border-slate-800 bg-white dark:bg-slate-900 p-8 text-center space-y-2 text-xs text-slate-400">
+                <p>
+                  {selectionMode && groupFilter === 'unassigned'
+                    ? '묶을 원인 미상 증상 기록이 없습니다.'
+                    : '기록된 통증 내역이 없습니다.'}
+                </p>
+                {selectionMode && groupFilter === 'unassigned' && logs.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setGroupFilter('all')}
+                    className="px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold"
+                  >
+                    전체 기록에서 고르기
+                  </button>
+                )}
               </div>
             ) : (
-              Object.entries(groupedLogs).map(([title, groupLogs]) => (
-                <div key={title} className="space-y-2">
-                  <div className="flex items-center justify-between px-1">
-                    <span className="text-xs font-bold text-slate-500 dark:text-slate-400">{title}</span>
-                    <span className="text-[10px] font-bold text-slate-400 bg-slate-200 dark:bg-slate-800 px-2 py-0.5 rounded-full">
-                      {groupLogs.length}건
-                    </span>
+              groupedSections.map((section) => (
+                <div key={section.key} className="space-y-2">
+                  <div className="flex items-center justify-between px-1 gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-xs font-bold text-slate-600 dark:text-slate-300 truncate">
+                        {section.title}
+                      </span>
+                      {section.subtitle && (
+                        <span className="text-[10px] font-semibold text-slate-400 truncate">
+                          ({section.subtitle})
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {section.avgIntensity && (
+                        <span className="text-[10px] font-bold text-teal-700 dark:text-teal-300 bg-teal-50 dark:bg-teal-950/60 px-2 py-0.5 rounded-full">
+                          평균 {section.avgIntensity}
+                        </span>
+                      )}
+                      <span className="text-[10px] font-bold text-slate-400 bg-slate-200 dark:bg-slate-800 px-2 py-0.5 rounded-full">
+                        {section.logs.length}건
+                      </span>
+                      {section.conditionId && !selectionMode && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            triggerHaptic();
+                            navigate(`/condition/${section.conditionId}`);
+                          }}
+                          className="inline-flex items-center gap-0.5 text-[10px] font-bold text-teal-700 dark:text-teal-400 hover:underline"
+                        >
+                          추이 <ArrowRight size={10} />
+                        </button>
+                      )}
+                    </div>
                   </div>
                   <div className="space-y-2">
-                    {groupLogs.map((log) => {
+                    {section.logs.map((log) => {
                       const cond = conditions.find((c) => c.id === log.conditionId);
                       return (
                         <HistoryItem
@@ -476,6 +1013,10 @@ export const HistoryPage: React.FC<{ initialTab?: 'list' | 'calendar' | 'diagnos
                           log={log}
                           previousLog={logHistoryMap[log.id]}
                           condition={cond}
+                          showFullDate={listViewMode === 'condition' || listViewMode !== 'day'}
+                          selectable={selectionMode}
+                          selected={selectedIds.includes(log.id)}
+                          onToggleSelect={toggleSelectLog}
                           onDelete={deleteLog}
                           onUpdate={updateLog}
                         />
@@ -488,6 +1029,150 @@ export const HistoryPage: React.FC<{ initialTab?: 'list' | 'calendar' | 'diagnos
           </div>
         </>
       )}
+
+      {/* Floating Bottom Selection Action Bar */}
+      {activeTab === 'list' && selectionMode && (
+        <div className="fixed bottom-20 left-4 right-4 z-40 max-w-md mx-auto">
+          <div className="rounded-2xl border border-teal-500/30 bg-slate-900/95 dark:bg-slate-900/95 text-white px-4 py-3 shadow-2xl backdrop-blur-md flex items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-extrabold text-emerald-300">
+                {selectedIds.length}건 선택됨
+              </p>
+              <p className="text-[10px] text-slate-300">
+                같은 질병 경과로 묶어 추적합니다
+              </p>
+            </div>
+            <button
+              type="button"
+              disabled={selectedIds.length === 0}
+              onClick={openAssignDialog}
+              className="shrink-0 px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-500 disabled:bg-slate-700 disabled:text-slate-400 text-xs font-extrabold flex items-center gap-1.5 transition-colors"
+            >
+              <FolderPlus size={14} /> 질병으로 묶기 ({selectedIds.length})
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Target Disease Assignment Modal */}
+      {assignDialogOpen &&
+        typeof document !== 'undefined' &&
+        createPortal(
+          <div
+            onClick={() => setAssignDialogOpen(false)}
+            className="fixed inset-0 z-[9998] bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4"
+          >
+            <form
+              onSubmit={handleConfirmAssign}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full max-w-sm rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-5 shadow-2xl space-y-3.5"
+            >
+              <div className="flex items-center justify-between">
+                <h3 className="font-bold text-sm">
+                  선택한 {selectedIds.length}건의 기록을 질병으로 묶기
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => setAssignDialogOpen(false)}
+                  className="text-slate-400"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              <div className="grid grid-cols-2 gap-1 rounded-xl bg-slate-100 dark:bg-slate-800 p-1 text-xs font-bold">
+                <button
+                  type="button"
+                  disabled={activeConditions.length === 0}
+                  onClick={() => setTargetMode('existing')}
+                  className={`py-1.5 rounded-lg ${
+                    targetMode === 'existing'
+                      ? 'bg-white dark:bg-slate-900 shadow-sm'
+                      : 'text-slate-500 disabled:opacity-40'
+                  }`}
+                >
+                  기존 질병에 연결
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTargetMode('new')}
+                  className={`py-1.5 rounded-lg ${
+                    targetMode === 'new' ? 'bg-white dark:bg-slate-900 shadow-sm' : 'text-slate-500'
+                  }`}
+                >
+                  새 확정 질병 생성
+                </button>
+              </div>
+
+              {targetMode === 'existing' ? (
+                <select
+                  value={targetCondId}
+                  onChange={(e) => setTargetCondId(e.target.value)}
+                  className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-bold"
+                >
+                  {activeConditions.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.label} ({c.bodyPart})
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <div className="space-y-2">
+                  <input
+                    type="text"
+                    placeholder="확정된 질병명 (예: 요추 추간판 탈출증)"
+                    value={newLabel}
+                    onChange={(e) => setNewLabel(e.target.value)}
+                    className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs"
+                  />
+                  <input
+                    type="text"
+                    placeholder="부위 (예: 허리/요통)"
+                    value={newBodyPart}
+                    onChange={(e) => setNewBodyPart(e.target.value)}
+                    className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs"
+                  />
+                </div>
+              )}
+
+              {assignError && <p className="text-xs font-bold text-rose-500">{assignError}</p>}
+
+              {overwriteTargets.length > 0 && (
+                <div className="rounded-xl border border-amber-300 dark:border-amber-800 bg-amber-50/90 dark:bg-amber-950/40 p-3 space-y-2 text-xs">
+                  <div className="flex items-start gap-2 text-amber-900 dark:text-amber-200 font-bold">
+                    <AlertCircle size={15} className="shrink-0 mt-0.5 text-amber-600 dark:text-amber-400" />
+                    <span>
+                      기존 질병({overwriteConditionNames.join(', ')})에 이미 기록된{' '}
+                      {overwriteTargets.length}건이 포함되어 있습니다.
+                    </span>
+                  </div>
+                  <label className="flex items-start gap-2 cursor-pointer select-none text-[11px] font-semibold text-amber-800 dark:text-amber-300">
+                    <input
+                      type="checkbox"
+                      checked={overwriteConfirmed}
+                      onChange={(e) => {
+                        triggerHaptic();
+                        setOverwriteConfirmed(e.target.checked);
+                        setAssignError('');
+                      }}
+                      className="mt-0.5 h-4 w-4 accent-amber-600 shrink-0"
+                    />
+                    <span>기존 질병 연결을 덮어쓰고 선택한 질병으로 이동하는 데 동의합니다.</span>
+                  </label>
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={overwriteTargets.length > 0 && !overwriteConfirmed}
+                className="w-full py-2.5 rounded-xl bg-teal-700 hover:bg-teal-600 disabled:bg-slate-300 dark:disabled:bg-slate-800 disabled:text-slate-500 text-white font-bold text-xs transition-colors"
+              >
+                질병으로 묶기 완료 ({selectedIds.length}건)
+              </button>
+            </form>
+          </div>,
+          document.body
+        )}
     </div>
   );
 };
