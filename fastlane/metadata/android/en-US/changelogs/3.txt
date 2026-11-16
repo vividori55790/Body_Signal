@@ -1,0 +1,6 @@
+v1.2.0:
+- Added Encrypted Diagnostic & Insurance Vault (EXIF-stripped AES-256 photos, Grid/Feed views, automatic 3-year indemnity claim deadline calculation)
+- Added Android OS Fingerprint/PIN/Password (DEVICE_CREDENTIAL) support via AndroidKeyStore + BiometricPrompt
+- Added offline TOTP 2FA with one-time recovery codes
+- Added screenshot, Recents thumbnail, and Assistant/Gemini screen-context blocking
+- Added double-back-to-exit confirmation toast

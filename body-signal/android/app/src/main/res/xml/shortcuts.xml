@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="acute_pain"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutShortLabel="@string/shortcut_acute_short"
+        android:shortcutLongLabel="@string/shortcut_acute_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.bodysignal.app"
+            android:targetClass="com.bodysignal.app.MainActivity"
+            android:data="https://localhost/?mode=acute" />
+    </shortcut>
+    <shortcut
+        android:shortcutId="clinical_briefing"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutShortLabel="@string/shortcut_briefing_short"
+        android:shortcutLongLabel="@string/shortcut_briefing_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.bodysignal.app"
+            android:targetClass="com.bodysignal.app.MainActivity"
+            android:data="https://localhost/briefing" />
+    </shortcut>
+    <shortcut
+        android:shortcutId="quick_med"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutShortLabel="@string/shortcut_med_short"
+        android:shortcutLongLabel="@string/shortcut_med_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.bodysignal.app"
+            android:targetClass="com.bodysignal.app.MainActivity"
+            android:data="https://localhost/entry" />
+    </shortcut>
+</shortcuts>

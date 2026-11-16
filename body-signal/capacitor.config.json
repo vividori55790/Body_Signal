@@ -1,0 +1,6 @@
+{
+  "appId": "com.bodysignal.app",
+  "appName": "Body Signal",
+  "webDir": "dist",
+  "bundledWebRuntime": false
+}

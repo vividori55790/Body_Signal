@@ -1,0 +1,25 @@
+# Build & Dependencies
+node_modules/
+dist/
+.gradle/
+build/
+*.log
+*.apk
+*.aab
+
+# Signing Keys & Secrets
+*.keystore
+*.jks
+key.properties
+.env*
+
+# Android Studio / IntelliJ / VSCode
+.idea/
+.vscode/
+local.properties
+Captures/
+*.hprof
+
+# OS
+.DS_Store
+Thumbs.db
