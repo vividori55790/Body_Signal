@@ -10,6 +10,7 @@ import {
   generateDeviceMasterKeyHex,
   importKeyFromHex,
 } from './crypto';
+import SecureAuth, { isNativeAndroidSecureAuth } from './secureAuthBridge';
 
 const DB_NAME = 'bignal_mobile_db';
 const DB_VERSION = 2;
@@ -151,19 +152,52 @@ export async function getOrCreateDeviceMasterKey(): Promise<CryptoKey> {
     hexKey = localStorage.getItem('bs-device-master-key-v1');
   }
 
+  // Native Android: seal/retrieve device master key inside hardware-backed AndroidKeyStore
+  if (isNativeAndroidSecureAuth()) {
+    try {
+      const res = await SecureAuth.getOrCreateDeviceMasterKeyHex({
+        migrateHexKey: hexKey || undefined,
+      });
+      if (res?.hexKey) {
+        // Purge legacy plaintext copies from WebView storage once sealed in AndroidKeyStore
+        if (db.objectStoreNames.contains('device_key_store')) {
+          try {
+            await db.delete('device_key_store', 'master_key');
+          } catch {}
+        }
+        try {
+          await db.delete('app_state', 'device_master_key');
+        } catch {}
+        if (typeof localStorage !== 'undefined') {
+          try {
+            localStorage.removeItem('bs-device-master-key-v1');
+          } catch {}
+        }
+        cachedDeviceMasterKey = await importKeyFromHex(res.hexKey);
+        return cachedDeviceMasterKey;
+      }
+    } catch (err) {
+      console.warn('AndroidKeyStore device key bridge fallback:', err);
+    }
+  }
+
   if (!hexKey) {
     hexKey = generateDeviceMasterKeyHex();
-    if (db.objectStoreNames.contains('device_key_store')) {
-      try {
-        await db.put('device_key_store', hexKey, 'master_key');
-      } catch {}
-    }
+  }
+
+  if (db.objectStoreNames.contains('device_key_store')) {
     try {
-      await db.put('app_state', hexKey, 'device_master_key');
+      await db.put('device_key_store', hexKey, 'master_key');
     } catch {}
-    if (typeof localStorage !== 'undefined') {
-      localStorage.setItem('bs-device-master-key-v1', hexKey);
-    }
+  }
+  // Remove legacy plaintext duplicates in app_state and localStorage
+  try {
+    await db.delete('app_state', 'device_master_key');
+  } catch {}
+  if (typeof localStorage !== 'undefined') {
+    try {
+      localStorage.removeItem('bs-device-master-key-v1');
+    } catch {}
   }
 
   cachedDeviceMasterKey = await importKeyFromHex(hexKey);
@@ -358,6 +392,11 @@ export async function saveUserSettings(settings: UserSettings): Promise<void> {
  * Clear all local data
  */
 export async function resetAllData(): Promise<void> {
+  if (isNativeAndroidSecureAuth()) {
+    try {
+      await SecureAuth.clearAllHardwareSecrets();
+    } catch {}
+  }
   const db = await getDB();
   await db.clear('app_state');
   if (db.objectStoreNames.contains('device_key_store')) {

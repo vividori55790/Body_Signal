@@ -44,7 +44,7 @@ interface HealthContextValue {
 const HealthContext = createContext<HealthContextValue | null>(null);
 
 export const HealthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { activeSessionPin, isUnlocked } = useAuth();
+  const { activeSessionPin, isUnlocked, isPinSet } = useAuth();
   const [conditions, setConditions] = useState<Condition[]>([]);
   const [logs, setLogs] = useState<PainLog[]>([]);
   const [diaryEntries, setDiaryEntries] = useState<DiaryEntry[]>([]);
@@ -53,9 +53,19 @@ export const HealthProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   // Debounce timer for diary auto-saving
   const diaryDebounceTimer = useRef<any>(null);
 
-  // Load data once unlocked
+  // Load data once unlocked; purge sensitive records from memory immediately when locked
   useEffect(() => {
-    if (!isUnlocked) return;
+    if (!isUnlocked) {
+      if (diaryDebounceTimer.current) {
+        clearTimeout(diaryDebounceTimer.current);
+        diaryDebounceTimer.current = null;
+      }
+      setConditions([]);
+      setLogs([]);
+      setDiaryEntries([]);
+      setIsLoading(true);
+      return;
+    }
 
     setIsLoading(true);
     loadHealthData(activeSessionPin || undefined)
@@ -74,6 +84,9 @@ export const HealthProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   // Persist data helper
   const persist = async (nextConditions: Condition[], nextLogs: PainLog[], nextDiary: DiaryEntry[]) => {
+    if (isPinSet && !activeSessionPin) {
+      throw new Error('앱이 잠겨 있어 암호화 키에 접근할 수 없습니다.');
+    }
     const payload: HealthDataPayload = {
       conditions: nextConditions,
       logs: nextLogs,

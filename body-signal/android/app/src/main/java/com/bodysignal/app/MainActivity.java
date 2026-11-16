@@ -8,6 +8,7 @@ import com.getcapacitor.BridgeActivity;
 public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
+        registerPlugin(SecureAuthPlugin.class);
         super.onCreate(savedInstanceState);
         // Prevent Android App Switcher thumbnail capture and unauthorized screenshots
         getWindow().setFlags(

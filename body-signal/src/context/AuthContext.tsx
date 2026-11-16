@@ -12,6 +12,7 @@ import {
 } from '../utils/biometrics';
 
 interface AuthContextValue {
+  isAuthReady: boolean;
   isUnlocked: boolean;
   isPinSet: boolean;
   activeSessionPin: string | null;
@@ -34,7 +35,8 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 const AUTO_LOCK_TIMEOUT_MS = 60_000;
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [isUnlocked, setIsUnlocked] = useState(true);
+  const [isAuthReady, setIsAuthReady] = useState(false);
+  const [isUnlocked, setIsUnlocked] = useState(false);
   const [isPinSet, setIsPinSet] = useState(false);
   const [activeSessionPin, setActiveSessionPin] = useState<string | null>(null);
   const [lockoutRemainingMs, setLockoutRemainingMs] = useState(0);
@@ -43,30 +45,42 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isBiometricEnabled, setIsBiometricEnabled] = useState(false);
 
   const backgroundTimeRef = useRef<number | null>(null);
+  const isPinSetRef = useRef<boolean>(false);
 
   useEffect(() => {
-    isPinConfigured().then((configured) => {
-      setIsPinSet(configured);
-      if (configured) {
+    isPinSetRef.current = isPinSet;
+  }, [isPinSet]);
+
+  useEffect(() => {
+    let mounted = true;
+
+    Promise.all([
+      isPinConfigured(),
+      checkLockout(),
+      checkBiometricAvailability(),
+      getBiometricMeta(),
+    ])
+      .then(([configured, lockout, bioAvail, bioMeta]) => {
+        if (!mounted) return;
+        isPinSetRef.current = configured;
+        setIsPinSet(configured);
+        setIsUnlocked(!configured);
+        if (lockout.isLocked) {
+          setLockoutRemainingMs(lockout.remainingMs);
+        }
+        setIsBiometricAvailable(bioAvail);
+        setIsBiometricEnabled(Boolean(bioMeta && bioMeta.enabled));
+      })
+      .catch(() => {
+        if (!mounted) return;
+        // Fail-closed on storage/initialization error
         setIsUnlocked(false);
-      }
-    });
-
-    // Check lockout on start
-    checkLockout().then(({ isLocked, remainingMs }) => {
-      if (isLocked) {
-        setLockoutRemainingMs(remainingMs);
-      }
-    });
-
-    // Check biometrics availability and enrollment state
-    checkBiometricAvailability().then((avail) => {
-      setIsBiometricAvailable(avail);
-    });
-
-    getBiometricMeta().then((meta) => {
-      setIsBiometricEnabled(Boolean(meta && meta.enabled));
-    });
+      })
+      .finally(() => {
+        if (mounted) {
+          setIsAuthReady(true);
+        }
+      });
 
     // Background Privacy Shield & Auto-lock / Re-entry Lock Listener (Feedback #5)
     const onAppBackground = () => {
@@ -76,7 +90,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const onAppForeground = () => {
       setIsPrivacyMasked(false);
-      if (backgroundTimeRef.current && isPinSet) {
+      if (backgroundTimeRef.current && isPinSetRef.current) {
         const elapsed = Date.now() - backgroundTimeRef.current;
         // When leaving and returning to app (after 1s or timeout), require PIN/Biometric
         if (elapsed >= 1000 || elapsed >= AUTO_LOCK_TIMEOUT_MS) {
@@ -113,12 +127,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
 
     return () => {
+      mounted = false;
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       if (appStateHandle) {
         appStateHandle.remove().catch(() => {});
       }
     };
-  }, [isPinSet]);
+  }, []);
 
   // Lockout countdown timer
   useEffect(() => {
@@ -226,6 +241,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   return (
     <AuthContext.Provider
       value={{
+        isAuthReady,
         isUnlocked,
         isPinSet,
         activeSessionPin,

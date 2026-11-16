@@ -7,12 +7,13 @@ import { openDB } from 'idb';
 import { getOrCreateDeviceMasterKey } from './storage';
 import { encryptWithDeviceKey, decryptWithDeviceKey, EncryptedPackage } from './crypto';
 import { verifyAppPin } from './pin';
+import SecureAuth, { isNativeAndroidSecureAuth } from './secureAuthBridge';
 
 export interface BiometricMeta {
   enabled: boolean;
   credentialId?: string; // Base64 credential id
   wrappedPin?: EncryptedPackage;
-  authenticatorType: 'webauthn' | 'mock';
+  authenticatorType: 'native-keystore' | 'webauthn' | 'mock';
   enrolledAt: string;
 }
 
@@ -49,6 +50,22 @@ function base64ToBuffer(base64: string): ArrayBuffer {
  * Storage helpers with multi-tier fallback (IndexedDB -> localStorage -> in-memory)
  */
 export async function getBiometricMeta(): Promise<BiometricMeta | null> {
+  if (mockModeOverride === null && isNativeAndroidSecureAuth()) {
+    try {
+      const res = await SecureAuth.isBiometricEnrolled();
+      if (res.enrolled) {
+        return {
+          enabled: true,
+          authenticatorType: 'native-keystore',
+          enrolledAt: res.enrolledAt || new Date().toISOString(),
+        };
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  }
+
   if (memoryMeta) return memoryMeta;
 
   try {
@@ -113,17 +130,22 @@ export async function checkBiometricAvailability(): Promise<boolean> {
   if (mockModeOverride !== null) return mockModeOverride;
   if (typeof window === 'undefined') return false;
 
+  if (isNativeAndroidSecureAuth()) {
+    try {
+      const res = await SecureAuth.isBiometricAvailable();
+      return Boolean(res.available);
+    } catch (err) {
+      console.warn('Native biometric availability check failed:', err);
+      return false;
+    }
+  }
+
   try {
     if (
       window.PublicKeyCredential &&
       typeof window.PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable === 'function'
     ) {
-      const isAvailable = await window.PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
-      if (isAvailable) return true;
-    }
-    // Fallback: check credentials container in secure context
-    if (window.isSecureContext && navigator.credentials) {
-      return true;
+      return await window.PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
     }
   } catch (err) {
     console.warn('Biometric availability check failed:', err);
@@ -142,16 +164,35 @@ export async function enrollBiometrics(pin: string): Promise<boolean> {
       return false;
     }
 
-    let credentialId: string | undefined = undefined;
-    let authType: 'webauthn' | 'mock' = 'mock';
+    // Native Android path: Hardware-backed AndroidKeyStore + BiometricPrompt
+    if (mockModeOverride === null && isNativeAndroidSecureAuth()) {
+      const res = await SecureAuth.enrollBiometricPin({
+        pin,
+        title: '생체인증 등록',
+        subtitle: '지문 또는 생체정보로 앱 잠금을 안전하게 보호합니다.',
+        negativeButtonText: '취소',
+      });
+      if (res.success) {
+        await saveBiometricMeta(null);
+      }
+      return Boolean(res.success);
+    }
 
-    // 2. Perform WebAuthn registration if available and not overridden
-    if (
-      typeof window !== 'undefined' &&
-      window.PublicKeyCredential &&
-      navigator.credentials &&
-      mockModeOverride !== true
-    ) {
+    let credentialId: string | undefined = undefined;
+    let authType: 'webauthn' | 'mock' = 'webauthn';
+
+    // 2. Enforce real WebAuthn platform verification unless explicitly running in test mock mode
+    if (mockModeOverride === true) {
+      authType = 'mock';
+    } else {
+      if (
+        typeof window === 'undefined' ||
+        !window.PublicKeyCredential ||
+        !navigator.credentials
+      ) {
+        return false;
+      }
+
       try {
         const challenge = crypto.getRandomValues(new Uint8Array(32));
         const userId = crypto.getRandomValues(new Uint8Array(16));
@@ -181,16 +222,15 @@ export async function enrollBiometrics(pin: string): Promise<boolean> {
           },
         })) as PublicKeyCredential | null;
 
-        if (credential) {
-          credentialId = bufferToBase64(credential.rawId);
-          authType = 'webauthn';
-        }
-      } catch (authErr: any) {
-        // If user cancelled platform prompt
-        if (authErr.name === 'NotAllowedError' || authErr.name === 'AbortError') {
+        if (!credential) {
           return false;
         }
-        console.warn('WebAuthn registration fallback to device key token:', authErr);
+        credentialId = bufferToBase64(credential.rawId);
+        authType = 'webauthn';
+      } catch (authErr: any) {
+        // Fail-closed: never fall back to mock authentication in production
+        console.warn('WebAuthn biometric enrollment unavailable or cancelled:', authErr?.name || authErr);
+        return false;
       }
     }
 
@@ -218,6 +258,13 @@ export async function enrollBiometrics(pin: string): Promise<boolean> {
  * Re-wraps existing biometric PIN when user changes their PIN
  */
 export async function updateBiometricPinToken(newPin: string): Promise<void> {
+  if (mockModeOverride === null && isNativeAndroidSecureAuth()) {
+    const res = await SecureAuth.isBiometricEnrolled();
+    if (!res.enrolled) return;
+    await enrollBiometrics(newPin);
+    return;
+  }
+
   const meta = await getBiometricMeta();
   if (!meta || !meta.enabled) return;
 
@@ -233,6 +280,11 @@ export async function updateBiometricPinToken(newPin: string): Promise<void> {
  * Disables and deletes biometric credentials
  */
 export async function disableBiometrics(): Promise<void> {
+  if (isNativeAndroidSecureAuth()) {
+    try {
+      await SecureAuth.clearBiometricPin();
+    } catch {}
+  }
   await saveBiometricMeta(null);
 }
 
@@ -242,19 +294,39 @@ export async function disableBiometrics(): Promise<void> {
  */
 export async function authenticateWithBiometrics(): Promise<{ success: boolean; pin?: string }> {
   try {
+    // Native Android path: Hardware-backed AndroidKeyStore + BiometricPrompt CryptoObject
+    if (mockModeOverride === null && isNativeAndroidSecureAuth()) {
+      const res = await SecureAuth.authenticateBiometricPin({
+        title: '생체인증 잠금 해제',
+        subtitle: '건강 데이터 접근을 위해 본인 인증이 필요합니다.',
+        negativeButtonText: 'PIN 입력',
+      });
+      if (!res.success || !res.pin) {
+        return { success: false };
+      }
+      const pinResult = await verifyAppPin(res.pin);
+      if (!pinResult.success) {
+        return { success: false };
+      }
+      return { success: true, pin: res.pin };
+    }
+
     const meta = await getBiometricMeta();
     if (!meta || !meta.enabled || !meta.wrappedPin) {
       return { success: false };
     }
 
-    // 1. WebAuthn prompt if enrolled via WebAuthn
-    if (
-      meta.authenticatorType === 'webauthn' &&
-      meta.credentialId &&
-      typeof window !== 'undefined' &&
-      navigator.credentials &&
-      mockModeOverride !== true
-    ) {
+    // 1. Require WebAuthn platform assertion unless explicitly running in test mock mode
+    if (mockModeOverride !== true) {
+      if (
+        meta.authenticatorType !== 'webauthn' ||
+        !meta.credentialId ||
+        typeof window === 'undefined' ||
+        !navigator.credentials
+      ) {
+        return { success: false };
+      }
+
       try {
         const challenge = crypto.getRandomValues(new Uint8Array(32));
         const credentialIdBuffer = base64ToBuffer(meta.credentialId);
