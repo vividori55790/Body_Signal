@@ -55,6 +55,7 @@ export function getDB(): Promise<IDBPDatabase<BignalDBSchema>> {
 export const DEFAULT_SETTINGS: UserSettings = {
   language: 'ko',
   theme: 'system',
+  logoVariant: 'cube-3d',
   hapticsEnabled: true,
   reminderEnabled: false,
   reminderTime: '21:00',

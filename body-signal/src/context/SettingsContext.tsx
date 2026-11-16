@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { UserSettings, MedicationPreset } from '../types/health';
+import { UserSettings, MedicationPreset, LogoVariant } from '../types/health';
 import { loadUserSettings, saveUserSettings, DEFAULT_SETTINGS } from '../utils/storage';
 import { translations, Language } from '../i18n/translations';
 import { scheduleDailyReminder, cancelDailyReminder, triggerHaptic, setHapticsEnabled } from '../utils/native';
@@ -10,6 +10,7 @@ interface SettingsContextValue {
   t: (key: keyof typeof translations['ko']) => string;
   setLanguage: (lang: Language) => Promise<void>;
   setTheme: (theme: 'light' | 'dark' | 'system') => Promise<void>;
+  setLogoVariant: (variant: LogoVariant) => Promise<void>;
   setHaptics: (enabled: boolean) => Promise<void>;
   setQuickSos: (enabled: boolean) => Promise<void>;
   setShowDiagnosticsTab: (enabled: boolean) => Promise<void>;
@@ -111,6 +112,10 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const setTheme = async (theme: 'light' | 'dark' | 'system') => {
     applyTheme(theme);
     await updateAndSave((prev) => ({ ...prev, theme }));
+  };
+
+  const setLogoVariant = async (logoVariant: LogoVariant) => {
+    await updateAndSave((prev) => ({ ...prev, logoVariant }));
   };
 
   const setHaptics = async (hapticsEnabled: boolean) => {
@@ -220,6 +225,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         t,
         setLanguage,
         setTheme,
+        setLogoVariant,
         setHaptics,
         setQuickSos,
         setShowDiagnosticsTab,

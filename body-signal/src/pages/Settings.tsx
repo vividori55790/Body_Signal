@@ -31,7 +31,9 @@ import {
   EyeOff,
   Sliders,
   Database,
+  Sparkles,
 } from 'lucide-react';
+import BrandLogo, { LOGO_VARIANT_OPTIONS } from '../components/BrandLogo';
 import { PinModal } from '../components/PinModal';
 import DisclaimerModal from '../components/DisclaimerModal';
 import { triggerHaptic } from '../utils/native';
@@ -72,6 +74,7 @@ export const SettingsPage: React.FC = () => {
     t,
     setLanguage,
     setTheme,
+    setLogoVariant,
     setHaptics,
     setQuickSos,
     setShowDiagnosticsTab,
@@ -571,6 +574,47 @@ export const SettingsPage: React.FC = () => {
                   {th === 'light' ? t('themeLight') : th === 'dark' ? t('themeDark') : t('themeSystem')}
                 </button>
               ))}
+            </div>
+          </div>
+
+          {/* Brand Logo Style */}
+          <div className="p-3.5 space-y-2.5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Sparkles size={18} className="text-emerald-600 dark:text-emerald-400" />
+                <div>
+                  <span className="font-bold text-xs block">
+                    {settings.language === 'en' ? 'Brand Emblem' : '대표 로고 스타일'}
+                  </span>
+                  <span className="text-[10px] text-slate-400">
+                    {settings.language === 'en'
+                      ? 'Shown on launch splash, lock screen & welcome header'
+                      : '시작 스플래시와 잠금 화면 로고에 적용됩니다'}
+                  </span>
+                </div>
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              {LOGO_VARIANT_OPTIONS.map((opt) => {
+                const selected = settings.logoVariant === opt.id;
+                return (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    onClick={() => setLogoVariant(opt.id)}
+                    className={`flex flex-col items-center rounded-xl border p-2 transition-all ${
+                      selected
+                        ? 'border-emerald-500 bg-emerald-50/70 dark:bg-emerald-950/40 ring-1 ring-emerald-500/30'
+                        : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
+                    }`}
+                  >
+                    <BrandLogo variant={opt.id} size={36} showFrame={true} />
+                    <span className="mt-1.5 text-[11px] font-bold text-slate-700 dark:text-slate-200">
+                      {settings.language === 'en' ? opt.labelEn : opt.labelKo}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
           </div>
 

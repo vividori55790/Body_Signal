@@ -95,10 +95,14 @@ export const LocalLlmConfigSchema = z.object({
 
 export type LocalLlmConfig = z.infer<typeof LocalLlmConfigSchema>;
 
+export const LogoVariantSchema = z.enum(['cube-3d', 'cube-2d', 'shield']);
+export type LogoVariant = z.infer<typeof LogoVariantSchema>;
+
 // User Settings
 export const UserSettingsSchema = z.object({
   language: z.enum(['ko', 'en']).default('ko'),
   theme: z.enum(['light', 'dark', 'system']).default('system'),
+  logoVariant: LogoVariantSchema.default('cube-3d'),
   hapticsEnabled: z.boolean().default(true),
   reminderEnabled: z.boolean().default(false),
   reminderTime: z.string().default('21:00'), // HH:mm
