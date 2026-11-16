@@ -15,6 +15,7 @@ import { useSettings } from '../context/SettingsContext';
 import { triggerHaptic } from '../utils/native';
 
 import { UNASSIGNED_CONDITION_ID } from '../types/health';
+import CalendarHeatmap from '../components/CalendarHeatmap';
 
 export const CalendarPage: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
   const { logs, conditions, diaryEntries, saveDiaryEntry } = useHealth();
@@ -248,6 +249,19 @@ export const CalendarPage: React.FC<{ embedded?: boolean }> = ({ embedded = fals
             ))
           )}
         </div>
+      </div>
+
+      {/* Overall Pain Heatmap (Secondary Overview at Bottom) */}
+      <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3.5 shadow-sm space-y-2">
+        <h3 className="text-[11px] font-bold text-slate-400 uppercase">{t('overallPainHeatmap')}</h3>
+        <CalendarHeatmap
+          logs={logs}
+          onDateClick={({ date }) => {
+            triggerHaptic();
+            setCurrentMonth(date);
+            setSelectedDate(date);
+          }}
+        />
       </div>
     </div>
   );

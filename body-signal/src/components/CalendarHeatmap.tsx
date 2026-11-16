@@ -16,14 +16,16 @@ export const CalendarHeatmap: React.FC<CalendarHeatmapProps> = ({ logs = [], onD
     return 'bg-rose-700 dark:bg-rose-800 shadow-[0_0_8px_rgba(225,29,72,0.6)] border border-rose-600';
   };
 
+  const WEEKS = 20;
+
   const calendarData = useMemo(() => {
     const today = new Date();
-    const startDate = startOfWeek(subDays(today, 84)); // 12 weeks ago
+    const startDate = startOfWeek(subDays(today, (WEEKS - 1) * 7));
 
     const days: Date[] = [];
     let currentDate = startDate;
 
-    for (let i = 0; i < 7 * 13; i++) {
+    for (let i = 0; i < 7 * WEEKS; i++) {
       days.push(currentDate);
       currentDate = addDays(currentDate, 1);
     }
@@ -48,10 +50,13 @@ export const CalendarHeatmap: React.FC<CalendarHeatmapProps> = ({ logs = [], onD
   }, [logs]);
 
   return (
-    <div className="w-full overflow-x-auto pb-2">
-      <div className="flex gap-1 min-w-max">
-        {Array.from({ length: 13 }).map((_, weekIndex) => (
-          <div key={weekIndex} className="flex flex-col gap-1">
+    <div className="w-full pb-1">
+      <div
+        className="grid gap-[3px] w-full"
+        style={{ gridTemplateColumns: `repeat(${WEEKS}, minmax(0, 1fr))` }}
+      >
+        {Array.from({ length: WEEKS }).map((_, weekIndex) => (
+          <div key={weekIndex} className="flex flex-col gap-[3px]">
             {Array.from({ length: 7 }).map((_, dayIndex) => {
               const dataIndex = weekIndex * 7 + dayIndex;
               const dayData = calendarData[dataIndex];
@@ -62,7 +67,7 @@ export const CalendarHeatmap: React.FC<CalendarHeatmapProps> = ({ logs = [], onD
                   key={dayData.date.toISOString()}
                   onClick={() => onDateClick && onDateClick(dayData)}
                   title={`${format(dayData.date, 'yyyy-MM-dd')}: 최고 통증 NRS ${dayData.intensity}`}
-                  className={`w-3.5 h-3.5 rounded-sm transition-transform hover:scale-125 cursor-pointer ${getColor(
+                  className={`w-full aspect-square rounded-[2px] transition-transform hover:scale-110 cursor-pointer ${getColor(
                     dayData.intensity
                   )}`}
                 />
@@ -72,8 +77,8 @@ export const CalendarHeatmap: React.FC<CalendarHeatmapProps> = ({ logs = [], onD
         ))}
       </div>
 
-      <div className="flex justify-between items-center text-[10px] text-slate-400 mt-2 px-1">
-        <span>3개월 전</span>
+      <div className="flex justify-between items-center text-[10px] text-slate-400 mt-2.5 px-0.5">
+        <span>5개월 전</span>
         <div className="flex items-center gap-1.5">
           <span>경미함</span>
           <div className="w-2.5 h-2.5 rounded-sm bg-emerald-400" />
