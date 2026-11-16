@@ -1,6 +1,6 @@
 import React from 'react';
 import { Outlet, NavLink } from 'react-router-dom';
-import { Home, Calendar, History, Stethoscope, Settings } from 'lucide-react';
+import { Home, Calendar, History, Stethoscope, Settings, FileCheck2 } from 'lucide-react';
 import { useSettings } from '../context/SettingsContext';
 import { useAcutePain } from '../context/AcutePainContext';
 import { triggerHaptic } from '../utils/native';
@@ -12,6 +12,7 @@ export const Layout: React.FC = () => {
   const navItems = [
     { path: '/', icon: Home, label: t('navDash') },
     { path: '/calendar', icon: Calendar, label: t('navCalendar') },
+    { path: '/diagnostics', icon: FileCheck2, label: t('navDiagnostics') },
     { path: '/history', icon: History, label: t('navHistory') },
     { path: '/briefing', icon: Stethoscope, label: t('navBriefing'), highlight: true },
     { path: '/settings', icon: Settings, label: t('navSettings') },

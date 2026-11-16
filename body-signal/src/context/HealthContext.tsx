@@ -1,7 +1,8 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
-import { Condition, PainLog, DiaryEntry, HealthDataPayload, ClinicalBriefing } from '../types/health';
+import { Condition, PainLog, DiaryEntry, DiagnosticRecord, HealthDataPayload, ClinicalBriefing } from '../types/health';
 import { loadHealthData, saveHealthData, resetAllData } from '../utils/storage';
 import { computeRecordSignature, verifyRecordSignature } from '../utils/crypto';
+import { deleteEncryptedPhoto } from '../utils/mediaStorage';
 import { useAuth } from './AuthContext';
 import { format, differenceInDays } from 'date-fns';
 
@@ -9,6 +10,7 @@ interface HealthContextValue {
   conditions: Condition[];
   logs: PainLog[];
   diaryEntries: DiaryEntry[];
+  diagnosticRecords: DiagnosticRecord[];
   isLoading: boolean;
   saveEntry: (payload: {
     isNewCondition: boolean;
@@ -34,6 +36,11 @@ interface HealthContextValue {
   deleteLog: (id: string) => Promise<boolean>;
   verifyLogIntegrity: (log: PainLog) => Promise<boolean>;
   saveDiaryEntry: (date: string, text: string) => void;
+  addDiagnosticRecord: (
+    record: Omit<DiagnosticRecord, 'id' | 'createdAt' | 'updatedAt'>
+  ) => Promise<DiagnosticRecord>;
+  updateDiagnosticRecord: (id: string, updates: Partial<DiagnosticRecord>) => Promise<boolean>;
+  deleteDiagnosticRecord: (id: string) => Promise<boolean>;
   getClinicalBriefing: () => ClinicalBriefing;
   generateEMRSummaryText: (formatType?: 'standard' | 'soap') => string;
   exportBackupJson: () => string;
@@ -48,6 +55,7 @@ export const HealthProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [conditions, setConditions] = useState<Condition[]>([]);
   const [logs, setLogs] = useState<PainLog[]>([]);
   const [diaryEntries, setDiaryEntries] = useState<DiaryEntry[]>([]);
+  const [diagnosticRecords, setDiagnosticRecords] = useState<DiagnosticRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   // Debounce timer for diary auto-saving
@@ -63,6 +71,7 @@ export const HealthProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       setConditions([]);
       setLogs([]);
       setDiaryEntries([]);
+      setDiagnosticRecords([]);
       setIsLoading(true);
       return;
     }
@@ -73,6 +82,7 @@ export const HealthProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         setConditions(data.conditions || []);
         setLogs(data.logs || []);
         setDiaryEntries(data.diaryEntries || []);
+        setDiagnosticRecords(data.diagnosticRecords || []);
       })
       .catch((err) => {
         console.error('Failed to load health data:', err);
@@ -83,7 +93,12 @@ export const HealthProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   }, [isUnlocked, activeSessionPin]);
 
   // Persist data helper
-  const persist = async (nextConditions: Condition[], nextLogs: PainLog[], nextDiary: DiaryEntry[]) => {
+  const persist = async (
+    nextConditions: Condition[],
+    nextLogs: PainLog[],
+    nextDiary: DiaryEntry[],
+    nextDiagnostics: DiagnosticRecord[] = diagnosticRecords
+  ) => {
     if (isPinSet && !activeSessionPin) {
       throw new Error('앱이 잠겨 있어 암호화 키에 접근할 수 없습니다.');
     }
@@ -91,6 +106,7 @@ export const HealthProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       conditions: nextConditions,
       logs: nextLogs,
       diaryEntries: nextDiary,
+      diagnosticRecords: nextDiagnostics,
       lastUpdated: new Date().toISOString(),
     };
     await saveHealthData(payload, activeSessionPin || undefined);
@@ -489,11 +505,51 @@ export const HealthProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     return text;
   };
 
+  const addDiagnosticRecord = async (
+    record: Omit<DiagnosticRecord, 'id' | 'createdAt' | 'updatedAt'>
+  ): Promise<DiagnosticRecord> => {
+    const now = new Date().toISOString();
+    const created: DiagnosticRecord = {
+      ...record,
+      id: crypto.randomUUID(),
+      createdAt: now,
+      updatedAt: now,
+    };
+    const nextDiagnostics = [created, ...diagnosticRecords];
+    setDiagnosticRecords(nextDiagnostics);
+    await persist(conditions, logs, diaryEntries, nextDiagnostics);
+    return created;
+  };
+
+  const updateDiagnosticRecord = async (
+    id: string,
+    updates: Partial<DiagnosticRecord>
+  ): Promise<boolean> => {
+    const nextDiagnostics = diagnosticRecords.map((d) =>
+      d.id === id ? { ...d, ...updates, updatedAt: new Date().toISOString() } : d
+    );
+    setDiagnosticRecords(nextDiagnostics);
+    await persist(conditions, logs, diaryEntries, nextDiagnostics);
+    return true;
+  };
+
+  const deleteDiagnosticRecord = async (id: string): Promise<boolean> => {
+    const target = diagnosticRecords.find((d) => d.id === id);
+    if (target?.photoIds?.length) {
+      await Promise.all(target.photoIds.map((pid) => deleteEncryptedPhoto(pid)));
+    }
+    const nextDiagnostics = diagnosticRecords.filter((d) => d.id !== id);
+    setDiagnosticRecords(nextDiagnostics);
+    await persist(conditions, logs, diaryEntries, nextDiagnostics);
+    return true;
+  };
+
   const exportBackupJson = (): string => {
     const payload: HealthDataPayload = {
       conditions,
       logs,
       diaryEntries,
+      diagnosticRecords,
       lastUpdated: new Date().toISOString(),
     };
     return JSON.stringify(payload, null, 2);
@@ -503,10 +559,12 @@ export const HealthProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const parsed = JSON.parse(jsonStr);
     const data = parsed?.data || parsed;
     if (data && Array.isArray(data.conditions) && Array.isArray(data.logs)) {
+      const nextDiagnostics = Array.isArray(data.diagnosticRecords) ? data.diagnosticRecords : [];
       setConditions(data.conditions);
       setLogs(data.logs);
       setDiaryEntries(data.diaryEntries || []);
-      await persist(data.conditions, data.logs, data.diaryEntries || []);
+      setDiagnosticRecords(nextDiagnostics);
+      await persist(data.conditions, data.logs, data.diaryEntries || [], nextDiagnostics);
     } else {
       throw new Error('올바른 백업 파일 형식이 아닙니다.');
     }
@@ -517,6 +575,7 @@ export const HealthProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     setConditions([]);
     setLogs([]);
     setDiaryEntries([]);
+    setDiagnosticRecords([]);
   };
 
   return (
@@ -525,6 +584,7 @@ export const HealthProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         conditions,
         logs,
         diaryEntries,
+        diagnosticRecords,
         isLoading,
         saveEntry,
         updateCondition,
@@ -533,6 +593,9 @@ export const HealthProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         deleteLog,
         verifyLogIntegrity: verifyRecordSignature,
         saveDiaryEntry,
+        addDiagnosticRecord,
+        updateDiagnosticRecord,
+        deleteDiagnosticRecord,
         getClinicalBriefing,
         generateEMRSummaryText,
         exportBackupJson,

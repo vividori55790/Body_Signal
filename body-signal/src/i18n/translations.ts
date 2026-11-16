@@ -20,6 +20,7 @@ export const translations = {
     // Nav
     navDash: '대시보드',
     navCalendar: '캘린더',
+    navDiagnostics: '진단·실손',
     navHistory: '기록내역',
     navBriefing: '진료브리핑',
     navSettings: '설정',
@@ -209,6 +210,7 @@ export const translations = {
     // Nav
     navDash: 'Dashboard',
     navCalendar: 'Calendar',
+    navDiagnostics: 'Claims',
     navHistory: 'History',
     navBriefing: 'Doctor View',
     navSettings: 'Settings',

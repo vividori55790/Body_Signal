@@ -6,6 +6,7 @@ import EntryFormPage from './pages/EntryForm';
 import SettingsPage from './pages/Settings';
 import HistoryPage from './pages/History';
 import CalendarPage from './pages/CalendarPage';
+import DiagnosticsPage from './pages/DiagnosticsPage';
 import ClinicalBriefingPage from './pages/ClinicalBriefing';
 import ConditionDetailPage from './pages/ConditionDetail';
 import LockScreen from './components/LockScreen';
@@ -48,6 +49,7 @@ const AppContent: React.FC = () => {
             <Route path="/" element={<DashboardPage />} />
             <Route path="/acute" element={<DashboardPage />} />
             <Route path="/calendar" element={<CalendarPage />} />
+            <Route path="/diagnostics" element={<DiagnosticsPage />} />
             <Route path="/history" element={<HistoryPage />} />
             <Route path="/briefing" element={<ClinicalBriefingPage />} />
             <Route path="/entry" element={<EntryFormPage />} />

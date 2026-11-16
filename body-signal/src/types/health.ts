@@ -52,6 +52,25 @@ export const DiaryEntrySchema = z.object({
 
 export type DiaryEntry = z.infer<typeof DiaryEntrySchema>;
 
+// Diagnostic Record & Encrypted Photo Vault schema
+export const DiagnosticRecordSchema = z.object({
+  id: z.string().min(1),
+  diagnosisDate: z.string(), // YYYY-MM-DD
+  diagnosisName: z.string().min(1),
+  hospitalName: z.string().optional().default(''),
+  department: z.string().optional().default(''),
+  amountKrw: z.number().nonnegative().optional(),
+  notes: z.string().max(5000).optional().default(''),
+  photoIds: z.array(z.string()).default([]),
+  claimStatus: z.enum(['pending', 'claimed', 'not_applicable']).default('pending'),
+  claimDeadlineYears: z.number().int().min(1).max(10).default(3),
+  claimedAt: z.string().optional(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
+export type DiagnosticRecord = z.infer<typeof DiagnosticRecordSchema>;
+
 // Presets for quick mobile logging
 export const MedicationPresetSchema = z.object({
   id: z.string(),
@@ -110,6 +129,7 @@ export const HealthDataPayloadSchema = z.object({
   conditions: z.array(ConditionSchema),
   logs: z.array(z.custom<PainLog>()),
   diaryEntries: z.array(DiaryEntrySchema),
+  diagnosticRecords: z.array(DiagnosticRecordSchema).optional().default([]),
   settings: UserSettingsSchema.optional(),
   lastUpdated: z.string().optional(),
 });

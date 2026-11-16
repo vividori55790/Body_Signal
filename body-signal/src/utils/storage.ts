@@ -84,6 +84,7 @@ const EMPTY_HEALTH_DATA: HealthDataPayload = {
   conditions: [],
   logs: [],
   diaryEntries: [],
+  diagnosticRecords: [],
   settings: DEFAULT_SETTINGS,
   lastUpdated: new Date().toISOString(),
 };
@@ -116,6 +117,7 @@ export async function migrateLegacyDataIfNeeded(): Promise<HealthDataPayload | n
           notes: l.notes || '',
         })),
         diaryEntries: Array.isArray(data.diaryEntries) ? data.diaryEntries : [],
+        diagnosticRecords: Array.isArray(data.diagnosticRecords) ? data.diagnosticRecords : [],
         settings: DEFAULT_SETTINGS,
         lastUpdated: new Date().toISOString(),
       };
@@ -321,32 +323,40 @@ export async function saveHealthData(data: HealthDataPayload, pin?: string): Pro
 export async function reEncryptHealthData(newPin?: string, oldPin?: string): Promise<void> {
   const db = await getDB();
   const record = await db.get('app_state', 'health_data');
-  if (!record) return;
+  if (record) {
+    let payload: HealthDataPayload | null = null;
+    if (record && typeof record === 'object' && record.v === 1 && record.salt && record.ct) {
+      const pkg = record as EncryptedPackage;
+      if (oldPin) {
+        try {
+          const json = await decryptWithPin(pkg, oldPin);
+          payload = JSON.parse(json);
+        } catch {}
+      }
+      if (!payload) {
+        try {
+          const deviceKey = await getOrCreateDeviceMasterKey();
+          const json = await decryptWithDeviceKey(pkg, deviceKey);
+          payload = JSON.parse(json);
+        } catch {}
+      }
+    } else {
+      try {
+        payload = HealthDataPayloadSchema.parse(record);
+      } catch {}
+    }
 
-  let payload: HealthDataPayload | null = null;
-  if (record && typeof record === 'object' && record.v === 1 && record.salt && record.ct) {
-    const pkg = record as EncryptedPackage;
-    if (oldPin) {
-      try {
-        const json = await decryptWithPin(pkg, oldPin);
-        payload = JSON.parse(json);
-      } catch {}
+    if (payload) {
+      await saveHealthData(payload, newPin);
     }
-    if (!payload) {
-      try {
-        const deviceKey = await getOrCreateDeviceMasterKey();
-        const json = await decryptWithDeviceKey(pkg, deviceKey);
-        payload = JSON.parse(json);
-      } catch {}
-    }
-  } else {
-    try {
-      payload = HealthDataPayloadSchema.parse(record);
-    } catch {}
   }
 
-  if (payload) {
-    await saveHealthData(payload, newPin);
+  // Re-encrypt all stored diagnostic photos with the new active key
+  try {
+    const { reEncryptAllMedia } = await import('./mediaStorage');
+    await reEncryptAllMedia(newPin, oldPin);
+  } catch (err) {
+    console.warn('Media re-encryption warning:', err);
   }
 }
 
