@@ -15,18 +15,34 @@ import { HealthProvider } from './context/HealthContext';
 
 import { AcutePainProvider } from './context/AcutePainContext';
 import DeepLinkHandler from './components/DeepLinkHandler';
+import { BackButtonHandler, LockedBackButtonHandler } from './components/BackButtonHandler';
 
 const AppContent: React.FC = () => {
-  const { isUnlocked } = useAuth();
+  const { isAuthReady, isUnlocked } = useAuth();
+
+  if (!isAuthReady) {
+    return (
+      <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950 text-slate-400 text-xs font-bold">
+        <LockedBackButtonHandler />
+        <span>보안 상태 확인 중...</span>
+      </div>
+    );
+  }
 
   if (!isUnlocked) {
-    return <LockScreen />;
+    return (
+      <>
+        <LockedBackButtonHandler />
+        <LockScreen />
+      </>
+    );
   }
 
   return (
     <BrowserRouter>
       <AcutePainProvider>
         <DeepLinkHandler />
+        <BackButtonHandler />
         <Routes>
           <Route element={<Layout />}>
             <Route path="/" element={<DashboardPage />} />

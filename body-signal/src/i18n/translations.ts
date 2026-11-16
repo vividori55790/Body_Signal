@@ -188,6 +188,7 @@ export const translations = {
     painTrendChart: '통증 추이 그래프',
     logHistoryTitle: '질환별 기록 내역',
     addLogForCondition: '이 질환 새 기록 추가',
+    backExitPrompt: '뒤로가기 버튼을 한 번 더 누르면 앱이 종료됩니다.',
   },
   en: {
     // Common
@@ -376,5 +377,6 @@ export const translations = {
     painTrendChart: 'Pain Trend Chart',
     logHistoryTitle: 'Condition Log History',
     addLogForCondition: 'Add Log for this Condition',
+    backExitPrompt: 'Press back again to exit the app.',
   },
 };
