@@ -910,9 +910,15 @@ export const tier2Tests = [
     feature: 'R5.3 Android APK Output Verification (Boundary)',
     name: 'APK versionName configured to valid release version and versionCode in build.gradle',
     run: async () => {
+      const pkgVersion = JSON.parse(
+        fs.readFileSync(path.resolve(PROJECT_DIR, 'package.json'), 'utf8')
+      ).version;
       const gradleSrc = fs.readFileSync(path.join(ANDROID_DIR, 'app/build.gradle'), 'utf8');
-      assert.match(gradleSrc, /versionCode\s+(?:1|2|3|110|120)/);
-      assert.match(gradleSrc, /versionName\s+['"](?:0\.1\.0|1\.1\.0|1\.2\.0)['"]/);
+      const gradleCode = gradleSrc.match(/\bversionCode\s+(\d+)/)?.[1];
+      const gradleName = gradleSrc.match(/\bversionName\s+["']([^"']+)["']/)?.[1];
+      assert.ok(Number(gradleCode) >= 1, 'versionCode must be >= 1');
+      assert.match(gradleName ?? '', /^\d+\.\d+\.\d+/);
+      assert.equal(gradleName, pkgVersion);
     },
   },
 ];

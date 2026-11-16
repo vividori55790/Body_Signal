@@ -1,4 +1,17 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" fill="#10b981" rx="100" />
-  <path fill="none" stroke="white" stroke-width="40" stroke-linecap="round" stroke-linejoin="round" d="M64 256h64l64-160 96 320 96-256 64 96h32"/>
+  <defs>
+    <linearGradient id="bg" x1="48" y1="32" x2="464" y2="480" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#0f766e" />
+      <stop offset="55%" stop-color="#059669" />
+      <stop offset="100%" stop-color="#10b981" />
+    </linearGradient>
+    <linearGradient id="shield" x1="256" y1="88" x2="256" y2="420" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.24" />
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0.06" />
+    </linearGradient>
+  </defs>
+  <rect x="16" y="16" width="480" height="480" rx="116" fill="url(#bg)" />
+  <path d="M256 88L384 134V242C384 324 330 388 256 420C182 388 128 324 128 242V134L256 88Z" fill="url(#shield)" stroke="#ffffff" stroke-opacity="0.58" stroke-width="10" stroke-linejoin="round" />
+  <path d="M88 260H164L198 172L238 340L280 150L318 304L346 260H424" fill="none" stroke="#ffffff" stroke-width="26" stroke-linecap="round" stroke-linejoin="round" />
+  <circle cx="280" cy="150" r="15" fill="#a7f3d0" />
 </svg>

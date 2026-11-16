@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Lock, Delete, AlertCircle, Fingerprint, ShieldCheck, ArrowLeft } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { triggerHaptic } from '../utils/native';
+import BrandLogo from './BrandLogo';
 
 export const LockScreen: React.FC = () => {
   const {
@@ -141,8 +142,11 @@ export const LockScreen: React.FC = () => {
   return (
     <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-slate-950 px-4 text-white">
       <div className="mb-10 text-center">
-        <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-full border border-slate-700 bg-slate-900 shadow-xl">
-          <Lock size={36} className="text-emerald-400" />
+        <div className="relative mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-3xl border border-emerald-500/30 bg-slate-900/90 shadow-xl">
+          <BrandLogo size={60} />
+          <span className="absolute -bottom-1.5 -right-1.5 flex h-7 w-7 items-center justify-center rounded-full border border-slate-800 bg-slate-950 text-emerald-400 shadow">
+            <Lock size={13} />
+          </span>
         </div>
         <h1 className="text-2xl font-bold tracking-wider">BODY SIGNAL</h1>
         <p className="mt-1 text-xs text-slate-400">

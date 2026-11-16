@@ -115,23 +115,29 @@ const tests = [
     fn: () => {
       const pkgLicense = read('LICENSE');
       assert.match(pkgLicense, /GNU GENERAL PUBLIC LICENSE/);
+      const pkgVersion = JSON.parse(read('package.json')).version;
       const yml = read('fdroid/metadata/com.bodysignal.app.yml');
       assert.match(yml, /License:\s*GPL-3\.0-only/);
-      assert.match(yml, /CurrentVersion:\s*1\.2\.0/);
-      assert.match(yml, /CurrentVersionCode:\s*3/);
       assert.match(yml, /npm run build/);
       assert.match(yml, /npx cap sync android/);
       const rootGradle = read('android/build.gradle');
       const appGradle = read('android/app/build.gradle');
       assert.doesNotMatch(rootGradle, /com\.google\.gms:google-services/);
       assert.doesNotMatch(appGradle, /com\.google\.gms\.google-services/);
-      assert.match(appGradle, /versionCode 3/);
-      assert.match(appGradle, /versionName "1\.2\.0"/);
+      const gradleCode = appGradle.match(/\bversionCode\s+(\d+)/)?.[1];
+      const gradleName = appGradle.match(/\bversionName\s+["']([^"']+)["']/)?.[1];
+      const ymlVersion = yml.match(/^CurrentVersion:\s*(.+)$/m)?.[1]?.trim();
+      const ymlCode = yml.match(/^CurrentVersionCode:\s*(\d+)/m)?.[1];
+      assert.ok(Number(gradleCode) >= 1);
+      assert.equal(gradleName, pkgVersion);
+      assert.equal(ymlVersion, gradleName);
+      assert.equal(ymlCode, gradleCode);
       const gitignore = read('.gitignore');
       assert.match(gitignore, /\*\.apk/);
       assert.match(gitignore, /android\/app\/src\/main\/assets\/public\//);
       assert.equal(fs.existsSync(path.resolve(ROOT, '../fastlane/metadata/android/ko-KR/title.txt')), true);
-      assert.equal(fs.existsSync(path.resolve(ROOT, '../fastlane/metadata/android/en-US/changelogs/3.txt')), true);
+      assert.equal(fs.existsSync(path.resolve(ROOT, `../fastlane/metadata/android/en-US/changelogs/${gradleCode}.txt`)), true);
+      assert.equal(fs.existsSync(path.resolve(ROOT, `../fastlane/metadata/android/ko-KR/changelogs/${gradleCode}.txt`)), true);
     },
   },
   {
@@ -263,6 +269,27 @@ const tests = [
       assert.match(settingsSrc, /searchParams\.get\(['"]sec['"]\)/);
       assert.match(settingsSrc, /Google Authenticator/);
       assert.match(settingsSrc, /Aegis/);
+    },
+  },
+  {
+    name: 'v1.2.1 Launch Sequence: Bignal BrandLogo & BrandSplash render before LockScreen while maintaining Fail-Closed gate',
+    fn: () => {
+      const appSrc = read('src/App.tsx');
+      assert.match(appSrc, /showIntroLogo/);
+      assert.match(appSrc, /<BrandSplash/);
+      const authGatePos = appSrc.indexOf('if (!isAuthReady)');
+      const splashGatePos = appSrc.indexOf('if (showIntroLogo)');
+      const unlockGatePos = appSrc.indexOf('if (!isUnlocked)');
+      assert.ok(authGatePos !== -1 && splashGatePos !== -1 && unlockGatePos !== -1);
+      assert.ok(authGatePos < splashGatePos && splashGatePos < unlockGatePos);
+
+      const lockSrc = read('src/components/LockScreen.tsx');
+      assert.match(lockSrc, /<BrandLogo/);
+
+      const splashSrc = read('src/components/BrandSplash.tsx');
+      assert.match(splashSrc, /<BrandLogo/);
+      assert.equal(fs.existsSync(path.resolve(ROOT, '../fastlane/metadata/android/en-US/images/icon.png')), true);
+      assert.equal(fs.existsSync(path.resolve(ROOT, '../fastlane/metadata/android/ko-KR/images/icon.png')), true);
     },
   },
 ];
