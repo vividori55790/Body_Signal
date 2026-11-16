@@ -1,59 +1,33 @@
-# Body Signal - App Features Overview
+# Body Signal - App Features Overview (`v1.2.1`)
 
-## 📝 Summary
+## Summary
 
-**Body Signal** is a personal health tracking Progressive Web App (PWA) designed to help users efficiently log and monitor their physical symptoms and pain levels. It offers a streamlined interface to track condition progress over time, visualize pain trends using heatmaps, and manage multiple health conditions simultaneously.
+**Body Signal (Bignal)** is a local-first, privacy-focused health and symptom tracking Android/PWA application licensed under `GPL-3.0-only`. All records, medications, and diagnostic images are encrypted on-device with zero cloud accounts, ads, or trackers.
 
 ---
 
-## 🚀 Detailed Features
+## Core Features
 
-### 1. Dashboard (Home)
+1. **Brand Launch Splash & Mandatory First-Use Disclaimer**
+   - Displays the Bignal brand splash screen on launch before transitioning to the security LockScreen.
+   - Requires explicit acknowledgment of the medical, emergency, and local backup responsibility disclaimer before first use (re-readable anytime in Settings).
 
-The central hub for viewing active health conditions.
+2. **Disease-Centered Tracking & Unassigned Symptom Grouping**
+   - Log pain and symptoms under an **existing condition**, as **unassigned**, or as a **new condition**.
+   - Batch-assign accumulated unassigned logs to a diagnosed condition later from the Dashboard.
+   - Supports a 1-second Acute Pain Mode, compact Dashboard Quick Logger, and full PQRST entry form.
 
-- **Condition Cards**: Displays a summary of each tracking condition, including the condition name, affected body part, and the time of the last log.
-- **Pain Level Indicators**: Visual color-coded badges indicating the intensity of the most recent symptom log.
-- **Navigation**: Click on any card to view detailed analytics for that specific condition.
+3. **Organic BodyMap & Ephemeral Pain Slider**
+   - Interactive front/back human silhouette with spray-paint region selection and multi-part department mapping.
+   - 1–10 NRS pain buttons that morph into a smooth horizontal slider on press/hold-slide and return cleanly on release.
 
-### 2. Symptom Logging (Entry)
+4. **30-Second Clinical Briefing**
+   - Organizes symptoms, trends, red-flag alerts, and medication efficacy by medical department.
+   - Includes one-tap EMR text export and print layout, plus an optional lab toggle for local-network LLM summaries (Ollama/LM Studio; HTTPS enforced for non-loopback endpoints).
 
-A comprehensive form to record daily symptoms.
+5. **Encrypted Diagnostic & Insurance Vault**
+   - Strips image EXIF metadata before encrypting diagnostic documents and receipts with AES-GCM 256.
+   - Supports Grid/Feed switching and automatic 3-year indemnity insurance claim deadline calculations.
 
-- **New Condition Tracking**: Register new symptoms by specifying the body part and custom label.
-- **Quick Logging**: Add updates to existing conditions.
-- **Detailed Metrics**:
-  - **Intensity Slider**: Interactive slider to rate pain from 1 (Mild) to 10 (Severe).
-  - **Medication Toggle**: Track if medication was taken.
-  - **Notes**: Text area for specific observations or clinical notes.
-
-### 3. History & Analytics
-
-Multiple views to analyze health trends over time.
-
-- **List View**: A chronological timeline of all symptom logs.
-  - Expandable items to view notes and medication details.
-  - Trend indicators showing if pain has increased or decreased since the last log.
-- **Calendar Heatmap**: A visual calendar view where days are colored based on the average pain intensity, allowing users to identify patterns at a glance.
-
-### 4. Condition Details
-
-A dedicated page for deep-diving into specific conditions.
-
-- **Condition Management**: Edit condition names or body parts.
-- **Quick Actions**: "Quick Log" button to instantly add a log for the specific condition without manual selection.
-- **Filtered History**: View a timeline of logs exclusive to the selected condition.
-
-### 5. Settings (UI Prototype)
-
-A configuration center for app personalization and data management.
-_Note: Some features in this section are currently UI previews._
-
-- **Preferences**:
-  - **Dark Mode**: Toggle for application-wide dark theme.
-  - **Daily Reminders**: Scheduling notification alerts.
-  - **Language**: Toggle between English and Korean.
-- **Data Management**:
-  - **Export Data**: Download all health logs as a JSON file for backup.
-  - **Reset App**: Clear all local data to start fresh.
-- **Privacy**: Options for App Lock and Cloud Sync.
+6. **Hardware-Backed On-Device Security**
+   - Fail-closed startup gating, `AndroidKeyStore` + `BiometricPrompt` (`DEVICE_CREDENTIAL`), 4-digit PBKDF2 PIN lock, offline RFC 6238 TOTP 2FA with one-time recovery codes, `FLAG_SECURE` / assistant screen-context blocking, SHA-256 audit chains, and passphrase-encrypted AES-256 backup export/import.

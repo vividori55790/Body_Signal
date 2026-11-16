@@ -1,26 +1,23 @@
-# Body Signal
+# Body Signal (`body-signal`)
 
-Body Signal is a personal health-signal tracking app built with React, Vite, and Capacitor.
+> **100% on-device encrypted pain, symptom, clinical briefing, and diagnostic vault app** built with React 19, TypeScript, Vite, Tailwind CSS, and Capacitor 8 (`GPL-3.0-only`).
 
-## Product roadmap
+See the repository root [README](../README.md) for the full project overview and release build instructions.
 
-The commercialization plan for taking the current MVP to a deployable subscription product is documented in [docs/COMMERCIALIZATION_ROADMAP_KO.md](docs/COMMERCIALIZATION_ROADMAP_KO.md).
+## Key Documents
 
-Privacy and usage guidance are documented in [PRIVACY.md](PRIVACY.md) and [TERMS.md](TERMS.md).
+- [APP_FEATURES.md](APP_FEATURES.md) — Current feature overview (`v1.2.1`)
+- [APP_DEPLOYMENT.md](APP_DEPLOYMENT.md) — Android APK & F-Droid source build guide
+- [PRIVACY.md](PRIVACY.md) — Local-first privacy & encryption policy
+- [TERMS.md](TERMS.md) — Usage guidance and medical disclaimer
+- [fdroid/README.md](fdroid/README.md) — F-Droid release checklist and metadata
 
-## Local development
+## Local Commands
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
-
-Currently, two official plugins are available:
-
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
-
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+```bash
+npm ci
+npm run lint
+npm run build
+npm run test:data
+node test/run-all-tests.mjs
+```

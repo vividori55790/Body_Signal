@@ -10,7 +10,8 @@ import ClinicalBriefingPage from './pages/ClinicalBriefing';
 import ConditionDetailPage from './pages/ConditionDetail';
 import BrandSplash from './components/BrandSplash';
 import LockScreen from './components/LockScreen';
-import { SettingsProvider } from './context/SettingsContext';
+import DisclaimerModal from './components/DisclaimerModal';
+import { SettingsProvider, useSettings } from './context/SettingsContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { HealthProvider } from './context/HealthContext';
 
@@ -22,6 +23,7 @@ const SPLASH_DURATION_MS = 1050;
 
 const AppContent: React.FC = () => {
   const { isAuthReady, isUnlocked } = useAuth();
+  const { settings, isSettingsLoaded, acceptDisclaimer } = useSettings();
   const [showIntroLogo, setShowIntroLogo] = useState(true);
 
   useEffect(() => {
@@ -54,6 +56,24 @@ const AppContent: React.FC = () => {
       <>
         <LockedBackButtonHandler />
         <LockScreen />
+      </>
+    );
+  }
+
+  if (!isSettingsLoaded) {
+    return (
+      <>
+        <LockedBackButtonHandler />
+        <BrandSplash statusText="설정 불러오는 중..." />
+      </>
+    );
+  }
+
+  if (!settings.disclaimerAcceptedAt) {
+    return (
+      <>
+        <LockedBackButtonHandler />
+        <DisclaimerModal mode="gate" onAccept={acceptDisclaimer} />
       </>
     );
   }

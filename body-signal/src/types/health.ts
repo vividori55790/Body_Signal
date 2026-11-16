@@ -124,6 +124,7 @@ export const UserSettingsSchema = z.object({
   symptomPresets: z.array(z.string()).default([
     '욱신거림', '찌르는 듯함', '뻐근함', '타는 듯함', '저림', '조이는 느낌', '두통', '관절통'
   ]),
+  disclaimerAcceptedAt: z.string().optional(),
 });
 
 export type UserSettings = z.infer<typeof UserSettingsSchema>;

@@ -33,6 +33,7 @@ import {
   Database,
 } from 'lucide-react';
 import { PinModal } from '../components/PinModal';
+import DisclaimerModal from '../components/DisclaimerModal';
 import { triggerHaptic } from '../utils/native';
 import { testLocalLlmConnection } from '../utils/localLlm';
 import { encryptBackupWithPassphrase, decryptBackupWithPassphrase } from '../utils/crypto';
@@ -117,6 +118,7 @@ export const SettingsPage: React.FC = () => {
 
   // Encrypted Backup Modal State
   const [backupModalMode, setBackupModalMode] = useState<'export' | 'importDecrypt' | 'importPreview' | null>(null);
+  const [showDisclaimerModal, setShowDisclaimerModal] = useState(false);
   const [backupPassphrase, setBackupPassphrase] = useState('');
   const [backupPassphraseConfirm, setBackupPassphraseConfirm] = useState('');
   const [backupError, setBackupError] = useState('');
@@ -1293,11 +1295,31 @@ export const SettingsPage: React.FC = () => {
         />
       )}
 
-      <div className="text-center pt-2">
-        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-200/60 dark:bg-slate-800 text-[10px] font-bold text-slate-500">
-          <Shield size={12} className="text-teal-600" />
-          Body Signal Mobile v1.2.1 (Encrypted)
-        </span>
+      {showDisclaimerModal && (
+        <DisclaimerModal
+          mode="view"
+          acceptedAt={settings.disclaimerAcceptedAt}
+          onClose={() => setShowDisclaimerModal(false)}
+        />
+      )}
+
+      <div className="text-center pt-2 space-y-2">
+        <button
+          type="button"
+          onClick={() => {
+            triggerHaptic();
+            setShowDisclaimerModal(true);
+          }}
+          className="text-[11px] font-bold text-slate-500 hover:text-teal-600 dark:text-slate-400 underline underline-offset-2"
+        >
+          면책조항 및 이용 안내 보기
+        </button>
+        <div>
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-200/60 dark:bg-slate-800 text-[10px] font-bold text-slate-500">
+            <Shield size={12} className="text-teal-600" />
+            Body Signal Mobile v1.2.1 (Encrypted)
+          </span>
+        </div>
       </div>
     </div>
   );

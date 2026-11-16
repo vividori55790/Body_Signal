@@ -6,6 +6,7 @@ import { scheduleDailyReminder, cancelDailyReminder, triggerHaptic, setHapticsEn
 
 interface SettingsContextValue {
   settings: UserSettings;
+  isSettingsLoaded: boolean;
   t: (key: keyof typeof translations['ko']) => string;
   setLanguage: (lang: Language) => Promise<void>;
   setTheme: (theme: 'light' | 'dark' | 'system') => Promise<void>;
@@ -13,6 +14,7 @@ interface SettingsContextValue {
   setQuickSos: (enabled: boolean) => Promise<void>;
   setShowDiagnosticsTab: (enabled: boolean) => Promise<void>;
   setReminder: (enabled: boolean, time?: string) => Promise<void>;
+  acceptDisclaimer: () => Promise<void>;
   addMedicationPreset: (name: string, dosage?: string) => Promise<MedicationPreset | null>;
   updateMedicationPreset: (id: string, updates: Partial<MedicationPreset>) => Promise<void>;
   removeMedicationPreset: (id: string) => Promise<void>;
@@ -25,13 +27,18 @@ export const SettingsContext = createContext<SettingsContextValue | null>(null);
 
 export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [settings, setSettings] = useState<UserSettings>(DEFAULT_SETTINGS);
+  const [isSettingsLoaded, setIsSettingsLoaded] = useState(false);
 
   useEffect(() => {
-    loadUserSettings().then((loaded) => {
-      setSettings(loaded);
-      applyTheme(loaded.theme);
-      setHapticsEnabled(loaded.hapticsEnabled);
-    });
+    loadUserSettings()
+      .then((loaded) => {
+        setSettings(loaded);
+        applyTheme(loaded.theme);
+        setHapticsEnabled(loaded.hapticsEnabled);
+      })
+      .finally(() => {
+        setIsSettingsLoaded(true);
+      });
   }, []);
 
   const applyTheme = (theme: 'light' | 'dark' | 'system') => {
@@ -197,10 +204,19 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }));
   };
 
+  const acceptDisclaimer = async () => {
+    triggerHaptic();
+    await updateAndSave((prev) => ({
+      ...prev,
+      disclaimerAcceptedAt: new Date().toISOString(),
+    }));
+  };
+
   return (
     <SettingsContext.Provider
       value={{
         settings,
+        isSettingsLoaded,
         t,
         setLanguage,
         setTheme,
@@ -208,6 +224,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         setQuickSos,
         setShowDiagnosticsTab,
         setReminder,
+        acceptDisclaimer,
         addMedicationPreset,
         updateMedicationPreset,
         removeMedicationPreset,

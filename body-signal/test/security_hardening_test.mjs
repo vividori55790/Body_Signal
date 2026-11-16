@@ -290,6 +290,15 @@ const tests = [
       assert.match(splashSrc, /<BrandLogo/);
       assert.equal(fs.existsSync(path.resolve(ROOT, '../fastlane/metadata/android/en-US/images/icon.png')), true);
       assert.equal(fs.existsSync(path.resolve(ROOT, '../fastlane/metadata/android/ko-KR/images/icon.png')), true);
+
+      // First-use Disclaimer Gate check
+      const routerPos = appSrc.indexOf('<BrowserRouter>');
+      const disclaimerPos = appSrc.indexOf('if (!settings.disclaimerAcceptedAt)');
+      assert.ok(disclaimerPos !== -1 && routerPos !== -1 && disclaimerPos < routerPos);
+      const disclaimerSrc = read('src/components/DisclaimerModal.tsx');
+      assert.match(disclaimerSrc, /onAccept/);
+      const typesSrc = read('src/types/health.ts');
+      assert.match(typesSrc, /disclaimerAcceptedAt/);
     },
   },
 ];
