@@ -24,9 +24,9 @@ RepoType: git
 Repo: https://github.com/vividori55790/Body_Signal.git
 
 Builds:
-  - versionName: 1.2.0
+  - versionName: 1.2.1
     versionCode: 3
-    commit: v1.2.0
+    commit: v1.2.1
     subdir: body-signal/android/app
     gradle: yes
     prebuild:
@@ -39,5 +39,5 @@ Builds:
 
 AutoUpdateMode: Version
 UpdateCheckMode: Tags
-CurrentVersion: 1.2.0
+CurrentVersion: 1.2.1
 CurrentVersionCode: 3
