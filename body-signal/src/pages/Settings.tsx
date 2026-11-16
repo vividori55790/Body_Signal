@@ -78,6 +78,8 @@ export const SettingsPage: React.FC = () => {
     setHaptics,
     setQuickSos,
     setShowDiagnosticsTab,
+    setDefaultQuickLoggerOpen,
+    setDefaultBodyMapOpen,
     setReminder,
     addMedicationPreset,
     removeMedicationPreset,
@@ -639,11 +641,52 @@ export const SettingsPage: React.FC = () => {
             </button>
           </div>
 
+          {/* Default Quick Pain Logger & BodyMap Open States */}
+          <div className="p-3.5 flex items-center justify-between">
+            <div className="pr-3">
+              <span className="font-bold text-xs block">홈 화면 &lsquo;3초 기록&rsquo; 기본 펼침</span>
+              <span className="text-[10px] text-slate-400">끄면 홈 진입 시 접힌 상태로 시작합니다</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setDefaultQuickLoggerOpen(!(settings.defaultQuickLoggerOpen ?? true))}
+              className={`w-11 h-6 rounded-full shrink-0 transition-colors ${
+                (settings.defaultQuickLoggerOpen ?? true) ? 'bg-teal-600' : 'bg-slate-300 dark:bg-slate-700'
+              }`}
+            >
+              <div
+                className={`w-4 h-4 rounded-full bg-white transition-transform ${
+                  (settings.defaultQuickLoggerOpen ?? true) ? 'translate-x-6' : 'translate-x-1'
+                }`}
+              />
+            </button>
+          </div>
+
+          <div className="p-3.5 flex items-center justify-between">
+            <div className="pr-3">
+              <span className="font-bold text-xs block">상세 기록 &lsquo;인체 바디맵&rsquo; 기본 펼침</span>
+              <span className="text-[10px] text-slate-400">끄면 부위 선택 시 필요할 때만 바디맵을 엽니다</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setDefaultBodyMapOpen(!(settings.defaultBodyMapOpen ?? true))}
+              className={`w-11 h-6 rounded-full shrink-0 transition-colors ${
+                (settings.defaultBodyMapOpen ?? true) ? 'bg-teal-600' : 'bg-slate-300 dark:bg-slate-700'
+              }`}
+            >
+              <div
+                className={`w-4 h-4 rounded-full bg-white transition-transform ${
+                  (settings.defaultBodyMapOpen ?? true) ? 'translate-x-6' : 'translate-x-1'
+                }`}
+              />
+            </button>
+          </div>
+
           {/* Optional Bottom Bar Shortcut: Diagnostics */}
           <div className="p-3.5 flex items-center justify-between">
             <div className="pr-3">
               <span className="font-bold text-xs block">하단 패널에 진단·실손 바로가기 추가</span>
-              <span className="text-[10px] text-slate-400">끄면 기본 4개 탭으로 간결하게 유지됩니다</span>
+              <span className="text-[10px] text-slate-400">끄면 기본 3개 탭(홈·기록·설정)으로 간결하게 유지됩니다</span>
             </div>
             <button
               type="button"

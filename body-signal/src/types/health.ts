@@ -109,6 +109,10 @@ export const UserSettingsSchema = z.object({
   pinEnabled: z.boolean().default(false),
   quickSosEnabled: z.boolean().default(false),
   showDiagnosticsTab: z.boolean().default(false),
+  defaultQuickLoggerOpen: z.boolean().default(true),
+  defaultBodyMapOpen: z.boolean().default(true),
+  quickLoggerUnusedCloseCount: z.number().int().min(0).default(0),
+  bodyMapUnusedCloseCount: z.number().int().min(0).default(0),
   emrFormat: z.enum(['standard', 'soap']).default('standard'),
   localLlm: LocalLlmConfigSchema.default({
     enabled: false,

@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ArrowLeft, Clock, Save, Sparkles, Plus, AlertCircle, AlertTriangle, ShieldAlert } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useHealth } from '../context/HealthContext';
 import { useSettings } from '../context/SettingsContext';
 import BodyMap, { parseMultiRegionParts, formatMultiRegionParts } from '../components/BodyMap';
+import DefaultClosedSuggestion from '../components/DefaultClosedSuggestion';
 import { triggerHaptic } from '../utils/native';
 import { formatMedicationPreset } from '../utils/medication';
 import AddMedicationInline from '../components/AddMedicationInline';
@@ -36,7 +37,7 @@ export const EntryFormPage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { conditions, saveEntry } = useHealth();
-  const { settings, t } = useSettings();
+  const { settings, t, setDefaultBodyMapOpen, recordCollapsibleDismissal } = useSettings();
 
   const activeConditions = conditions.filter((c) => !c.isArchived);
 
@@ -57,12 +58,42 @@ export const EntryFormPage: React.FC = () => {
   const [newLabel, setNewLabel] = useState('');
   const [newBodyPart, setNewBodyPart] = useState('');
   const [newOnsetDate, setNewOnsetDate] = useState(new Date().toISOString().split('T')[0]);
-  const [showBodyMap, setShowBodyMap] = useState(false);
+  const [showBodyMap, setShowBodyMap] = useState(settings.defaultBodyMapOpen ?? true);
+  const [usedBodyMap, setUsedBodyMap] = useState(false);
+  const [showBodyMapPrompt, setShowBodyMapPrompt] = useState(false);
+
+  useEffect(() => {
+    setShowBodyMap(settings.defaultBodyMapOpen ?? true);
+  }, [settings.defaultBodyMapOpen]);
+
+  const markBodyMapUsed = () => {
+    if (!usedBodyMap) {
+      setUsedBodyMap(true);
+      setShowBodyMapPrompt(false);
+      void recordCollapsibleDismissal('bodyMap', true);
+    }
+  };
+
+  const handleToggleBodyMap = async () => {
+    triggerHaptic();
+    if (showBodyMap) {
+      setShowBodyMap(false);
+      const shouldAsk = await recordCollapsibleDismissal('bodyMap', usedBodyMap);
+      if (shouldAsk) {
+        setShowBodyMapPrompt(true);
+      }
+    } else {
+      setUsedBodyMap(false);
+      setShowBodyMapPrompt(false);
+      setShowBodyMap(true);
+    }
+  };
 
   // Multi-region BodyMap helper
   const selectedBodyParts = parseMultiRegionParts(newBodyPart);
   const handleToggleBodyPart = (part: string) => {
     triggerHaptic();
+    markBodyMapUsed();
     const exists = selectedBodyParts.includes(part);
     const next = exists
       ? selectedBodyParts.filter((p) => p !== part)
@@ -312,7 +343,7 @@ export const EntryFormPage: React.FC = () => {
                   </label>
                   <button
                     type="button"
-                    onClick={() => setShowBodyMap(!showBodyMap)}
+                    onClick={handleToggleBodyMap}
                     className="text-[11px] font-bold text-teal-600 dark:text-teal-400 underline"
                   >
                     {showBodyMap ? '바디맵 닫기' : '바디맵에서 칠하기'}
@@ -327,11 +358,27 @@ export const EntryFormPage: React.FC = () => {
                   className="w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 p-3 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 />
               </div>
+              {showBodyMapPrompt && (
+                <DefaultClosedSuggestion
+                  featureName="인체 바디맵"
+                  onConfirmDefaultClosed={async () => {
+                    triggerHaptic();
+                    await setDefaultBodyMapOpen(false);
+                    setShowBodyMapPrompt(false);
+                  }}
+                  onKeepOpen={async () => {
+                    triggerHaptic();
+                    await recordCollapsibleDismissal('bodyMap', true);
+                    setShowBodyMapPrompt(false);
+                  }}
+                />
+              )}
               {showBodyMap && (
                 <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 p-2">
                   <BodyMap
                     selectedParts={parseMultiRegionParts(unassignedBodyPart)}
                     onTogglePart={(part) => {
+                      markBodyMapUsed();
                       const cur = parseMultiRegionParts(unassignedBodyPart);
                       const next = cur.includes(part) ? cur.filter((p) => p !== part) : [...cur, part];
                       setUnassignedBodyPart(formatMultiRegionParts(next));
@@ -363,7 +410,7 @@ export const EntryFormPage: React.FC = () => {
                   </label>
                   <button
                     type="button"
-                    onClick={() => setShowBodyMap(!showBodyMap)}
+                    onClick={handleToggleBodyMap}
                     className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 underline"
                   >
                     {showBodyMap ? '바디맵 닫기' : '인체 바디맵 열기'}
@@ -379,6 +426,22 @@ export const EntryFormPage: React.FC = () => {
                 />
               </div>
 
+              {showBodyMapPrompt && (
+                <DefaultClosedSuggestion
+                  featureName="인체 바디맵"
+                  onConfirmDefaultClosed={async () => {
+                    triggerHaptic();
+                    await setDefaultBodyMapOpen(false);
+                    setShowBodyMapPrompt(false);
+                  }}
+                  onKeepOpen={async () => {
+                    triggerHaptic();
+                    await recordCollapsibleDismissal('bodyMap', true);
+                    setShowBodyMapPrompt(false);
+                  }}
+                />
+              )}
+
               {showBodyMap && (
                 <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 p-2 animate-in fade-in">
                   <BodyMap
@@ -386,6 +449,7 @@ export const EntryFormPage: React.FC = () => {
                     onTogglePart={handleToggleBodyPart}
                     selectedPart={newBodyPart}
                     onSelectPart={(part) => {
+                      markBodyMapUsed();
                       if (!selectedBodyParts.includes(part)) {
                         setNewBodyPart(formatMultiRegionParts([...selectedBodyParts, part]));
                       }

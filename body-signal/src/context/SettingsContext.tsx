@@ -14,6 +14,12 @@ interface SettingsContextValue {
   setHaptics: (enabled: boolean) => Promise<void>;
   setQuickSos: (enabled: boolean) => Promise<void>;
   setShowDiagnosticsTab: (enabled: boolean) => Promise<void>;
+  setDefaultQuickLoggerOpen: (enabled: boolean) => Promise<void>;
+  setDefaultBodyMapOpen: (enabled: boolean) => Promise<void>;
+  recordCollapsibleDismissal: (
+    target: 'quickLogger' | 'bodyMap',
+    didUseSinceOpen: boolean
+  ) => Promise<boolean>;
   setReminder: (enabled: boolean, time?: string) => Promise<void>;
   acceptDisclaimer: () => Promise<void>;
   addMedicationPreset: (name: string, dosage?: string) => Promise<MedicationPreset | null>;
@@ -131,6 +137,58 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     await updateAndSave((prev) => ({ ...prev, showDiagnosticsTab }));
   };
 
+  const setDefaultQuickLoggerOpen = async (defaultQuickLoggerOpen: boolean) => {
+    await updateAndSave((prev) => ({
+      ...prev,
+      defaultQuickLoggerOpen,
+      quickLoggerUnusedCloseCount: 0,
+    }));
+  };
+
+  const setDefaultBodyMapOpen = async (defaultBodyMapOpen: boolean) => {
+    await updateAndSave((prev) => ({
+      ...prev,
+      defaultBodyMapOpen,
+      bodyMapUnusedCloseCount: 0,
+    }));
+  };
+
+  const recordCollapsibleDismissal = async (
+    target: 'quickLogger' | 'bodyMap',
+    didUseSinceOpen: boolean
+  ): Promise<boolean> => {
+    const keyMap = {
+      quickLogger: {
+        defaultKey: 'defaultQuickLoggerOpen',
+        countKey: 'quickLoggerUnusedCloseCount',
+      },
+      bodyMap: {
+        defaultKey: 'defaultBodyMapOpen',
+        countKey: 'bodyMapUnusedCloseCount',
+      },
+    } as const;
+    const { defaultKey, countKey } = keyMap[target];
+
+    if (didUseSinceOpen) {
+      if ((settings[countKey] || 0) > 0) {
+        await updateAndSave((prev) => ({ ...prev, [countKey]: 0 }));
+      }
+      return false;
+    }
+
+    if (!settings[defaultKey]) {
+      return false;
+    }
+
+    const nextCount = (settings[countKey] || 0) + 1;
+    const shouldPrompt = nextCount >= 2;
+    await updateAndSave((prev) => ({
+      ...prev,
+      [countKey]: shouldPrompt ? 0 : nextCount,
+    }));
+    return shouldPrompt;
+  };
+
   const setReminder = async (reminderEnabled: boolean, reminderTime?: string) => {
     const time = reminderTime || settings.reminderTime;
     if (reminderEnabled) {
@@ -229,6 +287,9 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         setHaptics,
         setQuickSos,
         setShowDiagnosticsTab,
+        setDefaultQuickLoggerOpen,
+        setDefaultBodyMapOpen,
+        recordCollapsibleDismissal,
         setReminder,
         acceptDisclaimer,
         addMedicationPreset,

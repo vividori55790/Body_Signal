@@ -62,6 +62,10 @@ export const DEFAULT_SETTINGS: UserSettings = {
   pinEnabled: false,
   quickSosEnabled: false,
   showDiagnosticsTab: false,
+  defaultQuickLoggerOpen: true,
+  defaultBodyMapOpen: true,
+  quickLoggerUnusedCloseCount: 0,
+  bodyMapUnusedCloseCount: 0,
   emrFormat: 'standard',
   localLlm: {
     enabled: false,
