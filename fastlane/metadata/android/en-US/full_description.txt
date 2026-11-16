@@ -1,0 +1,8 @@
+Body Signal (Bignal) is a privacy-first personal symptom, pain, and medical record tracker.
+
+Key features:
+- 1-second acute pain mode and PQRST symptom tracking with interactive front/back BodyMap
+- 30-second clinical briefing grouped by medical departments for doctor visits
+- Encrypted Diagnostic & Indemnity Insurance Vault: strip photo EXIF metadata, encrypt medical documents with AES-GCM 256, toggle Grid/Feed view, and automatically track insurance claim deadlines
+- Hardware-backed security: AndroidKeyStore + OS Fingerprint/PIN/Password unlock, offline TOTP 2FA, screenshot & assistant context blocking (FLAG_SECURE), and SHA-256 record integrity signatures
+- 100% offline-capable with passphrase-encrypted AES-256 JSON backups (no cloud accounts, ads, or trackers)

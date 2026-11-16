@@ -88,7 +88,7 @@ This repository includes:
 
 Before submitting:
 
-1. Create a public `v1.1.0` Git tag.
+1. Create a public `v1.2.0` Git tag.
 2. Build from a clean checkout (`npm ci && npm run build && npx cap sync android`) with the pinned Gradle wrapper.
 3. Confirm `android/app/build/outputs/apk/release/app-release-unsigned.apk`
    is generated without a signing key or private service configuration.

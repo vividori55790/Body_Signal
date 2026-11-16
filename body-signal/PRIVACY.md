@@ -2,17 +2,19 @@
 
 최종 수정일: 2026-11-16
 
-## 현재 릴리스(v1.1.0)의 데이터 처리
+## 현재 릴리스(v1.2.0)의 데이터 처리
 
 Body Signal은 사용자의 건강 기록을 기본적으로 기기 내부에만 저장하며,
 외부 클라우드 계정, 클라우드 백업, 광고 프로필, 원격 분석 SDK를 포함하지 않습니다.
 
-- **저장소 암호화**: 건강 기록은 기기 내 IndexedDB에 AES-GCM 256비트로 암호화되어 저장되며,
+- **저장소 및 사진 암호화**: 건강 기록과 진단서·영수증 사진(EXIF 메타데이터 제거 후 저장)은
+  기기 내 IndexedDB에 AES-GCM 256비트로 암호화되어 저장되며,
   모든 통증 기록에는 변조 감지를 위한 SHA-256 무결성 서명 체인이 포함됩니다.
-- **하드웨어 키 보호 (Android)**: 기기 마스터 키와 생체인증(지문/얼굴 인식) PIN 토큰은
-  `AndroidKeyStore` 하드웨어 보안 키와 `BiometricPrompt`를 통해 보호됩니다.
-- **OS 백업 차단**: Android 매니페스트에서 `android:allowBackup="false"` 및
-  앱 전환기 화면 가림(`FLAG_SECURE`)을 적용하여 타 앱/ADB 백업을 통한 데이터 추출을 방지합니다.
+- **하드웨어 키 & OS 잠금 보호 (Android)**: 기기 마스터 키와 생체인증·OS 잠금(지문/기기 PIN/비밀번호) 토큰은
+  `AndroidKeyStore` 하드웨어 보안 키와 `BiometricPrompt`(`BIOMETRIC_STRONG | DEVICE_CREDENTIAL`)를 통해 보호됩니다.
+- **2단계 인증 & 화면/어시스턴트 보호**: 오프라인 TOTP 2FA(일회용 복구 코드 포함), `FLAG_SECURE`,
+  Recents 스냅샷 비활성화, Assistant/Gemini 컨텍스트 차단(`onProvideAssistContent`/`onProvideAssistData`) 및
+  `android:allowBackup="false"`가 상시 적용됩니다.
 
 ## 네트워크 통신 정책
 

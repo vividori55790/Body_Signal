@@ -117,29 +117,41 @@ const tests = [
       assert.match(pkgLicense, /GNU GENERAL PUBLIC LICENSE/);
       const yml = read('fdroid/metadata/com.bodysignal.app.yml');
       assert.match(yml, /License:\s*GPL-3\.0-only/);
-      assert.match(yml, /CurrentVersion:\s*1\.1\.0/);
-      assert.match(yml, /CurrentVersionCode:\s*2/);
+      assert.match(yml, /CurrentVersion:\s*1\.2\.0/);
+      assert.match(yml, /CurrentVersionCode:\s*3/);
       assert.match(yml, /npm run build/);
       assert.match(yml, /npx cap sync android/);
       const rootGradle = read('android/build.gradle');
       const appGradle = read('android/app/build.gradle');
       assert.doesNotMatch(rootGradle, /com\.google\.gms:google-services/);
       assert.doesNotMatch(appGradle, /com\.google\.gms\.google-services/);
+      assert.match(appGradle, /versionCode 3/);
+      assert.match(appGradle, /versionName "1\.2\.0"/);
       const gitignore = read('.gitignore');
       assert.match(gitignore, /\*\.apk/);
       assert.match(gitignore, /android\/app\/src\/main\/assets\/public\//);
+      assert.equal(fs.existsSync(path.resolve(ROOT, '../fastlane/metadata/android/ko-KR/title.txt')), true);
+      assert.equal(fs.existsSync(path.resolve(ROOT, '../fastlane/metadata/android/en-US/changelogs/3.txt')), true);
     },
   },
   {
-    name: 'Native AndroidKeyStore & BiometricPrompt hardware security plugin is wired end-to-end',
+    name: 'Native AndroidKeyStore, DEVICE_CREDENTIAL, and Screen/Gemini Assist Shield wired end-to-end',
     fn: () => {
       const pluginJava = read('android/app/src/main/java/com/bodysignal/app/SecureAuthPlugin.java');
       assert.match(pluginJava, /AndroidKeyStore/);
       assert.match(pluginJava, /BiometricPrompt\.CryptoObject/);
       assert.match(pluginJava, /setUserAuthenticationRequired\(true\)/);
       assert.match(pluginJava, /setInvalidatedByBiometricEnrollment\(true\)/);
+      assert.match(pluginJava, /AUTH_DEVICE_CREDENTIAL/);
+      assert.match(pluginJava, /createConfirmDeviceCredentialIntent/);
       const mainActivity = read('android/app/src/main/java/com/bodysignal/app/MainActivity.java');
       assert.match(mainActivity, /registerPlugin\(SecureAuthPlugin\.class\);[\s\S]*super\.onCreate/);
+      assert.match(mainActivity, /onProvideAssistContent/);
+      assert.match(mainActivity, /onProvideAssistData/);
+      assert.match(mainActivity, /setRecentsScreenshotEnabled\(false\)/);
+      assert.match(mainActivity, /registerScreenCaptureCallback/);
+      const manifest = read('android/app/src/main/AndroidManifest.xml');
+      assert.match(manifest, /DETECT_SCREEN_CAPTURE/);
       const bioTs = read('src/utils/biometrics.ts');
       assert.match(bioTs, /SecureAuth\.enrollBiometricPin/);
       assert.match(bioTs, /SecureAuth\.authenticateBiometricPin/);
@@ -148,11 +160,84 @@ const tests = [
       assert.doesNotMatch(storageTs, /localStorage\.setItem\('bs-device-master-key-v1'/);
     },
   },
+  {
+    name: 'Offline RFC 6238 TOTP 2FA generates and verifies 6-digit codes and enforces LockScreen 2FA gate',
+    fn: async () => {
+      const totpSrc = read('src/utils/totp.ts');
+      assert.match(totpSrc, /generateTotpSecret/);
+      assert.match(totpSrc, /verifyTotpCode/);
+      assert.match(totpSrc, /verifyStoredTotpOrRecovery/);
+
+      const authSrc = read('src/context/AuthContext.tsx');
+      assert.match(authSrc, /pendingTwoFactor/);
+      assert.match(authSrc, /verifyTwoFactorAndUnlock/);
+      assert.match(authSrc, /setupOsCredentialLock/);
+
+      const lockSrc = read('src/components/LockScreen.tsx');
+      assert.match(lockSrc, /if\s*\(pendingTwoFactor\)/);
+
+      // Runtime Web Crypto RFC 6238 test vector check (Base32 'JBSWY3DPEHPK3PXP')
+      const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+      const decodeB32 = (s) => {
+        let bits = 0, val = 0;
+        const out = [];
+        for (const ch of s) {
+          const idx = alphabet.indexOf(ch);
+          val = (val << 5) | idx;
+          bits += 5;
+          if (bits >= 8) {
+            out.push((val >>> (bits - 8)) & 0xff);
+            bits -= 8;
+          }
+        }
+        return new Uint8Array(out);
+      };
+      const hotp = async (secretB32, timeMs) => {
+        const counter = Math.floor(timeMs / 1000 / 30);
+        const buf = new ArrayBuffer(8);
+        const view = new DataView(buf);
+        view.setUint32(0, Math.floor(counter / 0x100000000), false);
+        view.setUint32(4, counter >>> 0, false);
+        const key = await crypto.subtle.importKey('raw', decodeB32(secretB32), { name: 'HMAC', hash: 'SHA-1' }, false, ['sign']);
+        const hmac = new Uint8Array(await crypto.subtle.sign('HMAC', key, buf));
+        const off = hmac[hmac.length - 1] & 0x0f;
+        const bin = ((hmac[off] & 0x7f) << 24) | ((hmac[off + 1] & 0xff) << 16) | ((hmac[off + 2] & 0xff) << 8) | (hmac[off + 3] & 0xff);
+        return String(bin % 1_000_000).padStart(6, '0');
+      };
+
+      const now = 1_700_000_000_000;
+      const code = await hotp('JBSWY3DPEHPK3PXP', now);
+      assert.match(code, /^\d{6}$/);
+      assert.equal(code, await hotp('JBSWY3DPEHPK3PXP', now + 5000));
+    },
+  },
+  {
+    name: 'Diagnostic Vault encrypts EXIF-stripped photos, switches Grid/Feed views, and calculates insurance deadlines',
+    fn: () => {
+      const diagPage = read('src/pages/DiagnosticsPage.tsx');
+      assert.match(diagPage, /setViewMode\('grid'\)/);
+      assert.match(diagPage, /setViewMode\('feed'\)/);
+      assert.match(diagPage, /compressAndStripExif/);
+      assert.match(diagPage, /saveEncryptedPhoto/);
+      assert.match(diagPage, /deleteDiagnosticRecord/);
+
+      const mediaSrc = read('src/utils/mediaStorage.ts');
+      assert.match(mediaSrc, /encryptWithPin/);
+      assert.match(mediaSrc, /encryptWithDeviceKey/);
+      assert.match(mediaSrc, /reEncryptAllMedia/);
+
+      const insSrc = read('src/utils/insurance.ts');
+      assert.match(insSrc, /calculateInsuranceClaimStatus/);
+      assert.match(insSrc, /recommendedLatestDate/);
+      assert.match(insSrc, /addYears/);
+      assert.match(insSrc, /subDays/);
+    },
+  },
 ];
 
 let passed = 0;
 for (const t of tests) {
-  t.fn();
+  await t.fn();
   passed++;
   console.log(`  ✓ ${t.name}`);
 }

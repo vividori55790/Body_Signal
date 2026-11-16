@@ -11,7 +11,9 @@ export const PROJECT_DIR = path.resolve(__dirname, '../../..');
 export const REPO_ROOT = path.resolve(PROJECT_DIR, '..');
 export const SRC_DIR = path.resolve(PROJECT_DIR, 'src');
 export const ANDROID_DIR = path.resolve(PROJECT_DIR, 'android');
-export const APK_PATH = fs.existsSync(path.resolve(REPO_ROOT, 'Bignal-v1.1.0-debug.apk'))
+export const APK_PATH = fs.existsSync(path.resolve(REPO_ROOT, 'Bignal-v1.2.0-debug.apk'))
+  ? path.resolve(REPO_ROOT, 'Bignal-v1.2.0-debug.apk')
+  : fs.existsSync(path.resolve(REPO_ROOT, 'Bignal-v1.1.0-debug.apk'))
   ? path.resolve(REPO_ROOT, 'Bignal-v1.1.0-debug.apk')
   : path.resolve(REPO_ROOT, 'Bignal-v0.1.0-debug.apk');
 

@@ -910,8 +910,8 @@ export const tier2Tests = [
     name: 'APK versionName configured to valid release version and versionCode in build.gradle',
     run: async () => {
       const gradleSrc = fs.readFileSync(path.join(ANDROID_DIR, 'app/build.gradle'), 'utf8');
-      assert.match(gradleSrc, /versionCode\s+(?:1|2|110)/);
-      assert.match(gradleSrc, /versionName\s+['"](?:0\.1\.0|1\.1\.0)['"]/);
+      assert.match(gradleSrc, /versionCode\s+(?:1|2|3|110|120)/);
+      assert.match(gradleSrc, /versionName\s+['"](?:0\.1\.0|1\.1\.0|1\.2\.0)['"]/);
     },
   },
 ];
