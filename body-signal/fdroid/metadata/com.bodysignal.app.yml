@@ -1,6 +1,6 @@
 Categories:
   - Health
-License: MIT
+License: GPL-3.0-only
 AuthorName: vividori55790
 SourceCode: https://github.com/vividori55790/Body_Signal
 IssueTracker: https://github.com/vividori55790/Body_Signal/issues
@@ -9,8 +9,13 @@ Changelog: https://github.com/vividori55790/Body_Signal/releases
 AutoName: Body Signal
 Summary: Private symptom and body-signal tracker
 Description: |-
-  Body Signal helps you record symptoms, intensity, notes, and related
-  conditions so that you can review personal trends over time.
+  Body Signal helps you record symptoms, pain intensity (NRS 1-10), notes,
+  medications, and related conditions so that you can review personal trends
+  and prepare 30-second clinical briefings for medical visits.
+
+  All health records are encrypted locally on-device with AES-GCM 256 and
+  protected by PIN and AndroidKeyStore biometric authentication. No cloud
+  accounts, ads, or analytics trackers are included.
 
   It is a personal tracking tool, not a diagnostic or emergency medical
   service.
@@ -19,13 +24,20 @@ RepoType: git
 Repo: https://github.com/vividori55790/Body_Signal.git
 
 Builds:
-  - versionName: 0.1.0
-    versionCode: 1
-    commit: v0.1.0
-    subdir: body-signal
+  - versionName: 1.1.0
+    versionCode: 2
+    commit: v1.1.0
+    subdir: body-signal/android/app
     gradle: yes
-    output: android/app/build/outputs/apk/release/app-release-unsigned.apk
+    prebuild:
+      - pushd ../..
+      - npm ci
+      - npm run build
+      - npx cap sync android
+      - popd
+    output: build/outputs/apk/release/app-release-unsigned.apk
 
+AutoUpdateMode: Version
 UpdateCheckMode: Tags
-CurrentVersion: 0.1.0
-CurrentVersionCode: 1
+CurrentVersion: 1.1.0
+CurrentVersionCode: 2

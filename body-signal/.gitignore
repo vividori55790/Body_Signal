@@ -11,6 +11,8 @@ node_modules
 dist
 dist-ssr
 *.local
+*.apk
+android/app/src/main/assets/public/
 
 # Editor directories and files
 .vscode/*
@@ -23,3 +25,4 @@ dist-ssr
 *.sln
 *.sw?
 /user_feedback
+Agent.md

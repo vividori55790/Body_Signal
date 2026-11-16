@@ -82,15 +82,14 @@ signs itself.
 
 This repository includes:
 
-- `fdroid/metadata/com.bodysignal.app.yml` — submission metadata draft
+- `fdroid/metadata/com.bodysignal.app.yml` — submission metadata (`GPL-3.0-only`)
 - `fdroid/README.md` — release and submission checklist
-- `LICENSE` — the MIT license declared by the metadata
-- versioned Capacitor web assets under `android/app/src/main/assets/public`
+- `LICENSE` — the GNU GPL v3 license declared by the metadata
 
 Before submitting:
 
-1. Create a public `v0.1.0` Git tag.
-2. Build from a clean checkout with the pinned Gradle wrapper.
+1. Create a public `v1.1.0` Git tag.
+2. Build from a clean checkout (`npm ci && npm run build && npx cap sync android`) with the pinned Gradle wrapper.
 3. Confirm `android/app/build/outputs/apk/release/app-release-unsigned.apk`
    is generated without a signing key or private service configuration.
 4. Submit the metadata to the

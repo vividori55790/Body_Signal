@@ -4,6 +4,7 @@ dist/
 .gradle/
 build/
 *.log
+*.apk
 
 # Android Studio / IntelliJ / VSCode
 .idea/
