@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { Plus, AlertCircle, TrendingDown, ArrowRight, ChevronDown, ChevronUp, CheckCircle, Save, Clock, Pill, Stethoscope, Zap } from 'lucide-react';
+import { Plus, AlertCircle, TrendingDown, ArrowRight, ChevronDown, ChevronUp, CheckCircle, Save, Clock, Pill, Stethoscope, Zap, FileCheck2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useHealth } from '../context/HealthContext';
 import { useSettings } from '../context/SettingsContext';
 import { Condition, PainLog } from '../types/health';
 import { triggerHaptic } from '../utils/native';
+import { calculateInsuranceClaimStatus } from '../utils/insurance';
 import { LineChart, Line, ResponsiveContainer, YAxis } from 'recharts';
 import CalendarHeatmap from '../components/CalendarHeatmap';
 import QuickPainLogger from '../components/QuickPainLogger';
@@ -213,7 +214,7 @@ const DetailedConditionCard: React.FC<{
 
 export const DashboardPage: React.FC = () => {
   const navigate = useNavigate();
-  const { conditions, logs, updateLog } = useHealth();
+  const { conditions, logs, diagnosticRecords, updateLog } = useHealth();
   const { openAcute } = useAcutePain();
   const { t } = useSettings();
   const [filter, setFilter] = useState<'All' | 'Critical' | 'Improved'>('All');
@@ -523,6 +524,45 @@ export const DashboardPage: React.FC = () => {
         <h3 className="text-xs font-bold text-slate-400 uppercase">{t('overallPainHeatmap')}</h3>
         <CalendarHeatmap logs={logs} />
       </div>
+
+      {/* Diagnostic Vault & Indemnity Insurance Claim Shortcut */}
+      {(() => {
+        const pendingClaims = diagnosticRecords
+          .filter((d) => d.claimStatus === 'pending')
+          .map((d) => ({
+            record: d,
+            info: calculateInsuranceClaimStatus(d.diagnosisDate, d.claimStatus, d.claimDeadlineYears || 3),
+          }))
+          .sort((a, b) => a.info.daysRemaining - b.info.daysRemaining);
+        const nextClaim = pendingClaims[0];
+        return (
+          <button
+            type="button"
+            onClick={() => {
+              triggerHaptic();
+              navigate('/diagnostics');
+            }}
+            className="w-full text-left rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3.5 shadow-sm flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-800/70 transition-colors"
+          >
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-xl bg-teal-50 dark:bg-teal-950/60 text-teal-600 dark:text-teal-400">
+                <FileCheck2 size={18} />
+              </div>
+              <div>
+                <p className="text-xs font-bold text-slate-800 dark:text-slate-100">
+                  진단서·실손보험 보관함 ({diagnosticRecords.length}건)
+                </p>
+                <p className="text-[10px] text-slate-400">
+                  {nextClaim
+                    ? `다음 청구 마감: ${nextClaim.record.diagnosisName} (${nextClaim.info.badgeText})`
+                    : '진단일자·사진 암호화 저장 및 실손 청구 마감일 자동 계산'}
+                </p>
+              </div>
+            </div>
+            <ArrowRight size={16} className="text-slate-400 shrink-0" />
+          </button>
+        );
+      })()}
 
       {/* Action: Log New Symptom Button */}
       <button

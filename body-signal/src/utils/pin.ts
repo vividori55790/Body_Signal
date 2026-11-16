@@ -10,7 +10,10 @@ export async function isPinConfigured(): Promise<boolean> {
 }
 
 export async function setAppPin(pin: string): Promise<void> {
-  if (!/^\d{4,}$/.test(pin)) {
+  if (pin.length < 4 || isNaN(Number(pin))) {
+    throw new Error('PIN은 최소 4자리 숫자여야 합니다.');
+  }
+  if (!/^\d+$/.test(pin)) {
     throw new Error('PIN은 최소 4자리 숫자여야 합니다.');
   }
   const { hash, salt } = await computeSaltedPinHash(pin);
