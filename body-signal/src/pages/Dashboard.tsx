@@ -1,5 +1,4 @@
-import React, { useState, useEffect } from 'react';
-import { createPortal } from 'react-dom';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Plus,
   ArrowRight,
@@ -10,16 +9,20 @@ import {
   Pill,
   Zap,
   FolderPlus,
-  X,
+  BarChart3,
+  TrendingDown,
+  TrendingUp,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useHealth } from '../context/HealthContext';
 import { useSettings } from '../context/SettingsContext';
 import { Condition, PainLog, UNASSIGNED_CONDITION_ID } from '../types/health';
 import { triggerHaptic } from '../utils/native';
+import { computeTreatmentMetrics } from '../utils/treatmentMetrics';
 import { LineChart, Line, ResponsiveContainer, YAxis } from 'recharts';
 import CalendarHeatmap from '../components/CalendarHeatmap';
 import QuickPainLogger from '../components/QuickPainLogger';
+import DefaultClosedSuggestion from '../components/DefaultClosedSuggestion';
 import TrustBadge from '../components/TrustBadge';
 import { useAcutePain } from '../context/AcutePainContext';
 
@@ -63,16 +66,18 @@ const DetailedConditionCard: React.FC<{
         isExpanded ? 'ring-1 ring-teal-500/40' : ''
       }`}
     >
-      <div
-        className="p-3.5 flex justify-between items-center cursor-pointer select-none"
-        onClick={() => {
-          triggerHaptic();
-          setIsExpanded(!isExpanded);
-        }}
-      >
-        <div className="flex-1 min-w-0 pr-2">
+      <div className="p-3.5 flex justify-between items-center select-none">
+        <div
+          className="flex-1 min-w-0 pr-2 cursor-pointer hover:opacity-85 transition-opacity"
+          onClick={() => {
+            triggerHaptic();
+            navigate(`/condition/${condition.id}`);
+          }}
+        >
           <div className="flex items-center gap-2">
-            <h3 className="font-bold text-sm text-slate-800 dark:text-slate-100 truncate">{condition.label}</h3>
+            <h3 className="font-bold text-sm text-slate-800 dark:text-slate-100 truncate underline-offset-2 hover:underline">
+              {condition.label}
+            </h3>
             {isArchived && (
               <span className="text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-500 px-2 py-0.5 rounded-full font-bold shrink-0">
                 종료
@@ -84,7 +89,15 @@ const DetailedConditionCard: React.FC<{
           </p>
         </div>
 
-        <div className="flex items-center gap-2.5 text-right shrink-0">
+        <button
+          type="button"
+          aria-label={isExpanded ? '최근 기록 접기' : '최근 기록 펼치기'}
+          onClick={() => {
+            triggerHaptic();
+            setIsExpanded(!isExpanded);
+          }}
+          className="flex items-center gap-2.5 text-right shrink-0 p-1 -mr-1 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+        >
           {lastLog && (
             <span
               className={`px-2 py-0.5 rounded-lg text-sm font-black ${
@@ -101,7 +114,7 @@ const DetailedConditionCard: React.FC<{
           <div className="text-slate-400">
             {isExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
           </div>
-        </div>
+        </button>
       </div>
 
       {chartData.length > 1 && (
@@ -188,41 +201,57 @@ const DetailedConditionCard: React.FC<{
 
 export const DashboardPage: React.FC = () => {
   const navigate = useNavigate();
-  const { conditions, logs, updateLog, assignLogsToCondition } = useHealth();
+  const { conditions, logs, diaryEntries, diagnosticRecords, updateLog } = useHealth();
   const { openAcute } = useAcutePain();
-  const { t } = useSettings();
+  const {
+    settings,
+    t,
+    setDefaultQuickLoggerOpen,
+    recordCollapsibleDismissal,
+  } = useSettings();
 
   const [filter, setFilter] = useState<'All' | 'Critical' | 'Improved'>('All');
   const [showArchived, setShowArchived] = useState(false);
-  const [showQuickLogger, setShowQuickLogger] = useState(false);
+  const [showQuickLogger, setShowQuickLogger] = useState(
+    settings.defaultQuickLoggerOpen ?? true
+  );
+  const [usedQuickLogger, setUsedQuickLogger] = useState(false);
+  const [showQuickLoggerPrompt, setShowQuickLoggerPrompt] = useState(false);
+
+  useEffect(() => {
+    setShowQuickLogger(settings.defaultQuickLoggerOpen ?? true);
+  }, [settings.defaultQuickLoggerOpen]);
+
+  const handleToggleQuickLogger = async () => {
+    triggerHaptic();
+    if (showQuickLogger) {
+      setShowQuickLogger(false);
+      const shouldAsk = await recordCollapsibleDismissal('quickLogger', usedQuickLogger);
+      if (shouldAsk) {
+        setShowQuickLoggerPrompt(true);
+      }
+    } else {
+      setUsedQuickLogger(false);
+      setShowQuickLoggerPrompt(false);
+      setShowQuickLogger(true);
+    }
+  };
   const [dismissedMedId, setDismissedMedId] = useState<string | null>(null);
   const [medRatingSaved, setMedRatingSaved] = useState<boolean>(false);
   const [selectedSideEffects, setSelectedSideEffects] = useState<string[]>([]);
 
-  // Unassigned symptoms grouping modal state
-  const [groupModalOpen, setGroupModalOpen] = useState(false);
-  const [selectedUnassignedIds, setSelectedUnassignedIds] = useState<string[]>([]);
-  const [groupTargetMode, setGroupTargetMode] = useState<'existing' | 'new'>('new');
-  const [groupTargetCondId, setGroupTargetCondId] = useState('');
-  const [groupNewLabel, setGroupNewLabel] = useState('');
-  const [groupNewBodyPart, setGroupNewBodyPart] = useState('');
-  const [groupError, setGroupError] = useState('');
-
-  useEffect(() => {
-    if (!groupModalOpen) return;
-    const prevBody = document.body.style.overflow;
-    const prevHtml = document.documentElement.style.overflow;
-    document.body.style.overflow = 'hidden';
-    document.documentElement.style.overflow = 'hidden';
-    return () => {
-      document.body.style.overflow = prevBody;
-      document.documentElement.style.overflow = prevHtml;
-    };
-  }, [groupModalOpen]);
-
   const activeConditions = conditions.filter((c) => !c.isArchived);
   const archivedConditions = conditions.filter((c) => c.isArchived);
   const unassignedLogs = logs.filter((l) => l.conditionId === UNASSIGNED_CONDITION_ID);
+  const metrics = useMemo(
+    () => computeTreatmentMetrics(conditions, logs, diaryEntries, diagnosticRecords),
+    [conditions, logs, diaryEntries, diagnosticRecords]
+  );
+  const unassignedPreviewParts = useMemo(
+    () =>
+      Array.from(new Set(unassignedLogs.map((l) => l.bodyPartOverride).filter(Boolean))).slice(0, 3),
+    [unassignedLogs]
+  );
 
   const recentLogs = logs.filter((l) => Date.now() - new Date(l.date).getTime() <= 7 * 24 * 60 * 60 * 1000);
   const weeklyAvg = recentLogs.length
@@ -281,43 +310,7 @@ export const DashboardPage: React.FC = () => {
 
   const openGroupModal = () => {
     triggerHaptic();
-    setSelectedUnassignedIds(unassignedLogs.map((l) => l.id));
-    setGroupTargetMode(activeConditions.length > 0 ? 'existing' : 'new');
-    setGroupTargetCondId(activeConditions[0]?.id || '');
-    const inferredParts = Array.from(
-      new Set(unassignedLogs.map((l) => l.bodyPartOverride).filter(Boolean))
-    ).join(', ');
-    setGroupNewBodyPart(inferredParts || '허리/요통');
-    setGroupNewLabel('');
-    setGroupError('');
-    setGroupModalOpen(true);
-  };
-
-  const handleConfirmGroup = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (selectedUnassignedIds.length === 0) {
-      setGroupError('묶을 증상 기록을 1개 이상 선택하세요.');
-      return;
-    }
-    if (groupTargetMode === 'new' && (!groupNewLabel.trim() || !groupNewBodyPart.trim())) {
-      setGroupError('확정된 질병명과 부위를 입력하세요.');
-      return;
-    }
-    if (groupTargetMode === 'existing' && !groupTargetCondId) {
-      setGroupError('연결할 질병을 선택하세요.');
-      return;
-    }
-
-    const resultId = await assignLogsToCondition(
-      selectedUnassignedIds,
-      groupTargetMode === 'existing'
-        ? { existingConditionId: groupTargetCondId }
-        : { newCondition: { label: groupNewLabel.trim(), bodyPart: groupNewBodyPart.trim() } }
-    );
-    if (resultId) {
-      triggerHaptic();
-      setGroupModalOpen(false);
-    }
+    navigate('/history?group=unassigned');
   };
 
   return (
@@ -327,9 +320,20 @@ export const DashboardPage: React.FC = () => {
         <div className="flex items-center justify-between gap-2">
           <div>
             <h1 className="text-xl font-bold tracking-tight">{t('dashTitle')}</h1>
-            <p className="text-[11px] text-slate-500 dark:text-slate-400">
-              추적 질병 {activeConditions.length}개 · 누적 {logs.length}건 · 7일 평균{' '}
-              <strong className="text-slate-700 dark:text-slate-200">{weeklyAvg}</strong>
+            <p className="text-[11px] text-slate-500 dark:text-slate-400 flex flex-wrap items-center gap-1.5">
+              <span>
+                추적 질병 {activeConditions.length}개 · 누적 {logs.length}건 · 7일 평균{' '}
+                <strong className="text-slate-700 dark:text-slate-200">{weeklyAvg}</strong>
+              </span>
+              {unassignedLogs.length > 0 && (
+                <button
+                  type="button"
+                  onClick={openGroupModal}
+                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950/70 text-amber-800 dark:text-amber-300 text-[10px] font-extrabold border border-amber-300/70 dark:border-amber-800"
+                >
+                  미분류 {unassignedLogs.length}건
+                </button>
+              )}
             </p>
           </div>
           <TrustBadge compact />
@@ -362,16 +366,37 @@ export const DashboardPage: React.FC = () => {
 
         <button
           type="button"
-          onClick={() => {
-            triggerHaptic();
-            setShowQuickLogger(!showQuickLogger);
-          }}
+          onClick={handleToggleQuickLogger}
           className="w-full py-1.5 text-[11px] font-bold text-slate-500 dark:text-slate-400 flex items-center justify-center gap-1 hover:text-teal-600"
         >
           {showQuickLogger ? '빠른 기록 접기 ▲' : '홈에서 바로 3초 기록 펼치기 ▼'}
         </button>
 
-        {showQuickLogger && <QuickPainLogger onSaved={() => setShowQuickLogger(false)} />}
+        {showQuickLoggerPrompt && (
+          <DefaultClosedSuggestion
+            featureName="홈 3초 기록"
+            onConfirmDefaultClosed={async () => {
+              triggerHaptic();
+              await setDefaultQuickLoggerOpen(false);
+              setShowQuickLoggerPrompt(false);
+            }}
+            onKeepOpen={async () => {
+              triggerHaptic();
+              await recordCollapsibleDismissal('quickLogger', true);
+              setShowQuickLoggerPrompt(false);
+            }}
+          />
+        )}
+
+        {showQuickLogger && (
+          <QuickPainLogger
+            onSaved={async () => {
+              setUsedQuickLogger(true);
+              setShowQuickLoggerPrompt(false);
+              await recordCollapsibleDismissal('quickLogger', true);
+            }}
+          />
+        )}
       </header>
 
       {/* 2. Medication Follow-up Card (Only when pending within 24h) */}
@@ -456,29 +481,104 @@ export const DashboardPage: React.FC = () => {
         </div>
       )}
 
-      {/* 3. Overall Pain Heatmap */}
+      {/* 3. Quantitative Treatment Summary (Shown once user has meaningful tracking activity) */}
+      {metrics.hasEnoughUsage && (
+        <div className="rounded-2xl border border-emerald-200/80 dark:border-emerald-900/60 bg-gradient-to-br from-white to-emerald-50/50 dark:from-slate-900 dark:to-emerald-950/20 p-3.5 shadow-sm space-y-2.5">
+          <div className="flex items-center justify-between gap-2">
+            <h3 className="text-[11px] font-extrabold text-emerald-800 dark:text-emerald-300 uppercase flex items-center gap-1.5">
+              <BarChart3 size={14} className="text-emerald-600 dark:text-emerald-400" />
+              질병 치료 · 통증 개선 요약
+            </h3>
+            <button
+              type="button"
+              onClick={() => {
+                triggerHaptic();
+                navigate('/history?tab=stats');
+              }}
+              className="text-[11px] font-bold text-teal-700 dark:text-teal-400 flex items-center gap-0.5 hover:underline"
+            >
+              상세 통계 <ArrowRight size={11} />
+            </button>
+          </div>
+
+          <div className="grid grid-cols-3 gap-2 text-center">
+            <div className="rounded-xl bg-white/80 dark:bg-slate-900/80 border border-slate-200/70 dark:border-slate-800 py-2 px-1">
+              <span className="text-[10px] font-bold text-slate-400 block">치료 완료</span>
+              <strong className="text-sm font-black text-emerald-600 dark:text-emerald-400">
+                {metrics.archivedConditionsCount}
+                <span className="text-[10px] font-normal text-slate-400">/{metrics.totalConditions}개</span>
+              </strong>
+            </div>
+
+            <div className="rounded-xl bg-white/80 dark:bg-slate-900/80 border border-slate-200/70 dark:border-slate-800 py-2 px-1">
+              <span className="text-[10px] font-bold text-slate-400 block">개선된 질병</span>
+              <strong className="text-sm font-black text-slate-800 dark:text-slate-100">
+                {metrics.improvedConditionsCount}
+                <span className="text-[10px] font-normal text-slate-400">
+                  /{metrics.comparableConditionsCount}개
+                </span>
+              </strong>
+            </div>
+
+            <div className="rounded-xl bg-white/80 dark:bg-slate-900/80 border border-slate-200/70 dark:border-slate-800 py-2 px-1">
+              <span className="text-[10px] font-bold text-slate-400 block">통증 개선</span>
+              <strong
+                className={`text-sm font-black inline-flex items-center justify-center gap-0.5 ${
+                  metrics.overallPainDelta !== null && metrics.overallPainDelta < 0
+                    ? 'text-emerald-600 dark:text-emerald-400'
+                    : metrics.overallPainDelta !== null && metrics.overallPainDelta > 0
+                    ? 'text-rose-500'
+                    : 'text-slate-600 dark:text-slate-300'
+                }`}
+              >
+                {metrics.overallPainDelta !== null && metrics.overallPainDelta < 0 ? (
+                  <>
+                    <TrendingDown size={13} />
+                    {metrics.overallImprovementPct !== null
+                      ? `${metrics.overallImprovementPct}%`
+                      : `${metrics.overallPainDelta}`}
+                  </>
+                ) : metrics.overallPainDelta !== null && metrics.overallPainDelta > 0 ? (
+                  <>
+                    <TrendingUp size={13} />+{metrics.overallPainDelta}
+                  </>
+                ) : (
+                  '유지'
+                )}
+              </strong>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 4. Overall Pain Heatmap */}
       <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3.5 shadow-sm space-y-2">
         <h3 className="text-[11px] font-bold text-slate-400 uppercase">{t('overallPainHeatmap')}</h3>
         <CalendarHeatmap logs={logs} />
       </div>
 
-      {/* 4. Unassigned (Unknown Cause) Symptoms Grouping Card */}
+      {/* 5. Unassigned (Unknown Cause) Symptoms Grouping Signal Card */}
       {unassignedLogs.length > 0 && (
-        <div className="rounded-2xl border border-amber-200 dark:border-amber-900/70 bg-amber-50/60 dark:bg-amber-950/20 p-3.5 flex items-center justify-between gap-2">
-          <div>
-            <p className="text-xs font-bold text-amber-900 dark:text-amber-200">
-              원인 미상 증상 {unassignedLogs.length}건
-            </p>
-            <p className="text-[11px] text-amber-700 dark:text-amber-400">
-              진단명이 확인되면 질병으로 묶어 추적하세요
+        <div className="rounded-2xl border-2 border-amber-300 dark:border-amber-800 bg-amber-50/80 dark:bg-amber-950/25 p-3.5 flex items-center justify-between gap-2 shadow-sm">
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5">
+              <span className="h-2 w-2 rounded-full bg-amber-500 animate-pulse shrink-0" />
+              <p className="text-xs font-extrabold text-amber-950 dark:text-amber-200">
+                질병 미분류 증상 {unassignedLogs.length}건 · 분류가 필요해요
+              </p>
+            </div>
+            <p className="text-[11px] text-amber-800 dark:text-amber-400 truncate mt-0.5">
+              {unassignedPreviewParts.length > 0
+                ? `${unassignedPreviewParts.join(', ')} 기록을 질병으로 묶어 추이를 추적하세요`
+                : '진단명이 확인되면 질병으로 묶어 추이와 통계를 확인하세요'}
             </p>
           </div>
           <button
             type="button"
             onClick={openGroupModal}
-            className="shrink-0 px-3 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold flex items-center gap-1"
+            className="shrink-0 px-3 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-xs font-extrabold flex items-center gap-1 shadow-sm"
           >
-            <FolderPlus size={14} /> 질병으로 묶기
+            <FolderPlus size={14} /> 분류하기
           </button>
         </div>
       )}
@@ -538,118 +638,6 @@ export const DashboardPage: React.FC = () => {
           </div>
         )}
       </section>
-
-      {/* Unassigned-to-Disease Grouping Modal */}
-      {groupModalOpen &&
-        typeof document !== 'undefined' &&
-        createPortal(
-          <div
-            onClick={() => setGroupModalOpen(false)}
-            className="fixed inset-0 z-[9998] bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4"
-          >
-            <form
-              onSubmit={handleConfirmGroup}
-              onClick={(e) => e.stopPropagation()}
-              className="w-full max-w-sm rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-5 shadow-2xl space-y-3.5 max-h-[85vh] overflow-y-auto"
-            >
-              <div className="flex items-center justify-between">
-                <h3 className="font-bold text-sm">원인 미상 증상을 질병으로 묶기</h3>
-                <button type="button" onClick={() => setGroupModalOpen(false)} className="text-slate-400">
-                  <X size={18} />
-                </button>
-              </div>
-
-              <div className="space-y-1.5 max-h-36 overflow-y-auto border border-slate-100 dark:border-slate-800 rounded-xl p-2">
-                {unassignedLogs.map((l) => {
-                  const checked = selectedUnassignedIds.includes(l.id);
-                  return (
-                    <label key={l.id} className="flex items-center gap-2 text-xs p-1 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={() =>
-                          setSelectedUnassignedIds((prev) =>
-                            checked ? prev.filter((id) => id !== l.id) : [...prev, l.id]
-                          )
-                        }
-                        className="accent-teal-600"
-                      />
-                      <span className="font-bold">NRS {l.intensity}</span>
-                      <span className="text-slate-500 truncate">
-                        {l.bodyPartOverride || '미지정'} · {new Date(l.date).toLocaleDateString('ko-KR')}
-                      </span>
-                    </label>
-                  );
-                })}
-              </div>
-
-              <div className="grid grid-cols-2 gap-1 rounded-xl bg-slate-100 dark:bg-slate-800 p-1 text-xs font-bold">
-                <button
-                  type="button"
-                  disabled={activeConditions.length === 0}
-                  onClick={() => setGroupTargetMode('existing')}
-                  className={`py-1.5 rounded-lg ${
-                    groupTargetMode === 'existing'
-                      ? 'bg-white dark:bg-slate-900 shadow-sm'
-                      : 'text-slate-500 disabled:opacity-40'
-                  }`}
-                >
-                  기존 질병에 연결
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setGroupTargetMode('new')}
-                  className={`py-1.5 rounded-lg ${
-                    groupTargetMode === 'new' ? 'bg-white dark:bg-slate-900 shadow-sm' : 'text-slate-500'
-                  }`}
-                >
-                  새 확정 질병 생성
-                </button>
-              </div>
-
-              {groupTargetMode === 'existing' ? (
-                <select
-                  value={groupTargetCondId}
-                  onChange={(e) => setGroupTargetCondId(e.target.value)}
-                  className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-bold"
-                >
-                  {activeConditions.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.label} ({c.bodyPart})
-                    </option>
-                  ))}
-                </select>
-              ) : (
-                <div className="space-y-2">
-                  <input
-                    type="text"
-                    placeholder="확정된 질병명 (예: 요추 추간판 탈출증)"
-                    value={groupNewLabel}
-                    onChange={(e) => setGroupNewLabel(e.target.value)}
-                    className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs"
-                  />
-                  <input
-                    type="text"
-                    placeholder="부위 (예: 허리/요통)"
-                    value={groupNewBodyPart}
-                    onChange={(e) => setGroupNewBodyPart(e.target.value)}
-                    className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs"
-                  />
-                </div>
-              )}
-
-              {groupError && <p className="text-xs font-bold text-rose-500">{groupError}</p>}
-
-              <button
-                type="submit"
-                className="w-full py-2.5 rounded-xl bg-teal-700 text-white font-bold text-xs"
-              >
-                선택한 증상 묶기 ({selectedUnassignedIds.length}건)
-              </button>
-            </form>
-          </div>,
-          document.body
-        )}
     </div>
   );
 };

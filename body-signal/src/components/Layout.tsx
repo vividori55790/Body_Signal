@@ -1,21 +1,24 @@
 import React from 'react';
 import { Outlet, NavLink } from 'react-router-dom';
-import { Home, History, Stethoscope, Settings, FileCheck2 } from 'lucide-react';
+import { Home, History, Settings, FileCheck2 } from 'lucide-react';
 import { useSettings } from '../context/SettingsContext';
+import { useHealth } from '../context/HealthContext';
 import { useAcutePain } from '../context/AcutePainContext';
+import { UNASSIGNED_CONDITION_ID } from '../types/health';
 import { triggerHaptic } from '../utils/native';
 
 export const Layout: React.FC = () => {
   const { settings, t } = useSettings();
+  const { logs } = useHealth();
   const { openAcute } = useAcutePain();
+  const unassignedCount = logs.filter((l) => l.conditionId === UNASSIGNED_CONDITION_ID).length;
 
-  const navItems = [
+  const navItems: Array<{ path: string; icon: typeof Home; label: string; highlight?: boolean }> = [
     { path: '/', icon: Home, label: t('navDash') },
     { path: '/history', icon: History, label: t('navHistory') },
     ...(settings.showDiagnosticsTab === true
       ? [{ path: '/diagnostics', icon: FileCheck2, label: t('navDiagnostics') }]
       : []),
-    { path: '/briefing', icon: Stethoscope, label: t('navBriefing'), highlight: true },
     { path: '/settings', icon: Settings, label: t('navSettings') },
   ];
 
@@ -61,7 +64,17 @@ export const Layout: React.FC = () => {
                 }`
               }
             >
-              <Icon size={20} strokeWidth={2.1} />
+              <div className="relative">
+                <Icon size={20} strokeWidth={2.1} />
+                {path === '/history' && unassignedCount > 0 && (
+                  <span
+                    title={`미분류 증상 ${unassignedCount}건`}
+                    className="absolute -top-1.5 -right-2.5 min-w-[16px] h-4 px-1 rounded-full bg-amber-500 text-white text-[9px] font-black flex items-center justify-center shadow-sm"
+                  >
+                    {unassignedCount > 9 ? '9+' : unassignedCount}
+                  </span>
+                )}
+              </div>
               <span className="text-[11px] tracking-tight">{label}</span>
             </NavLink>
           ))}
