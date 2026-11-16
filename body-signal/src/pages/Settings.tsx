@@ -31,6 +31,7 @@ import {
 import { PinModal } from '../components/PinModal';
 import { triggerHaptic } from '../utils/native';
 import { testLocalLlmConnection } from '../utils/localLlm';
+import { encryptBackupWithPassphrase, decryptBackupWithPassphrase } from '../utils/crypto';
 
 export const SettingsPage: React.FC = () => {
   const {
@@ -67,6 +68,20 @@ export const SettingsPage: React.FC = () => {
   // Local LLM State
   const [isTestingLlm, setIsTestingLlm] = useState(false);
   const [llmTestStatus, setLlmTestStatus] = useState<{ success: boolean; msg: string } | null>(null);
+
+  // Encrypted Backup Modal State
+  const [backupModalMode, setBackupModalMode] = useState<'export' | 'importDecrypt' | 'importPreview' | null>(null);
+  const [backupPassphrase, setBackupPassphrase] = useState('');
+  const [backupPassphraseConfirm, setBackupPassphraseConfirm] = useState('');
+  const [backupError, setBackupError] = useState('');
+  const [pendingImportRaw, setPendingImportRaw] = useState('');
+  const [importPreviewData, setImportPreviewData] = useState<{
+    jsonStr: string;
+    conditionsCount: number;
+    logsCount: number;
+    diaryCount: number;
+    isEncrypted: boolean;
+  } | null>(null);
 
   const showToast = (msg: string) => {
     setFeedbackMsg(msg);
@@ -112,17 +127,49 @@ export const SettingsPage: React.FC = () => {
     setPinModalMode('unlock');
   };
 
+  const resetBackupModal = () => {
+    setBackupModalMode(null);
+    setBackupPassphrase('');
+    setBackupPassphraseConfirm('');
+    setBackupError('');
+    setPendingImportRaw('');
+    setImportPreviewData(null);
+  };
+
   const handleExportJson = () => {
     triggerHaptic();
-    const dataStr = exportBackupJson();
-    const blob = new Blob([dataStr], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `body-signal-backup-${new Date().toISOString().split('T')[0]}.json`;
-    link.click();
-    URL.revokeObjectURL(url);
-    showToast('백업 파일이 다운로드되었습니다.');
+    setBackupPassphrase('');
+    setBackupPassphraseConfirm('');
+    setBackupError('');
+    setBackupModalMode('export');
+  };
+
+  const confirmEncryptedExport = async () => {
+    if (backupPassphrase.length < 6) {
+      setBackupError('보안을 위해 백업 암호는 최소 6자 이상이어야 합니다.');
+      return;
+    }
+    if (backupPassphrase !== backupPassphraseConfirm) {
+      setBackupError('입력하신 두 백업 암호가 일치하지 않습니다.');
+      return;
+    }
+
+    try {
+      triggerHaptic();
+      const plainJson = exportBackupJson();
+      const encryptedContent = await encryptBackupWithPassphrase(plainJson, backupPassphrase);
+      const blob = new Blob([encryptedContent], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `body-signal-encrypted-backup-${new Date().toISOString().split('T')[0]}.json`;
+      link.click();
+      URL.revokeObjectURL(url);
+      resetBackupModal();
+      showToast('AES-256 암호화 백업 파일이 다운로드되었습니다.');
+    } catch (err: any) {
+      setBackupError(err?.message || '암호화 백업 생성에 실패했습니다.');
+    }
   };
 
   const handleExportCsv = () => {
@@ -159,12 +206,73 @@ export const SettingsPage: React.FC = () => {
     if (!file) return;
     try {
       const text = await file.text();
-      await importBackupJson(text);
-      showToast('백업이 성공적으로 복원되었습니다.');
+      const parsed = JSON.parse(text);
+
+      // Encrypted backup detection
+      if (parsed?.format === 'bignal-encrypted-backup-v1' || (parsed?.data?.ct && parsed?.data?.salt && parsed?.data?.iv)) {
+        setPendingImportRaw(text);
+        setBackupPassphrase('');
+        setBackupError('');
+        setBackupModalMode('importDecrypt');
+        return;
+      }
+
+      // Legacy plaintext JSON backup preview
+      const data = parsed?.data || parsed;
+      if (data && Array.isArray(data.conditions) && Array.isArray(data.logs)) {
+        setImportPreviewData({
+          jsonStr: JSON.stringify(data),
+          conditionsCount: data.conditions.length,
+          logsCount: data.logs.length,
+          diaryCount: Array.isArray(data.diaryEntries) ? data.diaryEntries.length : 0,
+          isEncrypted: false,
+        });
+        setBackupError('');
+        setBackupModalMode('importPreview');
+      } else {
+        throw new Error('올바른 백업 파일 형식이 아닙니다.');
+      }
     } catch (err: any) {
-      alert(err.message || '백업 복원에 실패했습니다.');
+      showToast(err.message || '백업 파일을 읽을 수 없습니다.');
     } finally {
       e.target.value = '';
+    }
+  };
+
+  const handleDecryptBackupPreview = async () => {
+    if (!backupPassphrase) {
+      setBackupError('백업 암호를 입력해 주세요.');
+      return;
+    }
+    try {
+      const decryptedJson = await decryptBackupWithPassphrase(pendingImportRaw, backupPassphrase);
+      const data = JSON.parse(decryptedJson);
+      if (!data || !Array.isArray(data.conditions) || !Array.isArray(data.logs)) {
+        throw new Error('복호화된 백업 데이터가 손상되었습니다.');
+      }
+      setImportPreviewData({
+        jsonStr: decryptedJson,
+        conditionsCount: data.conditions.length,
+        logsCount: data.logs.length,
+        diaryCount: Array.isArray(data.diaryEntries) ? data.diaryEntries.length : 0,
+        isEncrypted: true,
+      });
+      setBackupError('');
+      setBackupModalMode('importPreview');
+    } catch (err: any) {
+      setBackupError(err?.message || '백업 암호가 일치하지 않거나 파일이 손상되었습니다.');
+    }
+  };
+
+  const confirmRestoreBackup = async () => {
+    if (!importPreviewData) return;
+    try {
+      triggerHaptic();
+      await importBackupJson(importPreviewData.jsonStr);
+      resetBackupModal();
+      showToast('백업이 성공적으로 복원되었습니다.');
+    } catch (err: any) {
+      setBackupError(err?.message || '백업 복원에 실패했습니다.');
     }
   };
 
@@ -529,8 +637,8 @@ export const SettingsPage: React.FC = () => {
           <h2 className="text-xs font-bold uppercase tracking-wider text-slate-400">
             {t('localLlmSection')}
           </h2>
-          <span className="text-[10px] font-bold text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-950/80 px-2 py-0.5 rounded-full">
-            {t('localLlmBadge')}
+          <span className="text-[10px] font-bold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/80 border border-amber-200 dark:border-amber-800 px-2 py-0.5 rounded-full">
+            개발 중 · HTTPS/로컬 전용
           </span>
         </div>
 
@@ -598,13 +706,15 @@ export const SettingsPage: React.FC = () => {
                   >
                     Ollama 로컬 (11434)
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => updateLocalLlm({ endpoint: 'http://10.0.2.2:11434/v1', model: 'llama3.2' })}
-                    className="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-[10px] font-semibold text-slate-500 hover:text-purple-600"
-                  >
-                    안드로이드 에뮬레이터 (10.0.2.2)
-                  </button>
+                  {import.meta.env.DEV && (
+                    <button
+                      type="button"
+                      onClick={() => updateLocalLlm({ endpoint: 'http://10.0.2.2:11434/v1', model: 'llama3.2' })}
+                      className="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-[10px] font-semibold text-slate-500 hover:text-purple-600"
+                    >
+                      안드로이드 에뮬레이터 (DEV)
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => updateLocalLlm({ endpoint: 'http://localhost:1234/v1', model: 'llama3.2' })}
@@ -613,6 +723,9 @@ export const SettingsPage: React.FC = () => {
                     LM Studio (1234)
                   </button>
                 </div>
+                <p className="text-[10px] text-amber-600 dark:text-amber-400 mt-1.5 font-medium">
+                  🔒 보안 정책상 원격/LAN LLM 연결은 암호화된 HTTPS 엔드포인트만 허용됩니다. (localhost 제외)
+                </p>
               </div>
 
               {/* Model */}
@@ -757,6 +870,159 @@ export const SettingsPage: React.FC = () => {
           </button>
         </div>
       </section>
+
+      {/* Encrypted Backup Export / Import Modal */}
+      {backupModalMode && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-sm rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Lock size={18} className="text-emerald-500" />
+                <h3 className="font-bold text-sm text-slate-800 dark:text-slate-100">
+                  {backupModalMode === 'export'
+                    ? '암호화 백업 내보내기 (AES-256)'
+                    : backupModalMode === 'importDecrypt'
+                    ? '암호화 백업 복호화'
+                    : '백업 복원 미리보기'}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={resetBackupModal}
+                className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {backupModalMode === 'export' && (
+              <div className="space-y-3">
+                <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                  건강 기록을 보호하기 위해 백업 파일은 AES-GCM 256 및 SHA-256 무결성 검증으로 암호화됩니다. 복원 시 사용할 암호를 입력하세요.
+                </p>
+                <input
+                  type="password"
+                  value={backupPassphrase}
+                  onChange={(e) => setBackupPassphrase(e.target.value)}
+                  placeholder="백업 암호 입력 (6자 이상)"
+                  className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                />
+                <input
+                  type="password"
+                  value={backupPassphraseConfirm}
+                  onChange={(e) => setBackupPassphraseConfirm(e.target.value)}
+                  placeholder="백업 암호 확인"
+                  className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                />
+                {backupError && (
+                  <p className="text-xs font-bold text-rose-500 flex items-center gap-1">
+                    <AlertCircle size={13} /> {backupError}
+                  </p>
+                )}
+                <div className="flex gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={resetBackupModal}
+                    className="flex-1 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold text-xs"
+                  >
+                    {t('cancel')}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={confirmEncryptedExport}
+                    className="flex-1 py-2.5 rounded-xl bg-emerald-600 text-white font-bold text-xs shadow-sm"
+                  >
+                    암호화 다운로드
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {backupModalMode === 'importDecrypt' && (
+              <div className="space-y-3">
+                <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                  암호화된 백업 파일입니다. 내보낼 때 설정한 암호를 입력하면 내용을 미리 확인한 뒤 복원합니다.
+                </p>
+                <input
+                  type="password"
+                  value={backupPassphrase}
+                  onChange={(e) => setBackupPassphrase(e.target.value)}
+                  placeholder="백업 암호 입력"
+                  className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                />
+                {backupError && (
+                  <p className="text-xs font-bold text-rose-500 flex items-center gap-1">
+                    <AlertCircle size={13} /> {backupError}
+                  </p>
+                )}
+                <div className="flex gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={resetBackupModal}
+                    className="flex-1 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold text-xs"
+                  >
+                    {t('cancel')}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleDecryptBackupPreview}
+                    className="flex-1 py-2.5 rounded-xl bg-emerald-600 text-white font-bold text-xs shadow-sm"
+                  >
+                    복호화 및 미리보기
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {backupModalMode === 'importPreview' && importPreviewData && (
+              <div className="space-y-3">
+                <div
+                  className={`p-3 rounded-xl text-xs border ${
+                    importPreviewData.isEncrypted
+                      ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200'
+                      : 'bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-200'
+                  }`}
+                >
+                  <p className="font-bold mb-1">
+                    {importPreviewData.isEncrypted
+                      ? '✓ SHA-256 무결성 검증 및 복호화 완료'
+                      : '⚠️ 암호화되지 않은 구버전 JSON 백업'}
+                  </p>
+                  <ul className="space-y-0.5 text-[11px]">
+                    <li>• 관리 질환: {importPreviewData.conditionsCount}건</li>
+                    <li>• 통증 기록: {importPreviewData.logsCount}건</li>
+                    <li>• 일기 메모: {importPreviewData.diaryCount}건</li>
+                  </ul>
+                </div>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                  복원을 진행하면 현재 기기의 기록이 위 백업 내용으로 대체됩니다.
+                </p>
+                {backupError && (
+                  <p className="text-xs font-bold text-rose-500 flex items-center gap-1">
+                    <AlertCircle size={13} /> {backupError}
+                  </p>
+                )}
+                <div className="flex gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={resetBackupModal}
+                    className="flex-1 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold text-xs"
+                  >
+                    {t('cancel')}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={confirmRestoreBackup}
+                    className="flex-1 py-2.5 rounded-xl bg-amber-600 text-white font-bold text-xs shadow-sm"
+                  >
+                    복원 확정
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* PIN Setup/Change/Unlock Verification Modal */}
       {pinModalMode && (

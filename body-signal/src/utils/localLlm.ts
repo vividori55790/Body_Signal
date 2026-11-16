@@ -42,14 +42,48 @@ export class LocalLlmOfflineError extends Error {
 }
 
 /**
- * Clean and normalize endpoint URL to point to /v1 or base
+ * Return true only for strictly on-device loopback hosts
+ */
+export function isLoopbackHost(hostname: string): boolean {
+  const h = (hostname || '').toLowerCase().trim();
+  return h === 'localhost' || h === '127.0.0.1' || h === '::1' || h === '[::1]';
+}
+
+/**
+ * Clean and normalize endpoint URL to point to /v1 or base.
+ * Defaults loopback hosts to http:// and remote/LAN hosts to https://.
  */
 export function normalizeEndpoint(url: string): string {
   let cleaned = (url || '').trim().replace(/\/+$/, '');
   if (!cleaned.startsWith('http://') && !cleaned.startsWith('https://')) {
-    cleaned = 'http://' + cleaned;
+    const hostPart = cleaned.split('/')[0].split(':')[0];
+    cleaned = (isLoopbackHost(hostPart) ? 'http://' : 'https://') + cleaned;
   }
   return cleaned;
+}
+
+/**
+ * Enforce TLS encryption for all non-loopback endpoints.
+ */
+export function validateEndpointSecurity(normalizedUrl: string): { valid: boolean; reason?: string } {
+  try {
+    const parsed = new URL(normalizedUrl);
+    if (parsed.protocol === 'https:') {
+      return { valid: true };
+    }
+    if (parsed.protocol === 'http:' && isLoopbackHost(parsed.hostname)) {
+      return { valid: true };
+    }
+    return {
+      valid: false,
+      reason: '보안 정책상 외부 및 LAN 로컬 LLM 연결에는 HTTPS(암호화 통신)만 허용됩니다. (localhost 제외)',
+    };
+  } catch {
+    return {
+      valid: false,
+      reason: '유효하지 않은 엔드포인트 URL 형식입니다.',
+    };
+  }
 }
 
 /**
@@ -94,6 +128,13 @@ export async function testLocalLlmConnection(config: LocalLlmConfig): Promise<Ll
   }
 
   const base = normalizeEndpoint(config.endpoint);
+  const secCheck = validateEndpointSecurity(base);
+  if (!secCheck.valid) {
+    return {
+      success: false,
+      message: secCheck.reason || '보안 정책 위반: HTTPS가 필요합니다.',
+    };
+  }
   const modelsUrl = base.endsWith('/v1') ? `${base}/models` : `${base}/v1/models`;
 
   try {
@@ -304,6 +345,10 @@ export async function streamChatCompletions(
   }
 
   const base = normalizeEndpoint(config.endpoint);
+  const secCheck = validateEndpointSecurity(base);
+  if (!secCheck.valid) {
+    throw new LocalLlmOfflineError(secCheck.reason || '보안 정책상 HTTPS 연결만 허용됩니다.');
+  }
   const chatUrl = base.endsWith('/v1') ? `${base}/chat/completions` : `${base}/v1/chat/completions`;
 
   const headers: Record<string, string> = {
