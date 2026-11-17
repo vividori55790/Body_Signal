@@ -1,34 +1,20 @@
-# Body Signal - App Features Overview (`v2.0.0`)
+# Body Signal — Implemented Features (`v2.0.1`)
 
-## Summary
+## 1. Pain & Symptom Logging
+- **1-Second Acute Pain Mode**: Rapid oversized SOS severity capture with quick body region chips.
+- **3-Second Quick Logger**: Dashboard inline intensity (`0–10` NRS) and quick medication buttons.
+- **Full Entry Form & PQRST**: Detailed condition linking, front/back interactive BodyMap, pain qualities, radiation, triggers, relieving factors, Red Flag warnings, and medication intake tracking.
+- **Post-Medication Follow-up**: Re-evaluate pain intensity `1–2 hours` after dosing to measure drug response.
 
-**Body Signal (Bignal)** is a local-first, privacy-focused health and symptom tracking Android/PWA application licensed under `GPL-3.0-only`. All records, medications, and diagnostic images are encrypted on-device with zero cloud accounts, ads, or trackers.
+## 2. Clinical Consultation & Analytics
+- **30-Second Doctor View & SOAP EMR**: Aggregates symptoms by medical department (`Orthopedics / Rehabilitation`, `Neurology / Neurosurgery`, `Gastroenterology`, `Internal Medicine / General`), highlights Red Flags, and copies formatted Standard or SOAP summaries.
+- **Calendar Heatmap & Statistics**: Monthly/daily pain trends, NRS progression charts, and condition timeline views.
+- **Optional On-Device AI Briefing**: Strictly loopback-only (`localhost`, `127.0.0.1`, `[::1]`) or built-in device edge AI (`window.ai`) for clinical summaries and Q&A.
 
----
+## 3. Diagnostic Vault & Insurance Readiness
+- **Encrypted Diagnostic Archive**: Store hospital photos, receipts, and lab memos with automatic EXIF stripping and AES-GCM 256 encryption.
+- **Indemnity Claim Tracker**: Tracks diagnostic records and upcoming indemnity insurance claim filing deadlines.
 
-## Core Features
-
-1. **Brand Launch Splash & Mandatory First-Use Disclaimer**
-   - Displays the Bignal brand splash screen on launch before transitioning to the security LockScreen.
-   - Requires explicit acknowledgment of the medical, emergency, and local backup responsibility disclaimer before first use (re-readable anytime in Settings).
-
-2. **Disease-Centered Tracking & Unassigned Symptom Grouping**
-   - Log pain and symptoms under an **existing condition**, as **unassigned**, or as a **new condition**.
-   - Batch-assign accumulated unassigned logs to a diagnosed condition later from the Dashboard.
-   - Supports a 1-second Acute Pain Mode, compact Dashboard Quick Logger, and full PQRST entry form.
-
-3. **Organic BodyMap & Ephemeral Pain Slider**
-   - Interactive front/back human silhouette with spray-paint region selection and multi-part department mapping.
-   - 1–10 NRS pain buttons that morph into a smooth horizontal slider on press/hold-slide and return cleanly on release.
-
-4. **30-Second Clinical Briefing**
-   - Organizes symptoms, trends, red-flag alerts, and medication efficacy by medical department.
-   - Includes one-tap EMR text export and print layout, plus an optional lab toggle for strictly on-device loopback LLM summaries (`localhost` / `127.0.0.1` / `[::1]` only; external hosts blocked).
-
-5. **Encrypted Diagnostic & Insurance Vault**
-   - Strips image EXIF metadata before encrypting diagnostic documents and receipts with AES-GCM 256.
-   - Supports Grid/Feed switching and automatic 3-year indemnity insurance claim deadline calculations.
-
-6. **Hardware-Backed On-Device Security**
-   - Fail-closed startup gating, mandatory 6-digit PBKDF2 PIN setup on first launch, non-extractable WebCrypto session key vault, and 3-minute idle auto-lock.
-   - Native Android root/hook/debugger integrity detection, `AndroidKeyStore` + `BiometricPrompt` (`DEVICE_CREDENTIAL`) with atomic key rotation, offline RFC 6238 TOTP 2FA with replay/lockout guards, `FLAG_SECURE` / assistant screen-context blocking, strict CSP, R8 release hardening, SHA-256 audit chains, CSV plaintext/formula-injection warning, and passphrase-encrypted AES-256 backup export/import.
+## 4. Security, Privacy & Bilingual UX
+- **100% Offline & Bilingual**: Automatic first-launch locale detection (`English` / `한국어`) plus instant Settings toggle.
+- **Defense-in-Depth Protection**: Mandatory 6-digit PIN, non-extractable session key, 3-minute idle auto-lock, AndroidKeyStore + OS biometric/credential unlock, offline TOTP 2FA, native root/hook/debugger check, `FLAG_SECURE`, Privacy Mask overlay, and encrypted JSON backups (plus warned, formula-sanitized CSV exports).

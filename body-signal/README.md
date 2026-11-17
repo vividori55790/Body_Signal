@@ -1,23 +1,28 @@
 # Body Signal (`body-signal`)
 
-> **100% on-device encrypted pain, symptom, clinical briefing, and diagnostic vault app** built with React 19, TypeScript, Vite, Tailwind CSS, and Capacitor 8 (`GPL-3.0-only`).
+Frontend React/TypeScript web app and Capacitor Android project for **Body Signal (Bignal)** (`com.bodysignal.app`, `v2.0.1`).
 
-See the repository root [README](../README.md) for the full project overview and release build instructions.
+See the root [README.md](../README.md) for the full project overview, security architecture, and F-Droid metadata links.
 
-## Key Documents
+## Tech Stack
 
-- [APP_FEATURES.md](APP_FEATURES.md) — Current feature overview (`v2.0.0`)
-- [APP_DEPLOYMENT.md](APP_DEPLOYMENT.md) — Android APK & F-Droid source build guide
-- [PRIVACY.md](PRIVACY.md) — Local-first privacy & encryption policy
-- [TERMS.md](TERMS.md) — Usage guidance and medical disclaimer
-- [fdroid/README.md](fdroid/README.md) — F-Droid release checklist and metadata
+- **UI & Charts**: React 19, TypeScript, Tailwind CSS, `lucide-react`, `recharts`
+- **Local Storage & Validation**: IndexedDB (`idb`), Zod (`zod`), Web Crypto AES-GCM 256 / PBKDF2
+- **Native Shell**: Capacitor 8 (`@capacitor/android`, `@capacitor/app`, `@capacitor/haptics`, `@capacitor/local-notifications`)
 
-## Local Commands
+## Common Scripts
 
 ```bash
 npm ci
-npm run lint
-npm run build
+npm run dev          # Local development server
+npm run lint         # ESLint check
+npx tsc --noEmit     # TypeScript type check
+npm run build        # Production web bundle -> dist/
+npx cap sync android # Sync web bundle into android/
+
+# Verification Suites
+node test/security_hardening_test.mjs
+node scripts/test-m3-security.mjs
 npm run test:data
-node test/run-all-tests.mjs
+npm run test:e2e
 ```
