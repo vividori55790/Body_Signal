@@ -24,6 +24,14 @@ export interface SecureAuthPlugin {
     migrateHexKey?: string;
   }): Promise<{ hexKey: string }>;
   clearAllHardwareSecrets(): Promise<{ success: boolean }>;
+  checkDeviceIntegrity(): Promise<{
+    secure: boolean;
+    rooted: boolean;
+    hooked: boolean;
+    debuggerAttached: boolean;
+    reason: string;
+  }>;
+  clearWebViewMemory(): Promise<{ success: boolean }>;
 }
 
 const SecureAuth = registerPlugin<SecureAuthPlugin>('SecureAuth');

@@ -1,23 +1,30 @@
 package com.bodysignal.app;
 
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.app.assist.AssistContent;
 import android.content.Intent;
 import android.content.res.Configuration;
 import android.os.Build;
 import android.os.Bundle;
 import android.view.WindowManager;
+import android.webkit.WebView;
 import com.getcapacitor.BridgeActivity;
 
 public class MainActivity extends BridgeActivity {
     private Object screenCaptureCallback;
+    private boolean securityBlocked = false;
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(SecureAuthPlugin.class);
         super.onCreate(savedInstanceState);
+        if (!BuildConfig.DEBUG) {
+            WebView.setWebContentsDebuggingEnabled(false);
+        }
         applyScreenSecurity();
         applyFontScale();
+        enforceDeviceIntegrity();
     }
 
     @Override
@@ -54,6 +61,33 @@ public class MainActivity extends BridgeActivity {
         super.onResume();
         applyScreenSecurity();
         applyFontScale();
+        enforceDeviceIntegrity();
+    }
+
+    @Override
+    public void onDestroy() {
+        if (getBridge() != null && getBridge().getWebView() != null) {
+            getBridge().getWebView().clearCache(true);
+            getBridge().getWebView().clearFormData();
+        }
+        super.onDestroy();
+    }
+
+    private void enforceDeviceIntegrity() {
+        SecurityCheck.Result integrity = SecurityCheck.assessDevice(this);
+        if (!integrity.secure && !securityBlocked) {
+            securityBlocked = true;
+            if (getBridge() != null && getBridge().getWebView() != null) {
+                getBridge().getWebView().stopLoading();
+                getBridge().getWebView().loadUrl("about:blank");
+            }
+            new AlertDialog.Builder(this)
+                .setTitle("보안 위협 감지")
+                .setMessage(integrity.reason + "\n\n민감한 의료 데이터 보호를 위해 앱을 종료합니다.")
+                .setCancelable(false)
+                .setPositiveButton("앱 종료", (dialog, which) -> finishAffinity())
+                .show();
+        }
     }
 
     @Override

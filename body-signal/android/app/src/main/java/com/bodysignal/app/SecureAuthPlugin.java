@@ -28,6 +28,7 @@ import com.getcapacitor.annotation.CapacitorPlugin;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyStore;
 import java.security.SecureRandom;
+import java.util.Arrays;
 import java.util.concurrent.Executor;
 
 import javax.crypto.Cipher;
@@ -39,10 +40,13 @@ import javax.crypto.spec.GCMParameterSpec;
 public class SecureAuthPlugin extends Plugin {
     private static final String ANDROID_KEYSTORE = "AndroidKeyStore";
     private static final String BIO_KEY_ALIAS = "bignal_bio_pin_key";
+    private static final String BIO_KEY_ALIAS_ALT = "bignal_bio_pin_key_alt";
+    private static final String LEGACY_CRED_KEY_ALIAS = "bignal_legacy_cred_pin_key";
     private static final String DEVICE_KEY_ALIAS = "bignal_device_wrap_key";
     private static final String PREFS_NAME = "bignal_secure_keystore_prefs";
     private static final String PREF_BIO_CT = "bio_pin_ct";
     private static final String PREF_BIO_IV = "bio_pin_iv";
+    private static final String PREF_BIO_KEY_ALIAS = "bio_key_alias";
     private static final String PREF_BIO_MODE = "bio_auth_mode"; // "keystore_auth" | "legacy_keyguard"
     private static final String PREF_BIO_ENROLLED_AT = "bio_enrolled_at";
     private static final String PREF_DEVICE_KEY_CT = "device_key_ct";
@@ -75,21 +79,21 @@ public class SecureAuthPlugin extends Plugin {
         return km != null && km.isDeviceSecure();
     }
 
-    private SecretKey getOrCreateBioKey(boolean recreate) throws Exception {
+    private SecretKey getOrCreateBioKey(String alias, boolean recreate) throws Exception {
         KeyStore keyStore = KeyStore.getInstance(ANDROID_KEYSTORE);
         keyStore.load(null);
 
-        if (recreate && keyStore.containsAlias(BIO_KEY_ALIAS)) {
-            keyStore.deleteEntry(BIO_KEY_ALIAS);
+        if (recreate && keyStore.containsAlias(alias)) {
+            keyStore.deleteEntry(alias);
         }
 
-        if (!keyStore.containsAlias(BIO_KEY_ALIAS)) {
+        if (!keyStore.containsAlias(alias)) {
             KeyGenerator keyGenerator = KeyGenerator.getInstance(
                 KeyProperties.KEY_ALGORITHM_AES,
                 ANDROID_KEYSTORE
             );
             KeyGenParameterSpec.Builder builder = new KeyGenParameterSpec.Builder(
-                BIO_KEY_ALIAS,
+                alias,
                 KeyProperties.PURPOSE_ENCRYPT | KeyProperties.PURPOSE_DECRYPT
             )
                 .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
@@ -109,7 +113,55 @@ public class SecureAuthPlugin extends Plugin {
             return keyGenerator.generateKey();
         }
 
-        return ((KeyStore.SecretKeyEntry) keyStore.getEntry(BIO_KEY_ALIAS, null)).getSecretKey();
+        return ((KeyStore.SecretKeyEntry) keyStore.getEntry(alias, null)).getSecretKey();
+    }
+
+    @SuppressWarnings("deprecation")
+    private SecretKey getOrCreateLegacyCredentialKey(boolean recreate) throws Exception {
+        KeyStore keyStore = KeyStore.getInstance(ANDROID_KEYSTORE);
+        keyStore.load(null);
+
+        if (recreate && keyStore.containsAlias(LEGACY_CRED_KEY_ALIAS)) {
+            keyStore.deleteEntry(LEGACY_CRED_KEY_ALIAS);
+        }
+
+        if (!keyStore.containsAlias(LEGACY_CRED_KEY_ALIAS)) {
+            KeyGenerator keyGenerator = KeyGenerator.getInstance(
+                KeyProperties.KEY_ALGORITHM_AES,
+                ANDROID_KEYSTORE
+            );
+            KeyGenParameterSpec.Builder builder = new KeyGenParameterSpec.Builder(
+                LEGACY_CRED_KEY_ALIAS,
+                KeyProperties.PURPOSE_ENCRYPT | KeyProperties.PURPOSE_DECRYPT
+            )
+                .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
+                .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
+                .setKeySize(256)
+                .setUserAuthenticationRequired(true);
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                builder.setUserAuthenticationParameters(15, KeyProperties.AUTH_DEVICE_CREDENTIAL);
+            } else {
+                builder.setUserAuthenticationValidityDurationSeconds(15);
+            }
+
+            keyGenerator.init(builder.build());
+            return keyGenerator.generateKey();
+        }
+
+        return ((KeyStore.SecretKeyEntry) keyStore.getEntry(LEGACY_CRED_KEY_ALIAS, null)).getSecretKey();
+    }
+
+    private void deleteKeyAliasQuietly(String alias) {
+        if (alias == null) return;
+        try {
+            KeyStore keyStore = KeyStore.getInstance(ANDROID_KEYSTORE);
+            keyStore.load(null);
+            if (keyStore.containsAlias(alias)) {
+                keyStore.deleteEntry(alias);
+            }
+        } catch (Exception ignored) {
+        }
     }
 
     private SecretKey getOrCreateDeviceWrapKey() throws Exception {
@@ -141,17 +193,13 @@ public class SecureAuthPlugin extends Plugin {
         getPrefs().edit()
             .remove(PREF_BIO_CT)
             .remove(PREF_BIO_IV)
+            .remove(PREF_BIO_KEY_ALIAS)
             .remove(PREF_BIO_MODE)
             .remove(PREF_BIO_ENROLLED_AT)
             .apply();
-        try {
-            KeyStore keyStore = KeyStore.getInstance(ANDROID_KEYSTORE);
-            keyStore.load(null);
-            if (keyStore.containsAlias(BIO_KEY_ALIAS)) {
-                keyStore.deleteEntry(BIO_KEY_ALIAS);
-            }
-        } catch (Exception ignored) {
-        }
+        deleteKeyAliasQuietly(BIO_KEY_ALIAS);
+        deleteKeyAliasQuietly(BIO_KEY_ALIAS_ALT);
+        deleteKeyAliasQuietly(LEGACY_CRED_KEY_ALIAS);
     }
 
     @PluginMethod
@@ -200,8 +248,13 @@ public class SecureAuthPlugin extends Plugin {
         // API 30+: Unified BiometricStrong + DeviceCredential hardware-backed CryptoObject
         // API 24-29 with strong biometric: Strong biometric CryptoObject
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R || isStrongBiometricAvailable()) {
+            final String currentAlias = getPrefs().getString(PREF_BIO_KEY_ALIAS, BIO_KEY_ALIAS);
+            final boolean hasExisting = getPrefs().contains(PREF_BIO_CT);
+            final String targetAlias = hasExisting
+                ? (BIO_KEY_ALIAS.equals(currentAlias) ? BIO_KEY_ALIAS_ALT : BIO_KEY_ALIAS)
+                : BIO_KEY_ALIAS;
             try {
-                SecretKey key = getOrCreateBioKey(true);
+                SecretKey key = getOrCreateBioKey(targetAlias, true);
                 Cipher cipher = Cipher.getInstance(TRANSFORMATION);
                 cipher.init(Cipher.ENCRYPT_MODE, key);
 
@@ -220,6 +273,7 @@ public class SecureAuthPlugin extends Plugin {
                                         ? result.getCryptoObject().getCipher()
                                         : null;
                                     if (authCipher == null) {
+                                        deleteKeyAliasQuietly(targetAlias);
                                         JSObject ret = new JSObject();
                                         ret.put("success", false);
                                         call.resolve(ret);
@@ -232,15 +286,20 @@ public class SecureAuthPlugin extends Plugin {
                                     getPrefs().edit()
                                         .putString(PREF_BIO_CT, Base64.encodeToString(encrypted, Base64.NO_WRAP))
                                         .putString(PREF_BIO_IV, Base64.encodeToString(iv, Base64.NO_WRAP))
+                                        .putString(PREF_BIO_KEY_ALIAS, targetAlias)
                                         .putString(PREF_BIO_MODE, "keystore_auth")
                                         .putString(PREF_BIO_ENROLLED_AT, String.valueOf(System.currentTimeMillis()))
                                         .apply();
+
+                                    if (!targetAlias.equals(currentAlias)) {
+                                        deleteKeyAliasQuietly(currentAlias);
+                                    }
 
                                     JSObject ret = new JSObject();
                                     ret.put("success", true);
                                     call.resolve(ret);
                                 } catch (Exception e) {
-                                    clearBioState();
+                                    deleteKeyAliasQuietly(targetAlias);
                                     JSObject ret = new JSObject();
                                     ret.put("success", false);
                                     call.resolve(ret);
@@ -250,6 +309,8 @@ public class SecureAuthPlugin extends Plugin {
                             @Override
                             public void onAuthenticationError(int errorCode, @NonNull CharSequence errString) {
                                 super.onAuthenticationError(errorCode, errString);
+                                // Clean up only the pending key; preserve existing enrollment if cancelled
+                                deleteKeyAliasQuietly(targetAlias);
                                 JSObject ret = new JSObject();
                                 ret.put("success", false);
                                 ret.put("errorCode", errorCode);
@@ -277,7 +338,7 @@ public class SecureAuthPlugin extends Plugin {
                 });
                 return;
             } catch (Exception e) {
-                clearBioState();
+                deleteKeyAliasQuietly(targetAlias);
                 JSObject ret = new JSObject();
                 ret.put("success", false);
                 call.resolve(ret);
@@ -318,15 +379,16 @@ public class SecureAuthPlugin extends Plugin {
             return;
         }
         try {
-            SecretKey wrapKey = getOrCreateDeviceWrapKey();
+            SecretKey legacyKey = getOrCreateLegacyCredentialKey(true);
             Cipher cipher = Cipher.getInstance(TRANSFORMATION);
-            cipher.init(Cipher.ENCRYPT_MODE, wrapKey);
+            cipher.init(Cipher.ENCRYPT_MODE, legacyKey);
             byte[] encrypted = cipher.doFinal(pin.getBytes(StandardCharsets.UTF_8));
             byte[] iv = cipher.getIV();
 
             getPrefs().edit()
                 .putString(PREF_BIO_CT, Base64.encodeToString(encrypted, Base64.NO_WRAP))
                 .putString(PREF_BIO_IV, Base64.encodeToString(iv, Base64.NO_WRAP))
+                .putString(PREF_BIO_KEY_ALIAS, LEGACY_CRED_KEY_ALIAS)
                 .putString(PREF_BIO_MODE, "legacy_keyguard")
                 .putString(PREF_BIO_ENROLLED_AT, String.valueOf(System.currentTimeMillis()))
                 .apply();
@@ -377,7 +439,8 @@ public class SecureAuthPlugin extends Plugin {
         }
 
         try {
-            SecretKey key = getOrCreateBioKey(false);
+            String activeAlias = prefs.getString(PREF_BIO_KEY_ALIAS, BIO_KEY_ALIAS);
+            SecretKey key = getOrCreateBioKey(activeAlias, false);
             byte[] iv = Base64.decode(ivB64, Base64.NO_WRAP);
             byte[] ct = Base64.decode(ctB64, Base64.NO_WRAP);
 
@@ -407,6 +470,7 @@ public class SecureAuthPlugin extends Plugin {
 
                                 byte[] plainBytes = authCipher.doFinal(ct);
                                 String pin = new String(plainBytes, StandardCharsets.UTF_8);
+                                Arrays.fill(plainBytes, (byte) 0);
 
                                 JSObject ret = new JSObject();
                                 ret.put("success", true);
@@ -479,17 +543,19 @@ public class SecureAuthPlugin extends Plugin {
             return;
         }
         try {
-            SecretKey wrapKey = getOrCreateDeviceWrapKey();
+            SecretKey legacyKey = getOrCreateLegacyCredentialKey(false);
             Cipher cipher = Cipher.getInstance(TRANSFORMATION);
             cipher.init(
                 Cipher.DECRYPT_MODE,
-                wrapKey,
+                legacyKey,
                 new GCMParameterSpec(GCM_TAG_BITS, Base64.decode(ivB64, Base64.NO_WRAP))
             );
             byte[] plain = cipher.doFinal(Base64.decode(ctB64, Base64.NO_WRAP));
+            String pin = new String(plain, StandardCharsets.UTF_8);
+            Arrays.fill(plain, (byte) 0);
             JSObject ret = new JSObject();
             ret.put("success", true);
-            ret.put("pin", new String(plain, StandardCharsets.UTF_8));
+            ret.put("pin", pin);
             call.resolve(ret);
         } catch (Exception e) {
             JSObject ret = new JSObject();
@@ -572,6 +638,35 @@ public class SecureAuthPlugin extends Plugin {
                 keyStore.deleteEntry(DEVICE_KEY_ALIAS);
             }
         } catch (Exception ignored) {
+        }
+        JSObject ret = new JSObject();
+        ret.put("success", true);
+        call.resolve(ret);
+    }
+
+    @PluginMethod
+    public void checkDeviceIntegrity(PluginCall call) {
+        SecurityCheck.Result result = SecurityCheck.assessDevice(getContext());
+        JSObject ret = new JSObject();
+        ret.put("secure", result.secure);
+        ret.put("rooted", result.rooted);
+        ret.put("hooked", result.hooked);
+        ret.put("debuggerAttached", result.debuggerAttached);
+        ret.put("reason", result.reason);
+        call.resolve(ret);
+    }
+
+    @PluginMethod
+    public void clearWebViewMemory(PluginCall call) {
+        Activity activity = getActivity();
+        if (activity != null && getBridge() != null && getBridge().getWebView() != null) {
+            activity.runOnUiThread(() -> {
+                try {
+                    getBridge().getWebView().clearCache(true);
+                    getBridge().getWebView().clearFormData();
+                } catch (Exception ignored) {
+                }
+            });
         }
         JSObject ret = new JSObject();
         ret.put("success", true);
