@@ -43,6 +43,7 @@ import {
   ChatMessage,
   LocalLlmOfflineError,
   testLocalLlmConnection,
+  isOnDeviceLlmEndpoint,
 } from '../utils/localLlm';
 
 export const ClinicalBriefingPage: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
@@ -729,11 +730,21 @@ export const ClinicalBriefingPage: React.FC<{ embedded?: boolean }> = ({ embedde
             <div>
               <h3 className="font-bold text-xs text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
                 로컬 AI에게 내 증상 물어보기
-                <span className="text-[9px] bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 font-bold px-1.5 py-0.5 rounded-full">
-                  100% 프라이빗 Q&A
+                <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${
+                  isOnDeviceLlmEndpoint(settings.localLlm)
+                    ? 'bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300'
+                    : 'bg-rose-100 dark:bg-rose-950 text-rose-700 dark:text-rose-300'
+                }`}>
+                  {isOnDeviceLlmEndpoint(settings.localLlm)
+                    ? '100% 프라이빗 Q&A'
+                    : '외부 엔드포인트 차단됨'}
                 </span>
               </h3>
-              <p className="text-[10px] text-slate-400">내 통증 기록 기반 실시간 맞춤 상담 (외부 유출 0%)</p>
+              <p className="text-[10px] text-slate-400">
+                {isOnDeviceLlmEndpoint(settings.localLlm)
+                  ? '내 통증 기록 기반 실시간 맞춤 상담 (외부 유출 0%)'
+                  : '보안 정책상 온디바이스(built-in / localhost) AI만 허용됩니다'}
+              </p>
             </div>
           </div>
           {showQaPanel ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
