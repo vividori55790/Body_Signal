@@ -1,4 +1,4 @@
-# Body Signal - App Features Overview (`v1.2.1`)
+# Body Signal - App Features Overview (`v2.0.0`)
 
 ## Summary
 
@@ -23,11 +23,12 @@
 
 4. **30-Second Clinical Briefing**
    - Organizes symptoms, trends, red-flag alerts, and medication efficacy by medical department.
-   - Includes one-tap EMR text export and print layout, plus an optional lab toggle for local-network LLM summaries (Ollama/LM Studio; HTTPS enforced for non-loopback endpoints).
+   - Includes one-tap EMR text export and print layout, plus an optional lab toggle for strictly on-device loopback LLM summaries (`localhost` / `127.0.0.1` / `[::1]` only; external hosts blocked).
 
 5. **Encrypted Diagnostic & Insurance Vault**
    - Strips image EXIF metadata before encrypting diagnostic documents and receipts with AES-GCM 256.
    - Supports Grid/Feed switching and automatic 3-year indemnity insurance claim deadline calculations.
 
 6. **Hardware-Backed On-Device Security**
-   - Fail-closed startup gating, `AndroidKeyStore` + `BiometricPrompt` (`DEVICE_CREDENTIAL`), 4-digit PBKDF2 PIN lock, offline RFC 6238 TOTP 2FA with one-time recovery codes, `FLAG_SECURE` / assistant screen-context blocking, SHA-256 audit chains, and passphrase-encrypted AES-256 backup export/import.
+   - Fail-closed startup gating, mandatory 6-digit PBKDF2 PIN setup on first launch, non-extractable WebCrypto session key vault, and 3-minute idle auto-lock.
+   - Native Android root/hook/debugger integrity detection, `AndroidKeyStore` + `BiometricPrompt` (`DEVICE_CREDENTIAL`) with atomic key rotation, offline RFC 6238 TOTP 2FA with replay/lockout guards, `FLAG_SECURE` / assistant screen-context blocking, strict CSP, R8 release hardening, SHA-256 audit chains, CSV plaintext/formula-injection warning, and passphrase-encrypted AES-256 backup export/import.

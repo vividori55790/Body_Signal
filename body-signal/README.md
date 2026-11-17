@@ -6,7 +6,7 @@ See the repository root [README](../README.md) for the full project overview and
 
 ## Key Documents
 
-- [APP_FEATURES.md](APP_FEATURES.md) — Current feature overview (`v1.2.1`)
+- [APP_FEATURES.md](APP_FEATURES.md) — Current feature overview (`v2.0.0`)
 - [APP_DEPLOYMENT.md](APP_DEPLOYMENT.md) — Android APK & F-Droid source build guide
 - [PRIVACY.md](PRIVACY.md) — Local-first privacy & encryption policy
 - [TERMS.md](TERMS.md) — Usage guidance and medical disclaimer
