@@ -95,7 +95,7 @@ export const LocalLlmConfigSchema = z.object({
 
 export type LocalLlmConfig = z.infer<typeof LocalLlmConfigSchema>;
 
-export const LogoVariantSchema = z.enum(['cube-3d', 'cube-2d', 'shield']);
+export const LogoVariantSchema = z.enum(['cube-3d', 'cube-2d']).catch('cube-3d');
 export type LogoVariant = z.infer<typeof LogoVariantSchema>;
 
 // User Settings

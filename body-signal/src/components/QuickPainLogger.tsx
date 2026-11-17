@@ -18,11 +18,29 @@ const QUICK_BODY_PARTS = [
   '발목/발',
 ];
 
+const BODY_PART_EN_MAP: Record<string, string> = {
+  '허리/요통': 'Lower Back',
+  '머리/두통': 'Head / Headache',
+  '목/경추': 'Neck',
+  '어깨/등': 'Shoulder / Back',
+  '무릎/관절': 'Knee / Joint',
+  '복부/위장': 'Abdomen / GI',
+  '손목/손': 'Wrist / Hand',
+  '발목/발': 'Ankle / Foot',
+};
+
 const QUICK_MEDS = ['타이레놀', '소염진통제', '처방약', '근이완제'];
+const QUICK_MED_EN_MAP: Record<string, string> = {
+  타이레놀: 'Tylenol',
+  소염진통제: 'NSAID',
+  처방약: 'Rx Med',
+  근이완제: 'Muscle Relaxant',
+};
 
 export const QuickPainLogger: React.FC<{ onSaved?: () => void }> = ({ onSaved }) => {
   const { conditions, saveEntry } = useHealth();
   const { settings } = useSettings();
+  const isEn = settings.language === 'en';
   const [selectedIntensity, setSelectedIntensity] = useState<number>(5);
   const [selectedPart, setSelectedPart] = useState<string>('허리/요통');
   const [selectedMed, setSelectedMed] = useState<string>('');
@@ -133,13 +151,15 @@ export const QuickPainLogger: React.FC<{ onSaved?: () => void }> = ({ onSaved })
           </span>
           <div>
             <h3 className="font-bold text-xs text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
-              3초 퀵 통증 기록 (간편 모드)
+              {isEn ? '3-Second Quick Pain Log' : '3초 퀵 통증 기록 (간편 모드)'}
             </h3>
-            <p className="text-[10px] text-slate-400">화면 이동 없이 3번의 탭으로 즉시 저장</p>
+            <p className="text-[10px] text-slate-400">
+              {isEn ? 'Save immediately in 3 taps without leaving Home' : '화면 이동 없이 3번의 탭으로 즉시 저장'}
+            </p>
           </div>
         </div>
         <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/80 px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800/50">
-          터치 3번으로 끝
+          {isEn ? '3 Taps' : '터치 3번으로 끝'}
         </span>
       </div>
 
@@ -156,7 +176,7 @@ export const QuickPainLogger: React.FC<{ onSaved?: () => void }> = ({ onSaved })
       {/* Step 2: Body Part Quick Chips */}
       <div className="space-y-1.5">
         <span className="block text-[10px] font-bold text-slate-400 uppercase">
-          2. 아픈 부위 선택 (1-탭)
+          {isEn ? '2. Affected Area (1-Tap)' : '2. 아픈 부위 선택 (1-탭)'}
         </span>
         <div className="flex flex-wrap gap-1.5">
           {QUICK_BODY_PARTS.map((part) => {
@@ -172,7 +192,7 @@ export const QuickPainLogger: React.FC<{ onSaved?: () => void }> = ({ onSaved })
                     : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700/80 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-750 active:scale-95'
                 }`}
               >
-                {part}
+                {isEn ? BODY_PART_EN_MAP[part] || part : part}
               </button>
             );
           })}
@@ -182,11 +202,12 @@ export const QuickPainLogger: React.FC<{ onSaved?: () => void }> = ({ onSaved })
       {/* Step 3: Quick Medication Chip (Optional) */}
       <div className="space-y-1.5">
         <span className="block text-[10px] font-bold text-slate-400 uppercase">
-          3. 복약 여부 (선택)
+          {isEn ? '3. Medication Taken (Optional)' : '3. 복약 여부 (선택)'}
         </span>
         <div className="flex flex-wrap gap-1.5">
           {availableMeds.map((med) => {
             const isSelected = selectedMed === med;
+            const displayMed = isEn ? QUICK_MED_EN_MAP[med] || med : med;
             return (
               <button
                 key={med}
@@ -198,7 +219,7 @@ export const QuickPainLogger: React.FC<{ onSaved?: () => void }> = ({ onSaved })
                     : 'bg-slate-100 dark:bg-slate-800/70 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700/60 active:scale-95'
                 }`}
               >
-                {med} {isSelected && '✓'}
+                {displayMed} {isSelected && '✓'}
               </button>
             );
           })}
@@ -210,7 +231,7 @@ export const QuickPainLogger: React.FC<{ onSaved?: () => void }> = ({ onSaved })
             }}
             className="min-h-[32px] px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border border-dashed border-emerald-300 dark:border-emerald-700 active:scale-95 flex items-center gap-1"
           >
-            <Plus size={12} /> + 약 추가
+            <Plus size={12} /> {isEn ? 'Add Med' : '+ 약 추가'}
           </button>
         </div>
       </div>
@@ -238,12 +259,14 @@ export const QuickPainLogger: React.FC<{ onSaved?: () => void }> = ({ onSaved })
         {justSaved ? (
           <>
             <Check size={18} />
-            기록되었습니다! (3초 저장 완료)
+            {isEn ? 'Saved in 3 seconds!' : '기록되었습니다! (3초 저장 완료)'}
           </>
         ) : (
           <>
             <Zap size={16} className="fill-current" />
-            [NRS {selectedIntensity} • {selectedPart}] 3초 바로 기록하기
+            {isEn
+              ? `[NRS ${selectedIntensity} • ${BODY_PART_EN_MAP[selectedPart] || selectedPart}] Save Quickly`
+              : `[NRS ${selectedIntensity} • ${selectedPart}] 3초 바로 기록하기`}
           </>
         )}
       </button>

@@ -19,7 +19,8 @@ import CalendarHeatmap from '../components/CalendarHeatmap';
 
 export const CalendarPage: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
   const { logs, conditions, diaryEntries, saveDiaryEntry } = useHealth();
-  const { t } = useSettings();
+  const { settings, t } = useSettings();
+  const isEn = settings.language === 'en';
 
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
@@ -57,7 +58,11 @@ export const CalendarPage: React.FC<{ embedded?: boolean }> = ({ embedded = fals
         return {
           ...l,
           conditionLabel:
-            l.conditionId === UNASSIGNED_CONDITION_ID ? '원인 미상' : cond?.label || '미지정',
+            l.conditionId === UNASSIGNED_CONDITION_ID
+              ? isEn
+                ? 'Unassigned'
+                : '원인 미상'
+              : cond?.label || (isEn ? 'Unspecified' : '미지정'),
           bodyPart: l.bodyPartOverride || cond?.bodyPart || '',
         };
       });
@@ -92,7 +97,7 @@ export const CalendarPage: React.FC<{ embedded?: boolean }> = ({ embedded = fals
             <ChevronLeft size={18} />
           </button>
           <span className="font-bold text-xs w-28 text-center">
-            {format(currentMonth, 'yyyy년 M월')}
+            {format(currentMonth, isEn ? 'MMM yyyy' : 'yyyy년 M월')}
           </span>
           <button
             type="button"
@@ -110,7 +115,7 @@ export const CalendarPage: React.FC<{ embedded?: boolean }> = ({ embedded = fals
       {/* Calendar Grid */}
       <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden shadow-sm">
         <div className="grid grid-cols-7 border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50">
-          {['일', '월', '화', '수', '목', '금', '토'].map((d, idx) => (
+          {(isEn ? ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] : ['일', '월', '화', '수', '목', '금', '토']).map((d, idx) => (
             <div
               key={d}
               className={`py-2 text-center text-[11px] font-bold uppercase ${
@@ -160,10 +165,10 @@ export const CalendarPage: React.FC<{ embedded?: boolean }> = ({ embedded = fals
       <div className="space-y-4 animate-in fade-in">
         <div className="flex items-center justify-between">
           <h2 className="font-bold text-sm text-slate-700 dark:text-slate-200">
-            {format(selectedDate, 'yyyy년 M월 d일 (EEEE)')}
+            {format(selectedDate, isEn ? 'MMM d, yyyy (EEE)' : 'yyyy년 M월 d일 (EEEE)')}
           </h2>
           <span className="text-xs font-bold text-slate-400">
-            {selectedDateLogs.length}건의 기록
+            {isEn ? `${selectedDateLogs.length} logs` : `${selectedDateLogs.length}건의 기록`}
           </span>
         </div>
 

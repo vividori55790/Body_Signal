@@ -20,8 +20,11 @@ export type DepartmentId = 'orthopedics' | 'neurology' | 'gastroenterology' | 'i
 export interface DepartmentMeta {
   id: DepartmentId;
   name: DepartmentType;
+  nameEn: string;
   shortName: string;
+  shortNameEn: string;
   description: string;
+  descriptionEn: string;
   badgeColor: string; // Tailwind class
   accentColor: string; // Tailwind class
   iconName: string;
@@ -31,8 +34,11 @@ export const DEPARTMENT_METAS: Record<DepartmentType, DepartmentMeta> = {
   [DEPARTMENT_KEYS.ORTHOPEDICS]: {
     id: 'orthopedics',
     name: DEPARTMENT_KEYS.ORTHOPEDICS,
+    nameEn: 'Orthopedics / Rehabilitation',
     shortName: '정형·재활',
+    shortNameEn: 'Ortho / Rehab',
     description: '척추, 관절, 사지 근골격계 통증',
+    descriptionEn: 'Spine, joint, and musculoskeletal extremity pain',
     badgeColor: 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300 border-blue-200 dark:border-blue-800',
     accentColor: 'border-blue-500',
     iconName: 'Activity',
@@ -40,8 +46,11 @@ export const DEPARTMENT_METAS: Record<DepartmentType, DepartmentMeta> = {
   [DEPARTMENT_KEYS.NEUROLOGY]: {
     id: 'neurology',
     name: DEPARTMENT_KEYS.NEUROLOGY,
+    nameEn: 'Neurology / Neurosurgery',
     shortName: '신경과·신경외과',
+    shortNameEn: 'Neurology',
     description: '두통, 신경통, 저림 및 방사통',
+    descriptionEn: 'Headache, neuralgia, numbness, and radiating pain',
     badgeColor: 'bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300 border-purple-200 dark:border-purple-800',
     accentColor: 'border-purple-500',
     iconName: 'Brain',
@@ -49,8 +58,11 @@ export const DEPARTMENT_METAS: Record<DepartmentType, DepartmentMeta> = {
   [DEPARTMENT_KEYS.GASTROENTEROLOGY]: {
     id: 'gastroenterology',
     name: DEPARTMENT_KEYS.GASTROENTEROLOGY,
+    nameEn: 'Gastroenterology',
     shortName: '소화기내과',
+    shortNameEn: 'GI',
     description: '복부 통증, 위장관 장애, 소화기 증상',
+    descriptionEn: 'Abdominal pain, GI distress, and digestive symptoms',
     badgeColor: 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 border-amber-200 dark:border-amber-800',
     accentColor: 'border-amber-500',
     iconName: 'ShieldAlert',
@@ -58,8 +70,11 @@ export const DEPARTMENT_METAS: Record<DepartmentType, DepartmentMeta> = {
   [DEPARTMENT_KEYS.INTERNAL_MEDICINE]: {
     id: 'internal_medicine',
     name: DEPARTMENT_KEYS.INTERNAL_MEDICINE,
+    nameEn: 'Internal Medicine / General',
     shortName: '일반내과·기타',
+    shortNameEn: 'Internal Med',
     description: '전신 증상, 미분류 통증 및 기타 만성 질환',
+    descriptionEn: 'Systemic symptoms, unclassified pain, and chronic conditions',
     badgeColor: 'bg-teal-100 text-teal-800 dark:bg-teal-950 dark:text-teal-300 border-teal-200 dark:border-teal-800',
     accentColor: 'border-teal-500',
     iconName: 'Stethoscope',
@@ -84,7 +99,16 @@ export function classifyAnatomicalPart(partName?: string | null): DepartmentType
     lower.includes('저림') ||
     lower.includes('방사통') ||
     lower.includes('어지럼') ||
-    lower.includes('뇌')
+    lower.includes('뇌') ||
+    lower.includes('head') ||
+    lower.includes('migraine') ||
+    lower.includes('facial') ||
+    lower.includes('nerve') ||
+    lower.includes('neuro') ||
+    lower.includes('numb') ||
+    lower.includes('tingl') ||
+    lower.includes('radiat') ||
+    lower.includes('dizz')
   ) {
     return DEPARTMENT_KEYS.NEUROLOGY;
   }
@@ -98,7 +122,12 @@ export function classifyAnatomicalPart(partName?: string | null): DepartmentType
     lower.includes('속쓰림') ||
     lower.includes('복통') ||
     lower.includes('배/') ||
-    lower.includes('소화')
+    lower.includes('소화') ||
+    lower.includes('abdom') ||
+    lower.includes('stomach') ||
+    lower.includes('belly') ||
+    lower.includes('gastr') ||
+    lower.includes('digest')
   ) {
     return DEPARTMENT_KEYS.GASTROENTEROLOGY;
   }
@@ -129,7 +158,26 @@ export function classifyAnatomicalPart(partName?: string | null): DepartmentType
     lower.includes('견갑골') ||
     lower.includes('발목') ||
     lower.includes('손목') ||
-    lower.includes('팔꿈치')
+    lower.includes('팔꿈치') ||
+    lower.includes('back') ||
+    lower.includes('lumbar') ||
+    lower.includes('neck') ||
+    lower.includes('cervical') ||
+    lower.includes('shoulder') ||
+    lower.includes('knee') ||
+    lower.includes('arm') ||
+    lower.includes('hand') ||
+    lower.includes('foot') ||
+    lower.includes('pelvis') ||
+    lower.includes('thigh') ||
+    lower.includes('calf') ||
+    lower.includes('spine') ||
+    lower.includes('disc') ||
+    lower.includes('joint') ||
+    lower.includes('hip') ||
+    lower.includes('ankle') ||
+    lower.includes('wrist') ||
+    lower.includes('elbow')
   ) {
     return DEPARTMENT_KEYS.ORTHOPEDICS;
   }
@@ -295,7 +343,35 @@ export function categorizeByDepartment(
 /**
  * Text summary generator maintaining exact department headers (T2.F12.5)
  */
-export function generateDepartmentSummaryText(groups: DepartmentBriefingGroup[]): string {
+export function generateDepartmentSummaryText(
+  groups: DepartmentBriefingGroup[],
+  lang?: 'ko' | 'en'
+): string {
+  const isEn =
+    (lang ?? (typeof document !== 'undefined' && document.documentElement?.dataset?.lang === 'en' ? 'en' : 'ko')) ===
+    'en';
+
+  if (isEn) {
+    let text = `[Pain Summary by Department]\n`;
+    groups.forEach((g) => {
+      text += `■ ${g.meta.nameEn}:\n`;
+      if (g.logCount === 0 && g.activeConditions.length === 0) {
+        text += `  - No recorded symptoms\n`;
+      } else {
+        const condList = g.conditions.map((c) => `${c.label} (${c.bodyPart})`).join(', ');
+        text += `  - Conditions: ${condList || 'Unspecified'}\n`;
+        text += `  - Pain Metrics: 7d Avg NRS ${g.avgIntensity7Days ?? g.avgIntensity ?? '-'}/10, Peak NRS ${g.peakIntensity ?? '-'}/10 (${g.logCount} logs)\n`;
+        if (g.medications.length > 0) {
+          text += `  - Medications: ${g.medications.join(', ')}\n`;
+        }
+        if (g.redFlags.length > 0) {
+          text += `  - 🚨 Red Flags: ${g.redFlags.join(', ')}\n`;
+        }
+      }
+    });
+    return text;
+  }
+
   let text = `[진료과별 통증 요약]\n`;
   groups.forEach((g) => {
     text += `■ ${g.departmentName}:\n`;

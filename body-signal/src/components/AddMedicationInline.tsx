@@ -15,9 +15,12 @@ export const AddMedicationInline: React.FC<AddMedicationInlineProps> = ({
   isOpen,
   onClose,
   onAdded,
-  placeholder = '약 이름 (예: 타이레놀, 세레브렉스)',
+  placeholder,
 }) => {
-  const { addMedicationPreset } = useSettings();
+  const { settings, addMedicationPreset } = useSettings();
+  const isEn = settings.language === 'en';
+  const resolvedPlaceholder =
+    placeholder || (isEn ? 'Medication name (e.g., Ibuprofen, Tylenol)' : '약 이름 (예: 타이레놀, 세레브렉스)');
   const [name, setName] = useState('');
   const [dosage, setDosage] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -39,7 +42,9 @@ export const AddMedicationInline: React.FC<AddMedicationInlineProps> = ({
 
     const validation = validateMedicationInput(name, dosage);
     if (!validation.valid) {
-      setError(validation.error || '약 이름을 확인해 주세요.');
+      setError(
+        validation.error || (isEn ? 'Please check the medication name.' : '약 이름을 확인해 주세요.')
+      );
       return;
     }
 
@@ -53,10 +58,10 @@ export const AddMedicationInline: React.FC<AddMedicationInlineProps> = ({
         setError(null);
         onAdded(formatted);
       } else {
-        setError('약 추가에 실패했습니다.');
+        setError(isEn ? 'Failed to add medication.' : '약 추가에 실패했습니다.');
       }
     } catch {
-      setError('저장 중 오류가 발생했습니다.');
+      setError(isEn ? 'An error occurred while saving.' : '저장 중 오류가 발생했습니다.');
     } finally {
       setIsSubmitting(false);
     }
@@ -74,14 +79,14 @@ export const AddMedicationInline: React.FC<AddMedicationInlineProps> = ({
               <Pill size={18} />
             </span>
             <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100">
-              새 복용 약 등록
+              {isEn ? 'Add Medication Preset' : '새 복용 약 등록'}
             </h3>
           </div>
           <button
             type="button"
             onClick={handleCancel}
             className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 active:scale-95"
-            aria-label="닫기"
+            aria-label={isEn ? 'Close' : '닫기'}
           >
             <X size={18} />
           </button>
@@ -90,14 +95,14 @@ export const AddMedicationInline: React.FC<AddMedicationInlineProps> = ({
         <form onSubmit={handleSubmit} className="space-y-3.5">
           <div>
             <label className="block text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">
-              약 이름 <span className="text-rose-500">*</span>
+              {isEn ? 'Medication Name' : '약 이름'} <span className="text-rose-500">*</span>
             </label>
             <input
               type="text"
               required
               autoFocus
               maxLength={80}
-              placeholder={placeholder}
+              placeholder={resolvedPlaceholder}
               value={name}
               onChange={(e) => {
                 setName(e.target.value);
@@ -109,12 +114,12 @@ export const AddMedicationInline: React.FC<AddMedicationInlineProps> = ({
 
           <div>
             <label className="block text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">
-              용량 / 규격 (선택)
+              {isEn ? 'Dosage / Unit (Optional)' : '용량 / 규격 (선택)'}
             </label>
             <input
               type="text"
               maxLength={40}
-              placeholder="예: 500mg, 1정, 1포"
+              placeholder={isEn ? 'e.g., 500mg, 1 tablet' : '예: 500mg, 1정, 1포'}
               value={dosage}
               onChange={(e) => setDosage(e.target.value)}
               className="w-full min-h-[44px] px-3.5 py-2 text-xs font-semibold rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -133,14 +138,14 @@ export const AddMedicationInline: React.FC<AddMedicationInlineProps> = ({
               onClick={handleCancel}
               className="w-full min-h-[44px] py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-xs active:scale-95 transition-all"
             >
-              취소
+              {isEn ? 'Cancel' : '취소'}
             </button>
             <button
               type="submit"
               disabled={isSubmitting}
               className="w-full min-h-[44px] py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-md shadow-blue-500/20 active:scale-95 transition-all disabled:opacity-50"
             >
-              <Check size={16} /> 추가 및 선택
+              <Check size={16} /> {isEn ? 'Add & Select' : '추가 및 선택'}
             </button>
           </div>
         </form>

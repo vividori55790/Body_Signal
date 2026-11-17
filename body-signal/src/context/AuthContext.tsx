@@ -281,6 +281,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return true;
   };
 
+  const isEnUi = () =>
+    typeof document !== 'undefined' && document.documentElement?.dataset?.lang === 'en';
+
   const unlockApp = async (
     pin: string
   ): Promise<{ success: boolean; message?: string; requiresTwoFactor?: boolean }> => {
@@ -295,15 +298,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     if (result.lockoutMs) {
       setLockoutRemainingMs(result.lockoutMs);
+      const secs = Math.ceil(result.lockoutMs / 1000);
       return {
         success: false,
-        message: `입력 횟수를 초과했습니다. ${Math.ceil(result.lockoutMs / 1000)}초 후 다시 시도해 주세요.`,
+        message: isEnUi()
+          ? `Too many failed attempts. Try again in ${secs}s.`
+          : `입력 횟수를 초과했습니다. ${secs}초 후 다시 시도해 주세요.`,
       };
     }
 
+    const left = result.remainingAttempts ?? 0;
     return {
       success: false,
-      message: `PIN이 일치하지 않습니다. (남은 기회: ${result.remainingAttempts ?? 0}회)`,
+      message: isEnUi()
+        ? `Incorrect PIN. (${left} attempts remaining)`
+        : `PIN이 일치하지 않습니다. (남은 기회: ${left}회)`,
     };
   };
 
@@ -332,16 +341,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const res = await verifyStoredTotpOrRecovery(code, pendingPinRef.current || undefined);
     if (!res.valid) {
       if (res.lockoutMs) {
+        const secs = Math.ceil(res.lockoutMs / 1000);
         return {
           success: false,
-          message: `인증 시도 횟수를 초과했습니다. ${Math.ceil(res.lockoutMs / 1000)}초 후 다시 시도해 주세요.`,
+          message: isEnUi()
+            ? `Too many verification attempts. Try again in ${secs}s.`
+            : `인증 시도 횟수를 초과했습니다. ${secs}초 후 다시 시도해 주세요.`,
         };
       }
       const attemptHint =
-        typeof res.remainingAttempts === 'number' ? ` (남은 기회: ${res.remainingAttempts}회)` : '';
+        typeof res.remainingAttempts === 'number'
+          ? isEnUi()
+            ? ` (${res.remainingAttempts} left)`
+            : ` (남은 기회: ${res.remainingAttempts}회)`
+          : '';
       return {
         success: false,
-        message: `2단계 인증 코드 또는 복구 코드가 일치하지 않습니다.${attemptHint}`,
+        message: isEnUi()
+          ? `Invalid 2FA code or recovery code.${attemptHint}`
+          : `2단계 인증 코드 또는 복구 코드가 일치하지 않습니다.${attemptHint}`,
       };
     }
     const pendingPin = pendingPinRef.current;
@@ -416,14 +434,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const res = await verifyStoredTotpOrRecovery(verificationCode, activeSessionPin || undefined);
     if (!res.valid) {
       if (res.lockoutMs) {
+        const secs = Math.ceil(res.lockoutMs / 1000);
         return {
           success: false,
-          message: `시도 횟수를 초과했습니다. ${Math.ceil(res.lockoutMs / 1000)}초 후 다시 시도해 주세요.`,
+          message: isEnUi()
+            ? `Too many attempts. Try again in ${secs}s.`
+            : `시도 횟수를 초과했습니다. ${secs}초 후 다시 시도해 주세요.`,
         };
       }
       return {
         success: false,
-        message: '2단계 인증 코드 또는 복구 코드가 일치하지 않습니다.',
+        message: isEnUi()
+          ? 'Invalid 2FA code or recovery code.'
+          : '2단계 인증 코드 또는 복구 코드가 일치하지 않습니다.',
       };
     }
     await disableTotp2FA();
@@ -544,8 +567,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             <div className="w-12 h-12 rounded-full bg-emerald-500/20 text-emerald-400 mx-auto flex items-center justify-center font-black">
               🔒
             </div>
-            <p className="font-bold text-sm">보안 모드 실행 중</p>
-            <p className="text-xs text-slate-400">의료 데이터 보호를 위해 화면을 가립니다.</p>
+            <p className="font-bold text-sm">
+              {typeof window !== 'undefined' && document.documentElement.dataset.lang === 'en'
+                ? 'Privacy Shield Active'
+                : '보안 모드 실행 중'}
+            </p>
+            <p className="text-xs text-slate-400">
+              {typeof window !== 'undefined' && document.documentElement.dataset.lang === 'en'
+                ? 'Screen hidden to protect medical data.'
+                : '의료 데이터 보호를 위해 화면을 가립니다.'}
+            </p>
           </div>
         </div>
       )}

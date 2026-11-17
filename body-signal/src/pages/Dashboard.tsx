@@ -33,7 +33,8 @@ const DetailedConditionCard: React.FC<{
 }> = ({ condition, logs, isArchived = false }) => {
   const navigate = useNavigate();
   const { updateCondition } = useHealth();
-  const { t } = useSettings();
+  const { settings, t } = useSettings();
+  const isEn = settings.language === 'en';
   const [isExpanded, setIsExpanded] = useState(false);
 
   const conditionLogs = logs
@@ -80,18 +81,29 @@ const DetailedConditionCard: React.FC<{
             </h3>
             {isArchived && (
               <span className="text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-500 px-2 py-0.5 rounded-full font-bold shrink-0">
-                종료
+                {isEn ? 'Resolved' : '종료'}
               </span>
             )}
           </div>
           <p className="text-[11px] text-slate-400 mt-0.5 truncate">
-            {condition.bodyPart} · {conditionLogs.length}건 · 평균 {avgIntensity}
+            {condition.bodyPart} ·{' '}
+            {isEn
+              ? `${conditionLogs.length} logs · Avg ${avgIntensity}`
+              : `${conditionLogs.length}건 · 평균 ${avgIntensity}`}
           </p>
         </div>
 
         <button
           type="button"
-          aria-label={isExpanded ? '최근 기록 접기' : '최근 기록 펼치기'}
+          aria-label={
+            isExpanded
+              ? isEn
+                ? 'Collapse recent logs'
+                : '최근 기록 접기'
+              : isEn
+              ? 'Expand recent logs'
+              : '최근 기록 펼치기'
+          }
           onClick={() => {
             triggerHaptic();
             setIsExpanded(!isExpanded);
@@ -131,7 +143,7 @@ const DetailedConditionCard: React.FC<{
       {isExpanded && (
         <div className="border-t border-slate-100 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/60 p-3.5 space-y-3">
           <div className="flex justify-between items-center text-xs">
-            <span className="text-slate-500 font-semibold">최근 기록</span>
+            <span className="text-slate-500 font-semibold">{isEn ? 'Recent Logs' : '최근 기록'}</span>
             <button
               type="button"
               onClick={handleToggleArchive}
@@ -154,7 +166,10 @@ const DetailedConditionCard: React.FC<{
                       NRS {log.intensity}
                     </span>
                     <span className="text-slate-400 text-[11px] shrink-0">
-                      {new Date(log.date).toLocaleDateString('ko-KR', { month: 'numeric', day: 'numeric' })}
+                      {new Date(log.date).toLocaleDateString(isEn ? 'en-US' : 'ko-KR', {
+                        month: 'numeric',
+                        day: 'numeric',
+                      })}
                     </span>
                     {log.medication && (
                       <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-300 font-bold truncate">
@@ -180,7 +195,7 @@ const DetailedConditionCard: React.FC<{
               }}
               className="py-2 px-3 rounded-xl bg-teal-700 hover:bg-teal-600 text-white font-bold text-xs flex items-center justify-center gap-1"
             >
-              <Plus size={14} /> 증상 추가
+              <Plus size={14} /> {isEn ? 'Add Symptom' : '증상 추가'}
             </button>
             <button
               type="button"
@@ -190,7 +205,7 @@ const DetailedConditionCard: React.FC<{
               }}
               className="py-2 px-3 rounded-xl bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-bold text-xs flex items-center justify-center gap-1"
             >
-              질병 상세 <ArrowRight size={13} />
+              {isEn ? 'Details' : '질병 상세'} <ArrowRight size={13} />
             </button>
           </div>
         </div>
@@ -273,12 +288,19 @@ export const DashboardPage: React.FC = () => {
   const elapsedMinutes = recentMedLog
     ? Math.max(0, Math.floor((Date.now() - new Date(recentMedLog.date).getTime()) / (1000 * 60)))
     : 0;
+  const isEn = settings.language === 'en';
   const elapsedBadge =
     elapsedMinutes < 60
-      ? `${elapsedMinutes}분 경과`
+      ? isEn
+        ? `${elapsedMinutes}m ago`
+        : `${elapsedMinutes}분 경과`
+      : isEn
+      ? `${Math.floor(elapsedMinutes / 60)}h ${elapsedMinutes % 60}m ago`
       : `${Math.floor(elapsedMinutes / 60)}시간 ${elapsedMinutes % 60}분 경과`;
 
-  const QUICK_SIDE_EFFECTS = ['속쓰림', '어지러움', '구역감', '졸림', '두드러기'];
+  const QUICK_SIDE_EFFECTS = isEn
+    ? ['Heartburn', 'Dizziness', 'Nausea', 'Drowsiness', 'Rash']
+    : ['속쓰림', '어지러움', '구역감', '졸림', '두드러기'];
 
   const handleSelectMedResponse = async (targetIntensity: number) => {
     if (!recentMedLog) return;
@@ -322,7 +344,9 @@ export const DashboardPage: React.FC = () => {
             <h1 className="text-xl font-bold tracking-tight">{t('dashTitle')}</h1>
             <p className="text-[11px] text-slate-500 dark:text-slate-400 flex flex-wrap items-center gap-1.5">
               <span>
-                추적 질병 {activeConditions.length}개 · 누적 {logs.length}건 · 7일 평균{' '}
+                {isEn
+                  ? `${activeConditions.length} tracked · ${logs.length} logs · 7d avg `
+                  : `추적 질병 ${activeConditions.length}개 · 누적 ${logs.length}건 · 7일 평균 `}
                 <strong className="text-slate-700 dark:text-slate-200">{weeklyAvg}</strong>
               </span>
               {unassignedLogs.length > 0 && (
@@ -331,7 +355,7 @@ export const DashboardPage: React.FC = () => {
                   onClick={openGroupModal}
                   className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950/70 text-amber-800 dark:text-amber-300 text-[10px] font-extrabold border border-amber-300/70 dark:border-amber-800"
                 >
-                  미분류 {unassignedLogs.length}건
+                  {isEn ? `${unassignedLogs.length} unassigned` : `미분류 ${unassignedLogs.length}건`}
                 </button>
               )}
             </p>
@@ -350,7 +374,7 @@ export const DashboardPage: React.FC = () => {
             aria-label="🚨 지금 너무 아파요 (1초 급성 통증 기록)"
             className="py-2.5 px-3 rounded-xl bg-rose-700 hover:bg-rose-600 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm active:scale-98 transition-all"
           >
-            <Zap size={14} /> 1초 급성 기록
+            <Zap size={14} /> {isEn ? '1-Sec Acute Log' : '1초 급성 기록'}
           </button>
           <button
             type="button"
@@ -360,7 +384,7 @@ export const DashboardPage: React.FC = () => {
             }}
             className="py-2.5 px-3 rounded-xl bg-teal-700 hover:bg-teal-600 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm active:scale-98 transition-all"
           >
-            <Plus size={15} /> 상세 기록
+            <Plus size={15} /> {isEn ? 'Full Entry' : '상세 기록'}
           </button>
         </div>
 
@@ -369,12 +393,18 @@ export const DashboardPage: React.FC = () => {
           onClick={handleToggleQuickLogger}
           className="w-full py-1.5 text-[11px] font-bold text-slate-500 dark:text-slate-400 flex items-center justify-center gap-1 hover:text-teal-600"
         >
-          {showQuickLogger ? '빠른 기록 접기 ▲' : '홈에서 바로 3초 기록 펼치기 ▼'}
+          {showQuickLogger
+            ? isEn
+              ? 'Collapse Quick Logger ▲'
+              : '빠른 기록 접기 ▲'
+            : isEn
+            ? 'Expand 3-Sec Quick Logger ▼'
+            : '홈에서 바로 3초 기록 펼치기 ▼'}
         </button>
 
         {showQuickLoggerPrompt && (
           <DefaultClosedSuggestion
-            featureName="홈 3초 기록"
+            featureName={isEn ? 'Quick Logger' : '홈 3초 기록'}
             onConfirmDefaultClosed={async () => {
               triggerHaptic();
               await setDefaultQuickLoggerOpen(false);
@@ -407,9 +437,11 @@ export const DashboardPage: React.FC = () => {
               <Pill size={16} className="text-blue-600 dark:text-blue-400" />
               <div>
                 <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400 uppercase block">
-                  약효 확인 및 재평가 · {elapsedBadge}
+                  {isEn ? 'Medication Follow-up' : '약효 확인 및 재평가'} · {elapsedBadge}
                 </span>
-                <h3 className="font-bold text-xs">방금 드신 약의 효과가 나타났나요?</h3>
+                <h3 className="font-bold text-xs">
+                  {isEn ? 'Did the medication help relieve your pain?' : '방금 드신 약의 효과가 나타났나요?'}
+                </h3>
               </div>
             </div>
             <button
@@ -417,7 +449,7 @@ export const DashboardPage: React.FC = () => {
               onClick={() => setDismissedMedId(recentMedLog.id)}
               className="text-[11px] text-slate-400"
             >
-              닫기
+              {t('close')}
             </button>
           </div>
 
@@ -426,12 +458,14 @@ export const DashboardPage: React.FC = () => {
               {recentMedLog.medication}
               {recentMedCondition ? ` (${recentMedCondition.label})` : ''}
             </span>
-            <span>복용 시 NRS {recentMedLog.intensity}</span>
+            <span>
+              {isEn ? `Initial NRS ${recentMedLog.intensity}` : `복용 시 NRS ${recentMedLog.intensity}`}
+            </span>
           </div>
 
           {medRatingSaved ? (
             <div className="p-2.5 rounded-xl bg-emerald-600 text-white font-bold text-xs text-center">
-              약효 반응이 저장되었습니다
+              {isEn ? 'Medication response saved' : '약효 반응이 저장되었습니다'}
             </div>
           ) : (
             <>
@@ -461,10 +495,26 @@ export const DashboardPage: React.FC = () => {
               </div>
               <div className="grid grid-cols-4 gap-1.5">
                 {[
-                  { label: '훨씬 편해요', val: Math.max(0, recentMedLog.intensity - 3), cls: 'bg-emerald-600 text-white' },
-                  { label: '덜 아파요', val: Math.max(0, recentMedLog.intensity - 1), cls: 'bg-teal-600 text-white' },
-                  { label: '비슷해요', val: recentMedLog.intensity, cls: 'bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-200' },
-                  { label: '더 아파요', val: Math.min(10, recentMedLog.intensity + 1), cls: 'bg-rose-700 text-white' },
+                  {
+                    label: isEn ? 'Much Better' : '훨씬 편해요',
+                    val: Math.max(0, recentMedLog.intensity - 3),
+                    cls: 'bg-emerald-600 text-white',
+                  },
+                  {
+                    label: isEn ? 'Better' : '덜 아파요',
+                    val: Math.max(0, recentMedLog.intensity - 1),
+                    cls: 'bg-teal-600 text-white',
+                  },
+                  {
+                    label: isEn ? 'Same' : '비슷해요',
+                    val: recentMedLog.intensity,
+                    cls: 'bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-200',
+                  },
+                  {
+                    label: isEn ? 'Worse' : '더 아파요',
+                    val: Math.min(10, recentMedLog.intensity + 1),
+                    cls: 'bg-rose-700 text-white',
+                  },
                 ].map((opt) => (
                   <button
                     key={opt.label}
@@ -487,7 +537,7 @@ export const DashboardPage: React.FC = () => {
           <div className="flex items-center justify-between gap-2">
             <h3 className="text-[11px] font-extrabold text-emerald-800 dark:text-emerald-300 uppercase flex items-center gap-1.5">
               <BarChart3 size={14} className="text-emerald-600 dark:text-emerald-400" />
-              질병 치료 · 통증 개선 요약
+              {isEn ? 'Treatment & Pain Outcome Summary' : '질병 치료 · 통증 개선 요약'}
             </h3>
             <button
               type="button"
@@ -497,31 +547,41 @@ export const DashboardPage: React.FC = () => {
               }}
               className="text-[11px] font-bold text-teal-700 dark:text-teal-400 flex items-center gap-0.5 hover:underline"
             >
-              상세 통계 <ArrowRight size={11} />
+              {isEn ? 'Full Stats' : '상세 통계'} <ArrowRight size={11} />
             </button>
           </div>
 
           <div className="grid grid-cols-3 gap-2 text-center">
             <div className="rounded-xl bg-white/80 dark:bg-slate-900/80 border border-slate-200/70 dark:border-slate-800 py-2 px-1">
-              <span className="text-[10px] font-bold text-slate-400 block">치료 완료</span>
+              <span className="text-[10px] font-bold text-slate-400 block">
+                {isEn ? 'Resolved' : '치료 완료'}
+              </span>
               <strong className="text-sm font-black text-emerald-600 dark:text-emerald-400">
                 {metrics.archivedConditionsCount}
-                <span className="text-[10px] font-normal text-slate-400">/{metrics.totalConditions}개</span>
-              </strong>
-            </div>
-
-            <div className="rounded-xl bg-white/80 dark:bg-slate-900/80 border border-slate-200/70 dark:border-slate-800 py-2 px-1">
-              <span className="text-[10px] font-bold text-slate-400 block">개선된 질병</span>
-              <strong className="text-sm font-black text-slate-800 dark:text-slate-100">
-                {metrics.improvedConditionsCount}
                 <span className="text-[10px] font-normal text-slate-400">
-                  /{metrics.comparableConditionsCount}개
+                  /{metrics.totalConditions}
+                  {isEn ? '' : '개'}
                 </span>
               </strong>
             </div>
 
             <div className="rounded-xl bg-white/80 dark:bg-slate-900/80 border border-slate-200/70 dark:border-slate-800 py-2 px-1">
-              <span className="text-[10px] font-bold text-slate-400 block">통증 개선</span>
+              <span className="text-[10px] font-bold text-slate-400 block">
+                {isEn ? 'Improved' : '개선된 질병'}
+              </span>
+              <strong className="text-sm font-black text-slate-800 dark:text-slate-100">
+                {metrics.improvedConditionsCount}
+                <span className="text-[10px] font-normal text-slate-400">
+                  /{metrics.comparableConditionsCount}
+                  {isEn ? '' : '개'}
+                </span>
+              </strong>
+            </div>
+
+            <div className="rounded-xl bg-white/80 dark:bg-slate-900/80 border border-slate-200/70 dark:border-slate-800 py-2 px-1">
+              <span className="text-[10px] font-bold text-slate-400 block">
+                {isEn ? 'Pain Delta' : '통증 개선'}
+              </span>
               <strong
                 className={`text-sm font-black inline-flex items-center justify-center gap-0.5 ${
                   metrics.overallPainDelta !== null && metrics.overallPainDelta < 0
@@ -542,6 +602,8 @@ export const DashboardPage: React.FC = () => {
                   <>
                     <TrendingUp size={13} />+{metrics.overallPainDelta}
                   </>
+                ) : isEn ? (
+                  'Stable'
                 ) : (
                   '유지'
                 )}
@@ -564,12 +626,18 @@ export const DashboardPage: React.FC = () => {
             <div className="flex items-center gap-1.5">
               <span className="h-2 w-2 rounded-full bg-amber-500 animate-pulse shrink-0" />
               <p className="text-xs font-extrabold text-amber-950 dark:text-amber-200">
-                질병 미분류 증상 {unassignedLogs.length}건 · 분류가 필요해요
+                {isEn
+                  ? `${unassignedLogs.length} unassigned logs need grouping`
+                  : `질병 미분류 증상 ${unassignedLogs.length}건 · 분류가 필요해요`}
               </p>
             </div>
             <p className="text-[11px] text-amber-800 dark:text-amber-400 truncate mt-0.5">
               {unassignedPreviewParts.length > 0
-                ? `${unassignedPreviewParts.join(', ')} 기록을 질병으로 묶어 추이를 추적하세요`
+                ? isEn
+                  ? `Group ${unassignedPreviewParts.join(', ')} logs under a condition to track trends`
+                  : `${unassignedPreviewParts.join(', ')} 기록을 질병으로 묶어 추이를 추적하세요`
+                : isEn
+                ? 'Once diagnosed, group logs under a condition to see trends & stats'
                 : '진단명이 확인되면 질병으로 묶어 추이와 통계를 확인하세요'}
             </p>
           </div>
@@ -578,7 +646,7 @@ export const DashboardPage: React.FC = () => {
             onClick={openGroupModal}
             className="shrink-0 px-3 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-xs font-extrabold flex items-center gap-1 shadow-sm"
           >
-            <FolderPlus size={14} /> 분류하기
+            <FolderPlus size={14} /> {isEn ? 'Group' : '분류하기'}
           </button>
         </div>
       )}
@@ -586,7 +654,9 @@ export const DashboardPage: React.FC = () => {
       {/* 5. Tracked Diseases List */}
       <section className="space-y-2.5">
         <div className="flex items-center justify-between">
-          <h2 className="text-xs font-bold text-slate-500 uppercase">추적 중인 질병</h2>
+          <h2 className="text-xs font-bold text-slate-500 uppercase">
+            {isEn ? 'Tracked Conditions' : '추적 중인 질병'}
+          </h2>
           <div className="flex gap-1.5">
             {(['All', 'Critical', 'Improved'] as const).map((f) => (
               <button
@@ -611,7 +681,11 @@ export const DashboardPage: React.FC = () => {
         {activeConditions.length === 0 && unassignedLogs.length === 0 && (
           <div className="rounded-2xl border border-dashed border-slate-300 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 text-center space-y-1.5">
             <h3 className="font-bold text-sm text-slate-700 dark:text-slate-200">{t('startFirstRecord')}</h3>
-            <p className="text-xs text-slate-400">상단 버튼으로 통증이나 원인 미상 증상을 먼저 기록해 보세요.</p>
+            <p className="text-xs text-slate-400">
+              {isEn
+                ? 'Use the buttons above to log pain or unassigned symptoms.'
+                : '상단 버튼으로 통증이나 원인 미상 증상을 먼저 기록해 보세요.'}
+            </p>
           </div>
         )}
 

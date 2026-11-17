@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
 import { createPortal } from 'react-dom';
 import { Lock, Delete, X, AlertCircle } from 'lucide-react';
 import { triggerHaptic } from '../utils/native';
+import { SettingsContext } from '../context/SettingsContext';
 
 interface PinModalProps {
   isOpen: boolean;
@@ -26,6 +27,8 @@ export const PinModal: React.FC<PinModalProps> = ({
   expectedLength = 6,
   required = false,
 }) => {
+  const settingsCtx = useContext(SettingsContext);
+  const isEn = settingsCtx?.settings.language === 'en';
   const [pin, setPin] = useState('');
   const [firstPin, setFirstPin] = useState(''); // For set/change confirmation
   const [step, setStep] = useState<'enter' | 'confirm'>('enter');
@@ -91,7 +94,9 @@ export const PinModal: React.FC<PinModalProps> = ({
             await onSuccess(nextPin);
             handleClose();
           } else {
-            setLocalError('PIN이 일치하지 않습니다. 다시 설정해 주세요.');
+            setLocalError(
+              isEn ? 'PINs do not match. Please try again.' : 'PIN이 일치하지 않습니다. 다시 설정해 주세요.'
+            );
             setPin('');
             setFirstPin('');
             setStep('enter');
@@ -118,16 +123,24 @@ export const PinModal: React.FC<PinModalProps> = ({
   const displayTitle =
     title ||
     (mode === 'unlock'
-      ? 'PIN 입력'
+      ? isEn
+        ? 'Enter PIN'
+        : 'PIN 입력'
       : step === 'enter'
-      ? `새 ${targetLength}자리 PIN 입력`
+      ? isEn
+        ? `Enter New ${targetLength}-Digit PIN`
+        : `새 ${targetLength}자리 PIN 입력`
+      : isEn
+      ? 'Confirm PIN (Re-enter)'
       : 'PIN 확인 (한 번 더 입력)');
 
   const errorText =
     localError ||
     errorMessage ||
     (lockoutRemainingMs > 0
-      ? `입력 횟수 초과. ${Math.ceil(lockoutRemainingMs / 1000)}초 후 다시 시도해 주세요.`
+      ? isEn
+        ? `Too many attempts. Try again in ${Math.ceil(lockoutRemainingMs / 1000)}s.`
+        : `입력 횟수 초과. ${Math.ceil(lockoutRemainingMs / 1000)}초 후 다시 시도해 주세요.`
       : '');
 
   const modalContent = (
@@ -141,7 +154,7 @@ export const PinModal: React.FC<PinModalProps> = ({
         <button
           type="button"
           onClick={handleClose}
-          aria-label="닫기"
+          aria-label={isEn ? 'Close' : '닫기'}
           className="absolute top-[max(1.5rem,env(safe-area-inset-top,1.5rem))] right-[max(1.5rem,env(safe-area-inset-right,1.5rem))] p-2.5 rounded-full bg-slate-800 text-slate-400 hover:text-white active:scale-95 transition-all z-10"
         >
           <X size={24} />
@@ -156,7 +169,11 @@ export const PinModal: React.FC<PinModalProps> = ({
         <h2 id="pin-modal-title" className="text-xl font-bold tracking-wider">{displayTitle}</h2>
         <p className="mt-1 text-xs text-slate-400">
           {mode === 'unlock'
-            ? '데이터를 안전하게 암호화하여 보호합니다'
+            ? isEn
+              ? 'Your records are encrypted and protected on-device'
+              : '데이터를 안전하게 암호화하여 보호합니다'
+            : isEn
+            ? 'A 6-digit PIN is required to protect your health records'
             : '보안을 위해 6자리 숫자 PIN을 필수 적용합니다'}
         </p>
       </div>
@@ -180,10 +197,14 @@ export const PinModal: React.FC<PinModalProps> = ({
       ) : (
         <div className="mb-4 text-center">
           <div className="rounded-xl border border-slate-800 bg-slate-900 px-4 py-2 font-mono text-base tracking-widest text-emerald-400">
-            {pin.length > 0 ? '•'.repeat(pin.length) : `${targetLength}자리 PIN 입력`}
+            {pin.length > 0
+              ? '•'.repeat(pin.length)
+              : isEn
+              ? `Enter ${targetLength}-digit PIN`
+              : `${targetLength}자리 PIN 입력`}
           </div>
           <span className="mt-1 block text-[11px] font-mono text-slate-400">
-            {pin.length} / {targetLength}자리
+            {isEn ? `${pin.length} / ${targetLength} digits` : `${pin.length} / ${targetLength}자리`}
           </span>
         </div>
       )}
@@ -201,14 +222,14 @@ export const PinModal: React.FC<PinModalProps> = ({
       {/* Mobile Number Keypad */}
       <div
         role="group"
-        aria-label="PIN 입력 키패드"
+        aria-label={isEn ? 'PIN Keypad' : 'PIN 입력 키패드'}
         className="grid grid-cols-3 gap-y-4 gap-x-6 w-full max-w-[320px] sm:max-w-[340px] place-items-center text-white mb-6"
       >
         {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((num) => (
           <button
             key={num}
             type="button"
-            aria-label={`숫자 ${num}`}
+            aria-label={isEn ? `Digit ${num}` : `숫자 ${num}`}
             disabled={lockoutRemainingMs > 0}
             onClick={() => handleDigit(num)}
             className="flex h-16 w-16 sm:h-20 sm:w-20 min-w-[64px] min-h-[64px] max-w-[80px] max-h-[80px] aspect-square items-center justify-center rounded-full bg-slate-900/90 border border-slate-800 text-2xl sm:text-3xl font-bold text-slate-100 shadow-lg transition-all duration-150 hover:bg-slate-800/80 hover:border-slate-700 active:scale-90 active:bg-emerald-500/25 active:border-emerald-400/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 disabled:opacity-30 disabled:pointer-events-none"
@@ -221,7 +242,7 @@ export const PinModal: React.FC<PinModalProps> = ({
 
         <button
           type="button"
-          aria-label="숫자 0"
+          aria-label={isEn ? 'Digit 0' : '숫자 0'}
           disabled={lockoutRemainingMs > 0}
           onClick={() => handleDigit('0')}
           className="flex h-16 w-16 sm:h-20 sm:w-20 min-w-[64px] min-h-[64px] max-w-[80px] max-h-[80px] aspect-square items-center justify-center rounded-full bg-slate-900/90 border border-slate-800 text-2xl sm:text-3xl font-bold text-slate-100 shadow-lg transition-all duration-150 hover:bg-slate-800/80 hover:border-slate-700 active:scale-90 active:bg-emerald-500/25 active:border-emerald-400/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 disabled:opacity-30 disabled:pointer-events-none"
@@ -231,7 +252,7 @@ export const PinModal: React.FC<PinModalProps> = ({
 
         <button
           type="button"
-          aria-label="한 글자 지우기"
+          aria-label={isEn ? 'Backspace' : '한 글자 지우기'}
           onClick={handleDelete}
           className="flex h-16 w-16 sm:h-20 sm:w-20 min-w-[64px] min-h-[64px] max-w-[80px] max-h-[80px] aspect-square items-center justify-center rounded-full text-slate-400 transition-all duration-150 hover:text-slate-200 hover:bg-slate-900/60 active:scale-90 active:text-rose-400 active:bg-rose-500/15 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-400"
         >

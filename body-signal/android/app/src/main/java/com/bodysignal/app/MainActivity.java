@@ -81,11 +81,14 @@ public class MainActivity extends BridgeActivity {
                 getBridge().getWebView().stopLoading();
                 getBridge().getWebView().loadUrl("about:blank");
             }
+            boolean isKo = java.util.Locale.getDefault().getLanguage().startsWith("ko");
             new AlertDialog.Builder(this)
-                .setTitle("보안 위협 감지")
-                .setMessage(integrity.reason + "\n\n민감한 의료 데이터 보호를 위해 앱을 종료합니다.")
+                .setTitle(isKo ? "보안 위협 감지" : "Security Threat Detected")
+                .setMessage(integrity.reason + (isKo
+                    ? "\n\n민감한 의료 데이터 보호를 위해 앱을 종료합니다."
+                    : "\n\nClosing the app to protect sensitive medical data."))
                 .setCancelable(false)
-                .setPositiveButton("앱 종료", (dialog, which) -> finishAffinity())
+                .setPositiveButton(isKo ? "앱 종료" : "Exit App", (dialog, which) -> finishAffinity())
                 .show();
         }
     }

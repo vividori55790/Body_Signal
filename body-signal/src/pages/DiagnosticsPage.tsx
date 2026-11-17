@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { useHealth } from '../context/HealthContext';
 import { useAuth } from '../context/AuthContext';
+import { useSettings } from '../context/SettingsContext';
 import { DiagnosticRecord } from '../types/health';
 import { calculateInsuranceClaimStatus } from '../utils/insurance';
 import { compressAndStripExif, saveEncryptedPhoto, loadEncryptedPhoto } from '../utils/mediaStorage';
@@ -26,6 +27,8 @@ export const DiagnosticsPage: React.FC<{ embedded?: boolean }> = ({ embedded = f
   const location = useLocation();
   const { conditions, diagnosticRecords, addDiagnosticRecord, updateDiagnosticRecord, deleteDiagnosticRecord } = useHealth();
   const { activeSessionPin, isUnlocked } = useAuth();
+  const { settings } = useSettings();
+  const isEn = settings.language === 'en';
 
   const [viewMode, setViewMode] = useState<'feed' | 'grid'>('feed');
   const [sortBy, setSortBy] = useState<'deadline' | 'date'>('deadline');
@@ -94,7 +97,9 @@ export const DiagnosticsPage: React.FC<{ embedded?: boolean }> = ({ embedded = f
       insurance: calculateInsuranceClaimStatus(
         rec.diagnosisDate,
         rec.claimStatus,
-        rec.claimDeadlineYears || 3
+        rec.claimDeadlineYears || 3,
+        new Date(),
+        settings.language
       ),
     }));
 
@@ -110,7 +115,7 @@ export const DiagnosticsPage: React.FC<{ embedded?: boolean }> = ({ embedded = f
       }
       return b.record.diagnosisDate.localeCompare(a.record.diagnosisDate);
     });
-  }, [diagnosticRecords, sortBy, filterPendingOnly]);
+  }, [diagnosticRecords, sortBy, filterPendingOnly, settings.language]);
 
   const pendingStats = useMemo(() => {
     const pending = enrichedRecords.filter((i) => i.record.claimStatus === 'pending');
@@ -131,7 +136,7 @@ export const DiagnosticsPage: React.FC<{ embedded?: boolean }> = ({ embedded = f
       const processed = await Promise.all(files.map((f) => compressAndStripExif(f)));
       setDraftPhotos((prev) => [...prev, ...processed].slice(0, 6));
     } catch (err: any) {
-      setFormError(err?.message || '사진을 처리할 수 없습니다.');
+      setFormError(err?.message || (isEn ? 'Failed to process photos.' : '사진을 처리할 수 없습니다.'));
     } finally {
       e.target.value = '';
     }
@@ -154,7 +159,7 @@ export const DiagnosticsPage: React.FC<{ embedded?: boolean }> = ({ embedded = f
   const handleSaveRecord = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!diagnosisName.trim()) {
-      setFormError('진단명 또는 진료 내용을 입력해 주세요.');
+      setFormError(isEn ? 'Please enter a diagnosis or visit title.' : '진단명 또는 진료 내용을 입력해 주세요.');
       return;
     }
 
@@ -186,7 +191,7 @@ export const DiagnosticsPage: React.FC<{ embedded?: boolean }> = ({ embedded = f
 
       resetForm();
     } catch (err: any) {
-      setFormError(err?.message || '진단 기록 저장에 실패했습니다.');
+      setFormError(err?.message || (isEn ? 'Failed to save diagnostic record.' : '진단 기록 저장에 실패했습니다.'));
     } finally {
       setIsSaving(false);
     }
@@ -202,7 +207,14 @@ export const DiagnosticsPage: React.FC<{ embedded?: boolean }> = ({ embedded = f
   };
 
   const handleDelete = async (rec: DiagnosticRecord) => {
-    if (!window.confirm('이 진단 기록과 첨부된 암호화 사진을 영구 삭제하시겠습니까?')) return;
+    if (
+      !window.confirm(
+        isEn
+          ? 'Permanently delete this diagnostic record and its encrypted photos?'
+          : '이 진단 기록과 첨부된 암호화 사진을 영구 삭제하시겠습니까?'
+      )
+    )
+      return;
     triggerHaptic();
     await deleteDiagnosticRecord(rec.id);
     setDecryptedPhotos((prev) => {
@@ -233,9 +245,11 @@ export const DiagnosticsPage: React.FC<{ embedded?: boolean }> = ({ embedded = f
       {/* Header */}
       <header className="flex items-center justify-between gap-2">
         <div>
-          {!embedded && <h1 className="text-xl font-bold">진단·실손 보관함</h1>}
+          {!embedded && (
+            <h1 className="text-xl font-bold">{isEn ? 'Diagnostic & Insurance Vault' : '진단·실손 보관함'}</h1>
+          )}
           <p className="text-xs text-slate-500 dark:text-slate-400">
-            암호화 사진 보관 · 실손 마감 D-day
+            {isEn ? 'Encrypted Document Vault · Claim Deadlines' : '암호화 사진 보관 · 실손 마감 D-day'}
           </p>
         </div>
         <button
@@ -246,7 +260,7 @@ export const DiagnosticsPage: React.FC<{ embedded?: boolean }> = ({ embedded = f
           }}
           className="shrink-0 flex items-center gap-1 px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-sm active:scale-95 transition-all"
         >
-          <Plus size={15} /> 진단 등록
+          <Plus size={15} /> {isEn ? 'Add Record' : '진단 등록'}
         </button>
       </header>
 
@@ -264,15 +278,17 @@ export const DiagnosticsPage: React.FC<{ embedded?: boolean }> = ({ embedded = f
           </div>
           <div>
             <p className="text-xs font-bold">
-              실손 청구 대기 {pendingStats.pendingCount}건
+              {isEn ? `${pendingStats.pendingCount} pending claims` : `실손 청구 대기 ${pendingStats.pendingCount}건`}
               {pendingStats.urgentCount > 0 && (
                 <span className="ml-1.5 text-rose-600 dark:text-rose-400">
-                  (주의/임박 {pendingStats.urgentCount}건)
+                  {isEn ? `(${pendingStats.urgentCount} urgent)` : `(주의/임박 ${pendingStats.urgentCount}건)`}
                 </span>
               )}
             </p>
             <p className="text-[10px] text-slate-400">
-              상법 제662조 기준 3년 소멸시효 · 추천 최후 접수일(만료 14일 전) 안내
+              {isEn
+                ? 'Tracks statutory claim window & safe latest filing date (14d prior)'
+                : '상법 제662조 기준 3년 소멸시효 · 추천 최후 접수일(만료 14일 전) 안내'}
             </p>
           </div>
         </div>
@@ -289,7 +305,9 @@ export const DiagnosticsPage: React.FC<{ embedded?: boolean }> = ({ embedded = f
             }}
             className="px-2.5 py-1.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[11px] font-bold text-slate-600 dark:text-slate-300"
           >
-            정렬: {sortBy === 'deadline' ? '청구 마감 임박순' : '최신 진단일순'}
+            {isEn
+              ? `Sort: ${sortBy === 'deadline' ? 'Earliest Deadline' : 'Latest Date'}`
+              : `정렬: ${sortBy === 'deadline' ? '청구 마감 임박순' : '최신 진단일순'}`}
           </button>
           <button
             type="button"
@@ -303,14 +321,14 @@ export const DiagnosticsPage: React.FC<{ embedded?: boolean }> = ({ embedded = f
                 : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300'
             }`}
           >
-            미청구만
+            {isEn ? 'Pending Only' : '미청구만'}
           </button>
         </div>
 
         <div className="flex rounded-xl bg-slate-200/70 dark:bg-slate-800 p-1">
           <button
             type="button"
-            aria-label="피드 뷰"
+            aria-label={isEn ? 'Feed view' : '피드 뷰'}
             onClick={() => {
               triggerHaptic();
               setViewMode('feed');
@@ -321,11 +339,11 @@ export const DiagnosticsPage: React.FC<{ embedded?: boolean }> = ({ embedded = f
                 : 'text-slate-500'
             }`}
           >
-            <ListIcon size={13} /> 피드
+            <ListIcon size={13} /> {isEn ? 'Feed' : '피드'}
           </button>
           <button
             type="button"
-            aria-label="그리드 뷰"
+            aria-label={isEn ? 'Grid view' : '그리드 뷰'}
             onClick={() => {
               triggerHaptic();
               setViewMode('grid');
@@ -336,7 +354,7 @@ export const DiagnosticsPage: React.FC<{ embedded?: boolean }> = ({ embedded = f
                 : 'text-slate-500'
             }`}
           >
-            <LayoutGrid size={13} /> 그리드
+            <LayoutGrid size={13} /> {isEn ? 'Grid' : '그리드'}
           </button>
         </div>
       </div>
@@ -346,10 +364,12 @@ export const DiagnosticsPage: React.FC<{ embedded?: boolean }> = ({ embedded = f
         <div className="rounded-2xl border border-dashed border-slate-300 dark:border-slate-700 bg-white/60 dark:bg-slate-900/40 p-8 text-center space-y-2">
           <Camera size={28} className="mx-auto text-slate-400" />
           <p className="text-sm font-bold text-slate-600 dark:text-slate-300">
-            저장된 진단서·실손 기록이 없습니다
+            {isEn ? 'No diagnostic or insurance records saved yet' : '저장된 진단서·실손 기록이 없습니다'}
           </p>
           <p className="text-xs text-slate-400">
-            진단일자와 영수증/진단서 사진을 촬영해 암호화 보관하고, 실손 청구 마감일을 놓치지 마세요.
+            {isEn
+              ? 'Encrypt receipts and diagnostic photos (EXIF stripped) and track claim deadlines.'
+              : '진단일자와 영수증/진단서 사진을 촬영해 암호화 보관하고, 실손 청구 마감일을 놓치지 마세요.'}
           </p>
         </div>
       ) : viewMode === 'grid' ? (
@@ -396,7 +416,7 @@ export const DiagnosticsPage: React.FC<{ embedded?: boolean }> = ({ embedded = f
                       {record.diagnosisDate} {record.hospitalName ? `· ${record.hospitalName}` : ''}
                     </p>
                     <p className="text-[10px] text-slate-500 dark:text-slate-400">
-                      추천 청구: ~{insurance.recommendedLatestDate}
+                      {isEn ? `File by: ~${insurance.recommendedLatestDate}` : `추천 청구: ~${insurance.recommendedLatestDate}`}
                     </p>
                   </div>
                   <div className="flex items-center justify-between pt-1.5 border-t border-slate-100 dark:border-slate-800">
@@ -405,12 +425,18 @@ export const DiagnosticsPage: React.FC<{ embedded?: boolean }> = ({ embedded = f
                       onClick={() => toggleClaimStatus(record)}
                       className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400"
                     >
-                      {record.claimStatus === 'claimed' ? '청구완료 ✓' : '청구완료 처리'}
+                      {record.claimStatus === 'claimed'
+                        ? isEn
+                          ? 'Claimed ✓'
+                          : '청구완료 ✓'
+                        : isEn
+                        ? 'Mark Claimed'
+                        : '청구완료 처리'}
                     </button>
                     <button
                       type="button"
                       onClick={() => handleDelete(record)}
-                      aria-label="진단 기록 삭제"
+                      aria-label={isEn ? 'Delete diagnostic record' : '진단 기록 삭제'}
                       className="text-slate-400 hover:text-rose-500"
                     >
                       <Trash2 size={13} />
@@ -435,7 +461,8 @@ export const DiagnosticsPage: React.FC<{ embedded?: boolean }> = ({ embedded = f
                     <h3 className="font-bold text-sm">{record.diagnosisName}</h3>
                     {record.conditionId && (
                       <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-teal-50 dark:bg-teal-950/60 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800">
-                        {conditions.find((c) => c.id === record.conditionId)?.label || '연결 질병'}
+                        {conditions.find((c) => c.id === record.conditionId)?.label ||
+                          (isEn ? 'Linked Condition' : '연결 질병')}
                       </span>
                     )}
                     <span
@@ -448,7 +475,7 @@ export const DiagnosticsPage: React.FC<{ embedded?: boolean }> = ({ embedded = f
                   </div>
                   <div className="flex flex-wrap items-center gap-2 mt-1 text-[11px] text-slate-400">
                     <span className="flex items-center gap-1">
-                      <Calendar size={12} /> 진단일 {record.diagnosisDate}
+                      <Calendar size={12} /> {isEn ? 'Date' : '진단일'} {record.diagnosisDate}
                     </span>
                     {record.hospitalName && (
                       <span className="flex items-center gap-1">
@@ -458,7 +485,8 @@ export const DiagnosticsPage: React.FC<{ embedded?: boolean }> = ({ embedded = f
                     )}
                     {record.amountKrw !== undefined && (
                       <span className="font-bold text-slate-600 dark:text-slate-300">
-                        {record.amountKrw.toLocaleString()}원
+                        {record.amountKrw.toLocaleString()}
+                        {isEn ? ' KRW' : '원'}
                       </span>
                     )}
                   </div>
@@ -467,7 +495,7 @@ export const DiagnosticsPage: React.FC<{ embedded?: boolean }> = ({ embedded = f
                 <button
                   type="button"
                   onClick={() => handleDelete(record)}
-                  aria-label="진단 기록 삭제"
+                  aria-label={isEn ? 'Delete diagnostic record' : '진단 기록 삭제'}
                   className="p-1.5 text-slate-400 hover:text-rose-500"
                 >
                   <Trash2 size={15} />
@@ -479,10 +507,13 @@ export const DiagnosticsPage: React.FC<{ embedded?: boolean }> = ({ embedded = f
                 <div className="space-y-0.5">
                   <p className="font-bold text-slate-700 dark:text-slate-200 flex items-center gap-1">
                     <Clock size={12} className="text-emerald-500" />
-                    법정 청구 마감: {insurance.deadlineDate} ({record.claimDeadlineYears || 3}년)
+                    {isEn
+                      ? `Statutory Deadline: ${insurance.deadlineDate} (${record.claimDeadlineYears || 3}y)`
+                      : `법정 청구 마감: ${insurance.deadlineDate} (${record.claimDeadlineYears || 3}년)`}
                   </p>
                   <p className="text-[10px] text-slate-500 dark:text-slate-400">
-                    가능한 한 늦게 청구 시 안전 권고일: <strong className="text-slate-700 dark:text-slate-200">{insurance.recommendedLatestDate}</strong>
+                    {isEn ? 'Safe latest claim date: ' : '가능한 한 늦게 청구 시 안전 권고일: '}
+                    <strong className="text-slate-700 dark:text-slate-200">{insurance.recommendedLatestDate}</strong>
                   </p>
                 </div>
                 <button
@@ -495,7 +526,13 @@ export const DiagnosticsPage: React.FC<{ embedded?: boolean }> = ({ embedded = f
                   }`}
                 >
                   <CheckCircle2 size={13} />
-                  {record.claimStatus === 'claimed' ? '청구 완료됨' : '청구 완료 표시'}
+                  {record.claimStatus === 'claimed'
+                    ? isEn
+                      ? 'Claimed'
+                      : '청구 완료됨'
+                    : isEn
+                    ? 'Mark Claimed'
+                    : '청구 완료 표시'}
                 </button>
               </div>
 
@@ -516,7 +553,7 @@ export const DiagnosticsPage: React.FC<{ embedded?: boolean }> = ({ embedded = f
                         className="h-24 w-24 shrink-0 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 flex items-center justify-center"
                       >
                         {src ? (
-                          <img src={src} alt="암호화 진단서" className="w-full h-full object-cover" />
+                          <img src={src} alt={isEn ? 'Encrypted document' : '암호화 진단서'} className="w-full h-full object-cover" />
                         ) : (
                           <Shield size={18} className="text-slate-400 animate-pulse" />
                         )}
@@ -544,7 +581,9 @@ export const DiagnosticsPage: React.FC<{ embedded?: boolean }> = ({ embedded = f
             className="w-full max-w-md rounded-t-3xl sm:rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-5 shadow-2xl space-y-3.5 max-h-[90vh] overflow-y-auto"
           >
             <div className="flex items-center justify-between">
-              <h2 className="font-bold text-base">새 진단일자 & 암호화 사진 등록</h2>
+              <h2 className="font-bold text-base">
+                {isEn ? 'Add Diagnosis & Encrypted Photos' : '새 진단일자 & 암호화 사진 등록'}
+              </h2>
               <button type="button" onClick={resetForm} className="p-1 text-slate-400">
                 <X size={20} />
               </button>
@@ -552,7 +591,9 @@ export const DiagnosticsPage: React.FC<{ embedded?: boolean }> = ({ embedded = f
 
             <div className="grid grid-cols-2 gap-2.5">
               <div>
-                <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">진단일자</label>
+                <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">
+                  {isEn ? 'Diagnosis Date' : '진단일자'}
+                </label>
                 <input
                   type="date"
                   required
@@ -562,40 +603,46 @@ export const DiagnosticsPage: React.FC<{ embedded?: boolean }> = ({ embedded = f
                 />
               </div>
               <div>
-                <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">청구 시효(년)</label>
+                <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">
+                  {isEn ? 'Claim Window (Years)' : '청구 시효(년)'}
+                </label>
                 <select
                   value={claimDeadlineYears}
                   onChange={(e) => setClaimDeadlineYears(Number(e.target.value))}
                   className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-bold"
                 >
-                  <option value={3}>3년 (실손 표준)</option>
-                  <option value={2}>2년</option>
-                  <option value={5}>5년</option>
+                  <option value={3}>{isEn ? '3 Years (Standard)' : '3년 (실손 표준)'}</option>
+                  <option value={2}>{isEn ? '2 Years' : '2년'}</option>
+                  <option value={5}>{isEn ? '5 Years' : '5년'}</option>
                 </select>
               </div>
             </div>
 
             <div>
-              <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">진단명 / 진료 내용 *</label>
+              <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">
+                {isEn ? 'Diagnosis / Visit Details *' : '진단명 / 진료 내용 *'}
+              </label>
               <input
                 type="text"
                 required
                 value={diagnosisName}
                 onChange={(e) => setDiagnosisName(e.target.value)}
-                placeholder="예: 요추 염좌, 편두통 외래 진료"
+                placeholder={isEn ? 'e.g., Lumbar sprain, Outpatient migraine visit' : '예: 요추 염좌, 편두통 외래 진료'}
                 className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs"
               />
             </div>
 
             {conditions.length > 0 && (
               <div>
-                <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">소속 질병 연결 (선택)</label>
+                <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">
+                  {isEn ? 'Link Condition (Optional)' : '소속 질병 연결 (선택)'}
+                </label>
                 <select
                   value={linkedConditionId}
                   onChange={(e) => setLinkedConditionId(e.target.value)}
                   className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-medium"
                 >
-                  <option value="">미지정 (단독 보관)</option>
+                  <option value="">{isEn ? 'None (Standalone)' : '미지정 (단독 보관)'}</option>
                   {conditions.filter((c) => !c.isArchived).map((c) => (
                     <option key={c.id} value={c.id}>
                       {c.label} ({c.bodyPart})
@@ -607,23 +654,27 @@ export const DiagnosticsPage: React.FC<{ embedded?: boolean }> = ({ embedded = f
 
             <div className="grid grid-cols-2 gap-2.5">
               <div>
-                <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">병원명</label>
+                <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">
+                  {isEn ? 'Hospital / Clinic' : '병원명'}
+                </label>
                 <input
                   type="text"
                   value={hospitalName}
                   onChange={(e) => setHospitalName(e.target.value)}
-                  placeholder="예: OO정형외과"
+                  placeholder={isEn ? 'e.g., City Orthopedic Clinic' : '예: OO정형외과'}
                   className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs"
                 />
               </div>
               <div>
-                <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">진료비(원)</label>
+                <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">
+                  {isEn ? 'Amount (KRW)' : '진료비(원)'}
+                </label>
                 <input
                   type="number"
                   min={0}
                   value={amountKrw}
                   onChange={(e) => setAmountKrw(e.target.value)}
-                  placeholder="예: 35000"
+                  placeholder={isEn ? 'e.g., 35000' : '예: 35000'}
                   className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs"
                 />
               </div>
@@ -631,11 +682,13 @@ export const DiagnosticsPage: React.FC<{ embedded?: boolean }> = ({ embedded = f
 
             <div>
               <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">
-                진단서·영수증 사진 첨부 (EXIF 제거 후 AES-256 암호화, 최대 6장)
+                {isEn
+                  ? 'Attach Photos (EXIF Stripped, AES-256 Encrypted, max 6)'
+                  : '진단서·영수증 사진 첨부 (EXIF 제거 후 AES-256 암호화, 최대 6장)'}
               </label>
               <div className="flex gap-2">
                 <label className="flex-1 py-2.5 px-3 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer">
-                  <Camera size={15} /> 카메라 촬영
+                  <Camera size={15} /> {isEn ? 'Camera' : '카메라 촬영'}
                   <input
                     type="file"
                     accept="image/*"
@@ -645,7 +698,7 @@ export const DiagnosticsPage: React.FC<{ embedded?: boolean }> = ({ embedded = f
                   />
                 </label>
                 <label className="flex-1 py-2.5 px-3 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer">
-                  <ImageIcon size={15} /> 앨범 선택
+                  <ImageIcon size={15} /> {isEn ? 'Gallery' : '앨범 선택'}
                   <input
                     type="file"
                     accept="image/*"
@@ -659,7 +712,7 @@ export const DiagnosticsPage: React.FC<{ embedded?: boolean }> = ({ embedded = f
                 <div className="flex gap-2 mt-2 overflow-x-auto">
                   {draftPhotos.map((src, idx) => (
                     <div key={idx} className="relative h-16 w-16 shrink-0 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700">
-                      <img src={src} alt="미리보기" className="w-full h-full object-cover" />
+                      <img src={src} alt={isEn ? 'Preview' : '미리보기'} className="w-full h-full object-cover" />
                       <button
                         type="button"
                         onClick={() => setDraftPhotos((prev) => prev.filter((_, i) => i !== idx))}
@@ -674,12 +727,14 @@ export const DiagnosticsPage: React.FC<{ embedded?: boolean }> = ({ embedded = f
             </div>
 
             <div>
-              <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">메모</label>
+              <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">
+                {isEn ? 'Notes' : '메모'}
+              </label>
               <textarea
                 rows={2}
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
-                placeholder="청구 서류 확인 사항이나 진료 메모..."
+                placeholder={isEn ? 'Claim checklist or visit notes...' : '청구 서류 확인 사항이나 진료 메모...'}
                 className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs"
               />
             </div>
@@ -691,7 +746,13 @@ export const DiagnosticsPage: React.FC<{ embedded?: boolean }> = ({ embedded = f
               disabled={isSaving}
               className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-md disabled:opacity-50"
             >
-              {isSaving ? '암호화 저장 중...' : '암호화하여 저장'}
+              {isSaving
+                ? isEn
+                  ? 'Encrypting & Saving...'
+                  : '암호화 저장 중...'
+                : isEn
+                ? 'Encrypt & Save'
+                : '암호화하여 저장'}
             </button>
           </form>
         </div>

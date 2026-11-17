@@ -15,25 +15,42 @@ import {
   BookOpen,
 } from 'lucide-react';
 import { useHealth } from '../context/HealthContext';
+import { useSettings } from '../context/SettingsContext';
 import { computeTreatmentMetrics } from '../utils/treatmentMetrics';
 import { triggerHaptic } from '../utils/native';
 
 export const StatsPage: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
   const navigate = useNavigate();
   const { conditions, logs, diaryEntries, diagnosticRecords } = useHealth();
+  const { settings } = useSettings();
+  const isEn = settings.language === 'en';
 
   const metrics = useMemo(
     () => computeTreatmentMetrics(conditions, logs, diaryEntries, diagnosticRecords),
     [conditions, logs, diaryEntries, diagnosticRecords]
   );
 
+  const slotLabel = (id: string, koLabel: string) => {
+    if (!isEn) return koLabel;
+    if (id === 'morning') return 'Morning (06–12h)';
+    if (id === 'afternoon') return 'Afternoon (12–18h)';
+    if (id === 'evening') return 'Evening (18–24h)';
+    return 'Night (00–06h)';
+  };
+
   const deltaLabel =
     metrics.overallPainDelta === null
       ? '-'
       : metrics.overallPainDelta < 0
-      ? `${metrics.overallPainDelta}점 (${metrics.overallImprovementPct}% 개선)`
+      ? isEn
+        ? `${metrics.overallPainDelta} pts (${metrics.overallImprovementPct}% better)`
+        : `${metrics.overallPainDelta}점 (${metrics.overallImprovementPct}% 개선)`
       : metrics.overallPainDelta > 0
-      ? `+${metrics.overallPainDelta}점`
+      ? isEn
+        ? `+${metrics.overallPainDelta} pts`
+        : `+${metrics.overallPainDelta}점`
+      : isEn
+      ? 'Stable (0)'
       : '유지 (0점)';
 
   return (
@@ -47,7 +64,7 @@ export const StatsPage: React.FC<{ embedded?: boolean }> = ({ embedded = false }
       {!embedded && (
         <header className="flex items-center gap-2">
           <BarChart3 size={20} className="text-teal-600 dark:text-teal-400" />
-          <h1 className="text-xl font-bold">앱 사용 · 치료 통계</h1>
+          <h1 className="text-xl font-bold">{isEn ? 'Usage & Treatment Stats' : '앱 사용 · 치료 통계'}</h1>
         </header>
       )}
 
@@ -56,10 +73,14 @@ export const StatsPage: React.FC<{ embedded?: boolean }> = ({ embedded = false }
         <div className="rounded-2xl border border-amber-300 dark:border-amber-800 bg-amber-50/80 dark:bg-amber-950/30 p-3.5 flex items-center justify-between gap-2">
           <div>
             <p className="text-xs font-extrabold text-amber-900 dark:text-amber-200">
-              미분류 증상 {metrics.unassignedCount}건이 통계에서 개별 질병으로 묶이지 않았습니다
+              {isEn
+                ? `${metrics.unassignedCount} unassigned logs are excluded from per-condition trends`
+                : `미분류 증상 ${metrics.unassignedCount}건이 통계에서 개별 질병으로 묶이지 않았습니다`}
             </p>
             <p className="text-[11px] text-amber-700 dark:text-amber-400">
-              질병으로 분류하면 치료 경과와 개선율이 더 정확하게 계산됩니다
+              {isEn
+                ? 'Group logs under a condition for accurate improvement rates'
+                : '질병으로 분류하면 치료 경과와 개선율이 더 정확하게 계산됩니다'}
             </p>
           </div>
           <button
@@ -70,7 +91,7 @@ export const StatsPage: React.FC<{ embedded?: boolean }> = ({ embedded = false }
             }}
             className="shrink-0 px-3 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold flex items-center gap-1"
           >
-            <FolderPlus size={13} /> 분류하기
+            <FolderPlus size={13} /> {isEn ? 'Group' : '분류하기'}
           </button>
         </div>
       )}
@@ -79,26 +100,28 @@ export const StatsPage: React.FC<{ embedded?: boolean }> = ({ embedded = false }
       <section className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-sm space-y-3">
         <div className="flex items-center justify-between">
           <h2 className="text-xs font-extrabold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
-            <CheckCircle2 size={14} className="text-emerald-600" /> 질병 치료 · 통증 개선 지표
+            <CheckCircle2 size={14} className="text-emerald-600" />{' '}
+            {isEn ? 'Treatment & Pain Outcomes' : '질병 치료 · 통증 개선 지표'}
           </h2>
           <span className="text-[10px] font-bold text-slate-400">
-            전체 질병 {metrics.totalConditions}개
+            {isEn ? `${metrics.totalConditions} conditions` : `전체 질병 ${metrics.totalConditions}개`}
           </span>
         </div>
 
         <div className="grid grid-cols-3 gap-2">
           <div className="rounded-xl bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200/70 dark:border-emerald-900/50 p-3 text-center">
             <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-300 block">
-              치료 종료
+              {isEn ? 'Resolved' : '치료 종료'}
             </span>
             <strong className="mt-0.5 block text-xl font-black text-emerald-700 dark:text-emerald-300">
-              {metrics.archivedConditionsCount}개
+              {metrics.archivedConditionsCount}
+              {isEn ? '' : '개'}
             </strong>
           </div>
 
           <div className="rounded-xl bg-slate-50 dark:bg-slate-800/70 border border-slate-200/80 dark:border-slate-800 p-3 text-center">
             <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 block">
-              개선된 질병
+              {isEn ? 'Improved' : '개선된 질병'}
             </span>
             <strong className="mt-0.5 block text-xl font-black text-slate-800 dark:text-slate-100">
               {metrics.improvedConditionsCount}
@@ -110,7 +133,7 @@ export const StatsPage: React.FC<{ embedded?: boolean }> = ({ embedded = false }
 
           <div className="rounded-xl bg-teal-50/70 dark:bg-teal-950/30 border border-teal-200/70 dark:border-teal-900/50 p-3 text-center">
             <span className="text-[10px] font-bold text-teal-700 dark:text-teal-300 block">
-              평균 NRS
+              {isEn ? 'Mean NRS' : '평균 NRS'}
             </span>
             <strong className="mt-0.5 block text-xl font-black text-teal-700 dark:text-teal-300">
               {metrics.avgNrs || '-'}
@@ -127,7 +150,7 @@ export const StatsPage: React.FC<{ embedded?: boolean }> = ({ embedded = false }
             ) : (
               <Minus size={15} className="text-slate-400" />
             )}
-            초기 대비 최근 통증 변화
+            {isEn ? 'First vs Latest Pain Change' : '초기 대비 최근 통증 변화'}
           </span>
           <span
             className={`font-extrabold ${
@@ -146,16 +169,20 @@ export const StatsPage: React.FC<{ embedded?: boolean }> = ({ embedded = false }
       {/* 2. App Usage Statistics */}
       <section className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-sm space-y-3">
         <h2 className="text-xs font-extrabold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
-          <Activity size={14} className="text-cyan-600" /> 앱 사용 통계
+          <Activity size={14} className="text-cyan-600" /> {isEn ? 'App Usage' : '앱 사용 통계'}
         </h2>
 
         <div className="grid grid-cols-2 gap-2.5 text-xs">
           <div className="rounded-xl border border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 p-3 flex items-center gap-2.5">
             <CalendarDays size={18} className="text-teal-600 shrink-0" />
             <div>
-              <span className="text-[10px] text-slate-400 font-bold block">기록 일수 · 총 건수</span>
+              <span className="text-[10px] text-slate-400 font-bold block">
+                {isEn ? 'Active Days · Logs' : '기록 일수 · 총 건수'}
+              </span>
               <strong className="text-sm font-black">
-                {metrics.activeDaysCount}일 · {metrics.totalLogs}건
+                {isEn
+                  ? `${metrics.activeDaysCount}d · ${metrics.totalLogs} logs`
+                  : `${metrics.activeDaysCount}일 · ${metrics.totalLogs}건`}
               </strong>
             </div>
           </div>
@@ -163,9 +190,13 @@ export const StatsPage: React.FC<{ embedded?: boolean }> = ({ embedded = false }
           <div className="rounded-xl border border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 p-3 flex items-center gap-2.5">
             <Flame size={18} className="text-amber-500 shrink-0" />
             <div>
-              <span className="text-[10px] text-slate-400 font-bold block">연속 기록 (현재/최장)</span>
+              <span className="text-[10px] text-slate-400 font-bold block">
+                {isEn ? 'Streak (Now / Best)' : '연속 기록 (현재/최장)'}
+              </span>
               <strong className="text-sm font-black">
-                {metrics.currentStreakDays}일 / {metrics.longestStreakDays}일
+                {isEn
+                  ? `${metrics.currentStreakDays}d / ${metrics.longestStreakDays}d`
+                  : `${metrics.currentStreakDays}일 / ${metrics.longestStreakDays}일`}
               </strong>
             </div>
           </div>
@@ -173,17 +204,25 @@ export const StatsPage: React.FC<{ embedded?: boolean }> = ({ embedded = false }
           <div className="rounded-xl border border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 p-3 flex items-center gap-2.5">
             <BookOpen size={18} className="text-emerald-500 shrink-0" />
             <div>
-              <span className="text-[10px] text-slate-400 font-bold block">건강 일기 작성</span>
-              <strong className="text-sm font-black">{metrics.diaryDaysCount}일</strong>
+              <span className="text-[10px] text-slate-400 font-bold block">
+                {isEn ? 'Journal Entries' : '건강 일기 작성'}
+              </span>
+              <strong className="text-sm font-black">
+                {isEn ? `${metrics.diaryDaysCount} days` : `${metrics.diaryDaysCount}일`}
+              </strong>
             </div>
           </div>
 
           <div className="rounded-xl border border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 p-3 flex items-center gap-2.5">
             <FileCheck2 size={18} className="text-indigo-500 shrink-0" />
             <div>
-              <span className="text-[10px] text-slate-400 font-bold block">보관 진단서 · 약효 평가</span>
+              <span className="text-[10px] text-slate-400 font-bold block">
+                {isEn ? 'Vault Docs · Med Checks' : '보관 진단서 · 약효 평가'}
+              </span>
               <strong className="text-sm font-black">
-                {metrics.diagnosticsCount}건 · {metrics.medEvaluatedCount}회
+                {isEn
+                  ? `${metrics.diagnosticsCount} · ${metrics.medEvaluatedCount}`
+                  : `${metrics.diagnosticsCount}건 · ${metrics.medEvaluatedCount}회`}
               </strong>
             </div>
           </div>
@@ -192,11 +231,16 @@ export const StatsPage: React.FC<{ embedded?: boolean }> = ({ embedded = false }
         {metrics.avgMedReliefDelta !== null && (
           <div className="rounded-xl bg-blue-50/70 dark:bg-blue-950/30 border border-blue-200/70 dark:border-blue-900/50 px-3.5 py-2.5 flex items-center justify-between text-xs">
             <span className="font-bold text-blue-900 dark:text-blue-200 flex items-center gap-1.5">
-              <Pill size={14} className="text-blue-500" /> 복약 후 평균 통증 완화폭
+              <Pill size={14} className="text-blue-500" />{' '}
+              {isEn ? 'Mean Post-Med Pain Relief' : '복약 후 평균 통증 완화폭'}
             </span>
             <strong className="text-blue-700 dark:text-blue-300 font-black">
               {metrics.avgMedReliefDelta > 0
-                ? `-${metrics.avgMedReliefDelta}점 감소`
+                ? isEn
+                  ? `-${metrics.avgMedReliefDelta} pts`
+                  : `-${metrics.avgMedReliefDelta}점 감소`
+                : isEn
+                ? `${metrics.avgMedReliefDelta} pts`
                 : `${metrics.avgMedReliefDelta}점`}
             </strong>
           </div>
@@ -207,7 +251,7 @@ export const StatsPage: React.FC<{ embedded?: boolean }> = ({ embedded = false }
       {metrics.conditionOutcomes.length > 0 && (
         <section className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-sm space-y-2.5">
           <h2 className="text-xs font-extrabold uppercase tracking-wider text-slate-500">
-            질병별 통증 변화 (최초 → 최근)
+            {isEn ? 'Per-Condition Trend (First → Latest)' : '질병별 통증 변화 (최초 → 최근)'}
           </h2>
           <div className="space-y-2">
             {metrics.conditionOutcomes.map((item) => (
@@ -224,12 +268,12 @@ export const StatsPage: React.FC<{ embedded?: boolean }> = ({ embedded = false }
                     <span className="font-bold truncate">{item.label}</span>
                     {item.isArchived && (
                       <span className="px-1.5 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 text-[9px] font-bold">
-                        치료 종료
+                        {isEn ? 'Resolved' : '치료 종료'}
                       </span>
                     )}
                   </div>
                   <span className="text-[10px] text-slate-400">
-                    {item.bodyPart} · {item.count}건
+                    {item.bodyPart} · {isEn ? `${item.count} logs` : `${item.count}건`}
                   </span>
                 </div>
                 <div className="text-right shrink-0">
@@ -245,7 +289,17 @@ export const StatsPage: React.FC<{ embedded?: boolean }> = ({ embedded = false }
                         : 'text-slate-400'
                     }`}
                   >
-                    {item.delta < 0 ? `${item.delta}점 개선` : item.delta > 0 ? `+${item.delta}점` : '변화 없음'}
+                    {item.delta < 0
+                      ? isEn
+                        ? `${item.delta} improved`
+                        : `${item.delta}점 개선`
+                      : item.delta > 0
+                      ? isEn
+                        ? `+${item.delta} pts`
+                        : `+${item.delta}점`
+                      : isEn
+                      ? 'No change'
+                      : '변화 없음'}
                   </span>
                 </div>
               </div>
@@ -260,7 +314,9 @@ export const StatsPage: React.FC<{ embedded?: boolean }> = ({ embedded = false }
           {metrics.topBodyParts.length > 0 && (
             <section className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-sm space-y-2.5">
               <h2 className="text-xs font-extrabold uppercase tracking-wider text-slate-500">
-                가장 자주 기록한 부위 Top {metrics.topBodyParts.length}
+                {isEn
+                  ? `Top ${metrics.topBodyParts.length} Affected Body Parts`
+                  : `가장 자주 기록한 부위 Top ${metrics.topBodyParts.length}`}
               </h2>
               <div className="space-y-2">
                 {metrics.topBodyParts.map((item) => {
@@ -270,7 +326,9 @@ export const StatsPage: React.FC<{ embedded?: boolean }> = ({ embedded = false }
                       <div className="flex justify-between font-bold">
                         <span>{item.part}</span>
                         <span className="text-slate-500">
-                          {item.count}회 · 평균 NRS {item.avgNrs}
+                          {isEn
+                            ? `${item.count}x · Avg NRS ${item.avgNrs}`
+                            : `${item.count}회 · 평균 NRS ${item.avgNrs}`}
                         </span>
                       </div>
                       <div className="h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
@@ -288,15 +346,15 @@ export const StatsPage: React.FC<{ embedded?: boolean }> = ({ embedded = false }
 
           <section className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-sm space-y-2.5">
             <h2 className="text-xs font-extrabold uppercase tracking-wider text-slate-500">
-              시간대별 증상 기록 분포
+              {isEn ? 'Time-of-Day Symptom Distribution' : '시간대별 증상 기록 분포'}
             </h2>
             <div className="space-y-2">
               {metrics.timeOfDayDist.map((slot) => (
                 <div key={slot.id} className="space-y-1 text-xs">
                   <div className="flex justify-between font-semibold">
-                    <span>{slot.label}</span>
+                    <span>{slotLabel(slot.id, slot.label)}</span>
                     <span className="text-slate-500">
-                      {slot.count}건 ({slot.pct}%)
+                      {isEn ? `${slot.count} (${slot.pct}%)` : `${slot.count}건 (${slot.pct}%)`}
                     </span>
                   </div>
                   <div className="h-1.5 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">

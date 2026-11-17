@@ -32,6 +32,7 @@ const AppContent: React.FC = () => {
     setupNewPin,
   } = useAuth();
   const { settings, isSettingsLoaded, acceptDisclaimer } = useSettings();
+  const isEn = settings.language === 'en';
   const [showIntroLogo, setShowIntroLogo] = useState(true);
 
   useEffect(() => {
@@ -45,7 +46,7 @@ const AppContent: React.FC = () => {
     return (
       <>
         <LockedBackButtonHandler />
-        <BrandSplash statusText="보안 상태 확인 중..." />
+        <BrandSplash statusText={isEn ? 'Checking security integrity...' : '보안 상태 확인 중...'} />
       </>
     );
   }
@@ -59,12 +60,19 @@ const AppContent: React.FC = () => {
             <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-rose-500/15 text-rose-400 text-2xl font-black">
               !
             </div>
-            <h1 className="text-lg font-bold text-rose-300">보안 환경 검증 실패</h1>
+            <h1 className="text-lg font-bold text-rose-300">
+              {isEn ? 'Security Integrity Check Failed' : '보안 환경 검증 실패'}
+            </h1>
             <p className="text-xs leading-relaxed text-slate-300">
-              {deviceIntegrityReason || '루팅 또는 변조된 환경이 감지되어 앱 실행이 차단되었습니다.'}
+              {deviceIntegrityReason ||
+                (isEn
+                  ? 'Rooted, hooked, or tampered environment detected. App launch is blocked.'
+                  : '루팅 또는 변조된 환경이 감지되어 앱 실행이 차단되었습니다.')}
             </p>
             <p className="text-[11px] text-slate-400">
-              민감한 의료 기록 보호를 위해 순정(비루팅) 환경에서만 실행할 수 있습니다.
+              {isEn
+                ? 'To protect sensitive medical records, Body Signal only runs on unmodified, non-rooted devices.'
+                : '민감한 의료 기록 보호를 위해 순정(비루팅) 환경에서만 실행할 수 있습니다.'}
             </p>
           </div>
         </main>
@@ -94,7 +102,7 @@ const AppContent: React.FC = () => {
     return (
       <>
         <LockedBackButtonHandler />
-        <BrandSplash statusText="설정 불러오는 중..." />
+        <BrandSplash statusText={isEn ? 'Loading settings...' : '설정 불러오는 중...'} />
       </>
     );
   }
@@ -116,7 +124,7 @@ const AppContent: React.FC = () => {
           isOpen={true}
           mode="set"
           required={true}
-          title="초기 6자리 보안 PIN 설정"
+          title={isEn ? 'Set Mandatory 6-Digit Security PIN' : '초기 6자리 보안 PIN 설정'}
           onSuccess={async (newPin) => {
             await setupNewPin(newPin);
           }}

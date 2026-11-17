@@ -127,7 +127,7 @@ export const translations = {
     quickSosSettingDesc: '화면 우하단에 1초 긴급 기록 플로팅 버튼 표시',
     privacySection: '보안 및 잠금',
     appLockPin: '앱 잠금 (암호화 PIN)',
-    appLockPinDesc: 'AES-256 비트 암호화로 데이터 보호',
+    appLockPinDesc: '6자리 PIN 기반 AES-256 세션 키로 데이터 보호',
     changePin: 'PIN 변경',
     presetSection: '상용구 & 약물 관리',
     manageMedPresets: '자주 복용하는 약물 관리',
@@ -146,7 +146,7 @@ export const translations = {
 
     // Security & Pin
     enterPin: 'PIN 입력',
-    setNewPin: '새 4자리 PIN 설정',
+    setNewPin: '새 6자리 PIN 설정',
     confirmNewPin: 'PIN 확인 (한 번 더 입력)',
     pinIncorrect: 'PIN이 일치하지 않습니다.',
     pinMismatch: '입력하신 두 PIN이 서로 다릅니다.',
@@ -317,7 +317,7 @@ export const translations = {
     quickSosSettingDesc: 'Show 1-sec acute pain logging floating button',
     privacySection: 'Security & Lock',
     appLockPin: 'App Lock (AES-256 PIN)',
-    appLockPinDesc: 'Encrypt local storage with a 4-digit PIN',
+    appLockPinDesc: 'Encrypt local storage with a mandatory 6-digit PIN',
     changePin: 'Change PIN',
     presetSection: 'Medications & Presets',
     manageMedPresets: 'Frequent Medications Presets',
@@ -336,7 +336,7 @@ export const translations = {
 
     // Security & Pin
     enterPin: 'Enter PIN',
-    setNewPin: 'Set New 4-digit PIN',
+    setNewPin: 'Set New 6-digit PIN',
     confirmNewPin: 'Confirm New PIN',
     pinIncorrect: 'Incorrect PIN.',
     pinMismatch: 'PINs do not match.',
@@ -345,7 +345,7 @@ export const translations = {
     tooManyAttempts: 'Too many attempts. Please try again later.',
     biometricsSetting: 'Biometrics (Fingerprint / Face ID)',
     biometricsSettingDesc: 'Unlock quickly and securely using biometrics instead of PIN',
-    biometricVerifyPinPrompt: 'For security, please enter your current 4-digit PIN first.',
+    biometricVerifyPinPrompt: 'For security, please enter your current 6-digit PIN first.',
 
     // Local LLM & Edge AI
     localLlmSection: 'Local LLM (Private On-Device AI)',

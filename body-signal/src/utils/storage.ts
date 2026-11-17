@@ -466,6 +466,12 @@ export async function loadUserSettings(): Promise<UserSettings> {
   const db = await getDB();
   const stored = await db.get('app_state', 'user_settings');
   if (!stored) {
+    if (typeof window !== 'undefined' && typeof navigator !== 'undefined' && navigator.language) {
+      const detectedLang = navigator.language.toLowerCase().startsWith('ko') ? 'ko' : 'en';
+      if (detectedLang === 'en') {
+        return { ...DEFAULT_SETTINGS, language: 'en' };
+      }
+    }
     return DEFAULT_SETTINGS;
   }
 
