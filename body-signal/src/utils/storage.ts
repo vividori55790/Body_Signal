@@ -2,9 +2,12 @@ import { openDB, DBSchema, IDBPDatabase } from 'idb';
 import { HealthDataPayload, HealthDataPayloadSchema, UserSettings, UserSettingsSchema } from '../types/health';
 import {
   EncryptedPackage,
+  SESSION_KEY_TOKEN,
   encryptWithPin,
   decryptWithPin,
-  computeSaltedPinHash,
+  encryptWithActiveSessionKey,
+  decryptWithActiveSessionKey,
+  hasActiveSessionCryptoKey,
   encryptWithDeviceKey,
   decryptWithDeviceKey,
   generateDeviceMasterKeyHex,
@@ -128,9 +131,10 @@ export async function migrateLegacyDataIfNeeded(): Promise<HealthDataPayload | n
         lastUpdated: new Date().toISOString(),
       };
 
-      // Save migrated data to IndexedDB encrypted at rest
+      // Save migrated data to IndexedDB encrypted at rest, then purge plaintext localStorage copy
       await saveHealthData(payload);
-      // Mark migration complete, don't delete localStorage immediately for safety
+      localStorage.removeItem(LEGACY_STORAGE_KEY);
+      localStorage.removeItem('bs-sync-queue-v1');
       localStorage.setItem('bs-migrated-to-idb', 'true');
       return payload;
     }
@@ -250,7 +254,10 @@ export async function loadHealthData(pin?: string): Promise<{ data: HealthDataPa
         return { data: EMPTY_HEALTH_DATA, isEncrypted: true };
       }
       try {
-        const decryptedJson = await decryptWithPin(pkg, pin);
+        const decryptedJson =
+          pin === SESSION_KEY_TOKEN
+            ? await decryptWithActiveSessionKey(pkg)
+            : await decryptWithPin(pkg, pin);
         const parsed = JSON.parse(decryptedJson);
         const validated = HealthDataPayloadSchema.parse(parsed);
         return { data: validated, isEncrypted: true };
@@ -313,7 +320,10 @@ export async function saveHealthData(data: HealthDataPayload, pin?: string): Pro
   };
 
   const jsonStr = JSON.stringify(toSave);
-  if (pin) {
+  if (pin === SESSION_KEY_TOKEN) {
+    const encrypted = await encryptWithActiveSessionKey(jsonStr);
+    await db.put('app_state', { ...encrypted, mode: 'pin' }, 'health_data');
+  } else if (pin) {
     const encrypted = await encryptWithPin(jsonStr, pin);
     await db.put('app_state', { ...encrypted, mode: 'pin' }, 'health_data');
   } else {
@@ -321,6 +331,42 @@ export async function saveHealthData(data: HealthDataPayload, pin?: string): Pro
     const encrypted = await encryptWithDeviceKey(jsonStr, deviceKey);
     await db.put('app_state', { ...encrypted, mode: 'device' }, 'health_data');
   }
+}
+
+/**
+ * Migrates any PIN-encrypted records (health_data, encrypted_media, totp_meta)
+ * onto the PinMeta sessionSalt so the non-extractable session CryptoKey can
+ * encrypt and decrypt everything without holding the raw PIN in JS state.
+ */
+export async function migratePinRecordsToSessionKey(rawPin: string): Promise<void> {
+  if (!hasActiveSessionCryptoKey()) return;
+  const db = await getDB();
+  const record = await db.get('app_state', 'health_data');
+  if (record && typeof record === 'object' && record.v === 1 && record.salt && record.ct) {
+    const pkg = record as EncryptedPackage;
+    try {
+      await decryptWithActiveSessionKey(pkg);
+    } catch {
+      try {
+        const plain =
+          pkg.mode === 'device'
+            ? await decryptWithDeviceKey(pkg, await getOrCreateDeviceMasterKey())
+            : await decryptWithPin(pkg, rawPin);
+        const reWrapped = await encryptWithActiveSessionKey(plain);
+        await db.put('app_state', { ...reWrapped, mode: 'pin' }, 'health_data');
+      } catch {}
+    }
+  }
+
+  try {
+    const { migrateMediaToSessionKey } = await import('./mediaStorage');
+    await migrateMediaToSessionKey(rawPin);
+  } catch {}
+
+  try {
+    const { migrateTotpToSessionKey } = await import('./totp');
+    await migrateTotpToSessionKey(rawPin);
+  } catch {}
 }
 
 /**
@@ -333,9 +379,20 @@ export async function reEncryptHealthData(newPin?: string, oldPin?: string): Pro
     let payload: HealthDataPayload | null = null;
     if (record && typeof record === 'object' && record.v === 1 && record.salt && record.ct) {
       const pkg = record as EncryptedPackage;
-      if (oldPin) {
+      if (oldPin === SESSION_KEY_TOKEN) {
+        try {
+          const json = await decryptWithActiveSessionKey(pkg);
+          payload = JSON.parse(json);
+        } catch {}
+      } else if (oldPin) {
         try {
           const json = await decryptWithPin(pkg, oldPin);
+          payload = JSON.parse(json);
+        } catch {}
+      }
+      if (!payload && hasActiveSessionCryptoKey()) {
+        try {
+          const json = await decryptWithActiveSessionKey(pkg);
           payload = JSON.parse(json);
         } catch {}
       }
@@ -364,6 +421,14 @@ export async function reEncryptHealthData(newPin?: string, oldPin?: string): Pro
   } catch (err) {
     console.warn('Media re-encryption warning:', err);
   }
+
+  // Re-encrypt stored TOTP 2FA secret with the new active PIN / key
+  try {
+    const { reEncryptTotpSecret } = await import('./totp');
+    await reEncryptTotpSecret(newPin, oldPin);
+  } catch (err) {
+    console.warn('TOTP re-encryption warning:', err);
+  }
 }
 
 /**
@@ -374,6 +439,10 @@ export interface PinMeta {
   hash: string;
   failedAttempts: number;
   lockoutUntil: number; // timestamp
+  consecutiveLockouts?: number;
+  pinLength?: number;
+  isOsCredentialOnly?: boolean;
+  sessionSalt?: string;
 }
 
 export async function getPinMeta(): Promise<PinMeta | null> {
@@ -391,24 +460,49 @@ export async function savePinMeta(meta: PinMeta | null): Promise<void> {
 }
 
 /**
- * Settings operations
+ * Settings operations (AES-GCM 256 encrypted at rest with device master key)
  */
 export async function loadUserSettings(): Promise<UserSettings> {
   const db = await getDB();
-  const settings = await db.get('app_state', 'user_settings');
-  if (!settings) {
+  const stored = await db.get('app_state', 'user_settings');
+  if (!stored) {
     return DEFAULT_SETTINGS;
   }
+
+  let rawSettings: any = stored;
+  if (stored && typeof stored === 'object' && stored.v === 1 && stored.salt && stored.ct) {
+    try {
+      const deviceKey = await getOrCreateDeviceMasterKey();
+      const decryptedJson = await decryptWithDeviceKey(stored as EncryptedPackage, deviceKey);
+      rawSettings = JSON.parse(decryptedJson);
+    } catch {
+      return DEFAULT_SETTINGS;
+    }
+  } else {
+    // Transparently encrypt legacy plaintext user_settings (which may hold localLlm.apiKey)
+    try {
+      const parsed = UserSettingsSchema.parse(rawSettings);
+      await saveUserSettings(parsed);
+      return parsed;
+    } catch {
+      const merged = { ...DEFAULT_SETTINGS, ...rawSettings };
+      await saveUserSettings(merged).catch(() => {});
+      return merged;
+    }
+  }
+
   try {
-    return UserSettingsSchema.parse(settings);
+    return UserSettingsSchema.parse(rawSettings);
   } catch {
-    return { ...DEFAULT_SETTINGS, ...settings };
+    return { ...DEFAULT_SETTINGS, ...rawSettings };
   }
 }
 
 export async function saveUserSettings(settings: UserSettings): Promise<void> {
   const db = await getDB();
-  await db.put('app_state', settings, 'user_settings');
+  const deviceKey = await getOrCreateDeviceMasterKey();
+  const encrypted = await encryptWithDeviceKey(JSON.stringify(settings), deviceKey);
+  await db.put('app_state', { ...encrypted, mode: 'device' }, 'user_settings');
 }
 
 /**

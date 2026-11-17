@@ -9,6 +9,10 @@ const KEY_LENGTH_BITS = 256;
 const IV_LENGTH_BYTES = 12; // Standard for AES-GCM
 const SALT_LENGTH_BYTES = 16;
 
+export const SESSION_KEY_TOKEN = '__NON_EXTRACTABLE_SESSION_KEY__';
+let activeSessionCryptoKey: CryptoKey | null = null;
+let activeSessionSaltHex: string | null = null;
+
 export interface EncryptedPackage {
   v: 1;
   salt: string; // Hex
@@ -55,6 +59,21 @@ function base64ToBuffer(base64: string): ArrayBuffer {
 }
 
 /**
+ * Constant-time string comparison (UTF-8 byte XOR accumulation) to mitigate timing side-channels.
+ */
+export function constantTimeEqual(a: string, b: string): boolean {
+  const encoder = new TextEncoder();
+  const aBytes = encoder.encode(a);
+  const bBytes = encoder.encode(b);
+  const maxLen = Math.max(aBytes.length, bBytes.length);
+  let diff = aBytes.length ^ bBytes.length;
+  for (let i = 0; i < maxLen; i++) {
+    diff |= (aBytes[i] ?? 0) ^ (bBytes[i] ?? 0);
+  }
+  return diff === 0;
+}
+
+/**
  * Computes a SHA-256 Checksum hash of any string data (for medical tamper-proof verification).
  */
 export async function computeSha256Checksum(data: string): Promise<string> {
@@ -88,6 +107,63 @@ export async function deriveKeyFromPin(pin: string, salt: Uint8Array): Promise<C
     false,
     ['encrypt', 'decrypt']
   );
+}
+
+/**
+ * Generates a random 16-byte salt encoded as hex.
+ */
+export function generateSaltHex(): string {
+  const salt = crypto.getRandomValues(new Uint8Array(SALT_LENGTH_BYTES));
+  return bufferToHex(salt.buffer);
+}
+
+/**
+ * Derives and stores a non-extractable (extractable=false) AES-GCM 256 CryptoKey
+ * in a module-private closure so plaintext PINs never stay in React state or JS strings.
+ */
+export async function initSessionCryptoKeyFromPin(pin: string, saltHex: string): Promise<void> {
+  const salt = hexToBytes(saltHex);
+  activeSessionCryptoKey = await deriveKeyFromPin(pin, salt);
+  activeSessionSaltHex = saltHex;
+}
+
+export function clearSessionCryptoKey(): void {
+  activeSessionCryptoKey = null;
+  activeSessionSaltHex = null;
+}
+
+export function hasActiveSessionCryptoKey(): boolean {
+  return activeSessionCryptoKey !== null && activeSessionSaltHex !== null;
+}
+
+export async function encryptWithActiveSessionKey(plaintext: string): Promise<EncryptedPackage> {
+  if (!activeSessionCryptoKey || !activeSessionSaltHex) {
+    throw new Error('세션 암호화 키가 초기화되지 않았습니다.');
+  }
+  const iv = crypto.getRandomValues(new Uint8Array(IV_LENGTH_BYTES));
+  const encoded = new TextEncoder().encode(plaintext);
+  const ciphertextBuffer = await crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv },
+    activeSessionCryptoKey,
+    encoded
+  );
+  return {
+    v: 1,
+    salt: activeSessionSaltHex,
+    iv: bufferToHex(iv.buffer),
+    ct: bufferToBase64(ciphertextBuffer),
+    mode: 'pin',
+  };
+}
+
+export async function decryptWithActiveSessionKey(pkg: EncryptedPackage): Promise<string> {
+  if (!activeSessionCryptoKey || !activeSessionSaltHex) {
+    throw new Error('세션 암호화 키가 초기화되지 않았습니다.');
+  }
+  if (pkg.salt !== activeSessionSaltHex) {
+    throw new Error('세션 Salt가 일치하지 않아 키 재유도가 필요합니다.');
+  }
+  return decryptWithKey(pkg, activeSessionCryptoKey);
 }
 
 /**
@@ -183,10 +259,10 @@ export async function decryptBackupWithPassphrase(
   const decryptedJson = await decryptWithPin(pkg, passphrase);
   const envelope = JSON.parse(decryptedJson);
 
-  // Verify Checksum
+  // Verify Checksum (constant-time)
   if (envelope.checksum && envelope.payload) {
     const calculatedChecksum = await computeSha256Checksum(envelope.payload);
-    if (calculatedChecksum !== envelope.checksum) {
+    if (!constantTimeEqual(calculatedChecksum, envelope.checksum)) {
       throw new Error('데이터 무결성 검증 실패: 백업 파일이 변조되었거나 손상되었습니다.');
     }
     return envelope.payload;
@@ -345,11 +421,17 @@ export async function computeRecordSignature(
     intensity: number;
     medication?: string;
     postMedIntensity?: number;
+    notes?: string;
+    radiation?: string;
+    painQuality?: string[];
+    triggers?: string[];
+    reliefFactors?: string[];
+    redFlags?: string[];
     prevSignature?: string;
   },
   prevSignature: string = ''
 ): Promise<string> {
-  const canonicalStr = [
+  const baseFields = [
     record.id,
     record.conditionId,
     record.date,
@@ -357,8 +439,27 @@ export async function computeRecordSignature(
     record.medication || '',
     record.postMedIntensity ?? '',
     prevSignature || record.prevSignature || '',
-  ].join('|');
-  return computeSha256Checksum(canonicalStr);
+  ];
+  const hasExtended = Boolean(
+    record.notes ||
+      record.radiation ||
+      (record.painQuality && record.painQuality.length > 0) ||
+      (record.triggers && record.triggers.length > 0) ||
+      (record.reliefFactors && record.reliefFactors.length > 0) ||
+      (record.redFlags && record.redFlags.length > 0)
+  );
+  const fields = hasExtended
+    ? [
+        ...baseFields,
+        record.notes || '',
+        record.radiation || '',
+        (record.painQuality || []).join(','),
+        (record.triggers || []).join(','),
+        (record.reliefFactors || []).join(','),
+        (record.redFlags || []).join(','),
+      ]
+    : baseFields;
+  return computeSha256Checksum(fields.join('|'));
 }
 
 /**
@@ -372,6 +473,12 @@ export async function verifyRecordSignature(
     intensity: number;
     medication?: string;
     postMedIntensity?: number;
+    notes?: string;
+    radiation?: string;
+    painQuality?: string[];
+    triggers?: string[];
+    reliefFactors?: string[];
+    redFlags?: string[];
     signature?: string;
     prevSignature?: string;
   }
@@ -380,7 +487,7 @@ export async function verifyRecordSignature(
     return false;
   }
   const expected = await computeRecordSignature(record, record.prevSignature || '');
-  return record.signature === expected;
+  return constantTimeEqual(record.signature, expected);
 }
 
 // Aliases for compatibility
