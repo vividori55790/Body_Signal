@@ -10,11 +10,14 @@ export const LockScreen: React.FC = () => {
     unlockWithBiometric,
     isBiometricEnabled,
     isBiometricAvailable,
+    pinLengthHint,
+    isOsCredentialOnly,
     lockoutRemainingMs,
     pendingTwoFactor,
     verifyTwoFactorAndUnlock,
     cancelTwoFactor,
   } = useAuth();
+  const targetLength = Math.max(4, Math.min(16, pinLengthHint || 4));
   const [pin, setPin] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [totpInput, setTotpInput] = useState('');
@@ -106,14 +109,14 @@ export const LockScreen: React.FC = () => {
 
   const handleDigit = async (digit: string) => {
     if (lockoutRemainingMs > 0) return;
-    if (pin.length >= 4) return;
+    if (pin.length >= targetLength) return;
 
     triggerHaptic();
     const nextPin = pin + digit;
     setPin(nextPin);
     setErrorMsg('');
 
-    if (nextPin.length === 4) {
+    if (nextPin.length === targetLength) {
       const result = await unlockApp(nextPin);
       if (!result.success) {
         setErrorMsg(result.message || 'PIN이 일치하지 않습니다.');
@@ -150,25 +153,40 @@ export const LockScreen: React.FC = () => {
         </div>
         <h1 className="text-2xl font-bold tracking-wider">BODY SIGNAL</h1>
         <p className="mt-1 text-xs text-slate-400">
-          {isBiometricEnabled && isBiometricAvailable ? '생체인식 또는 PIN을 입력하세요' : '안전한 데이터 접근을 위해 PIN을 입력하세요'}
+          {isOsCredentialOnly
+            ? '생체인증·기기 잠금 또는 16자리 비상 복구 PIN을 입력하세요'
+            : isBiometricEnabled && isBiometricAvailable
+            ? `생체인식 또는 ${targetLength}자리 PIN을 입력하세요`
+            : `안전한 데이터 접근을 위해 ${targetLength}자리 PIN을 입력하세요`}
         </p>
       </div>
 
       {/* PIN dots */}
-      <div className="mb-6 flex gap-4 sm:gap-5 justify-center">
-        {[0, 1, 2, 3].map((i) => (
-          <div
-            key={i}
-            className={`h-4 w-4 sm:h-5 sm:w-5 rounded-full transition-all duration-200 ${
-              errorMsg || lockoutRemainingMs > 0
-                ? 'scale-110 bg-rose-500 border-2 border-rose-400 shadow-[0_0_12px_rgba(244,63,94,0.9)]'
-                : pin.length > i
-                ? 'scale-110 bg-emerald-400 border-2 border-emerald-300 shadow-[0_0_12px_rgba(52,211,153,0.9)]'
-                : 'border-2 border-slate-700 bg-slate-900/80'
-            }`}
-          />
-        ))}
-      </div>
+      {targetLength <= 8 ? (
+        <div className="mb-6 flex gap-3.5 sm:gap-4 justify-center">
+          {Array.from({ length: targetLength }, (_, i) => (
+            <div
+              key={i}
+              className={`h-4 w-4 sm:h-5 sm:w-5 rounded-full transition-all duration-200 ${
+                errorMsg || lockoutRemainingMs > 0
+                  ? 'scale-110 bg-rose-500 border-2 border-rose-400 shadow-[0_0_12px_rgba(244,63,94,0.9)]'
+                  : pin.length > i
+                  ? 'scale-110 bg-emerald-400 border-2 border-emerald-300 shadow-[0_0_12px_rgba(52,211,153,0.9)]'
+                  : 'border-2 border-slate-700 bg-slate-900/80'
+              }`}
+            />
+          ))}
+        </div>
+      ) : (
+        <div className="mb-6 flex flex-col items-center gap-2">
+          <div className="rounded-2xl border border-slate-800 bg-slate-900/90 px-4 py-2.5 font-mono text-lg tracking-widest text-emerald-400 min-w-[220px] text-center">
+            {pin.length > 0 ? '•'.repeat(pin.length) : '비상 복구 PIN 입력'}
+          </div>
+          <span className="text-[11px] font-mono text-slate-400">
+            {pin.length} / {targetLength}자리
+          </span>
+        </div>
+      )}
 
       {/* Error or Lockout notification */}
       <div className="mb-8 flex h-6 items-center justify-center text-xs font-bold text-rose-400">

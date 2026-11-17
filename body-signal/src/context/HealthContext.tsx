@@ -5,6 +5,7 @@ import {
   DiaryEntry,
   DiagnosticRecord,
   HealthDataPayload,
+  HealthDataPayloadSchema,
   ClinicalBriefing,
   UNASSIGNED_CONDITION_ID,
 } from '../types/health';
@@ -626,14 +627,25 @@ export const HealthProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   const importBackupJson = async (jsonStr: string) => {
     const parsed = JSON.parse(jsonStr);
-    const data = parsed?.data || parsed;
-    if (data && Array.isArray(data.conditions) && Array.isArray(data.logs)) {
-      const nextDiagnostics = Array.isArray(data.diagnosticRecords) ? data.diagnosticRecords : [];
-      setConditions(data.conditions);
-      setLogs(data.logs);
-      setDiaryEntries(data.diaryEntries || []);
-      setDiagnosticRecords(nextDiagnostics);
-      await persist(data.conditions, data.logs, data.diaryEntries || [], nextDiagnostics);
+    const raw = parsed?.data || parsed;
+    if (raw && Array.isArray(raw.conditions) && Array.isArray(raw.logs)) {
+      const validated = HealthDataPayloadSchema.parse({
+        conditions: raw.conditions,
+        logs: raw.logs,
+        diaryEntries: Array.isArray(raw.diaryEntries) ? raw.diaryEntries : [],
+        diagnosticRecords: Array.isArray(raw.diagnosticRecords) ? raw.diagnosticRecords : [],
+        lastUpdated: typeof raw.lastUpdated === 'string' ? raw.lastUpdated : new Date().toISOString(),
+      });
+      setConditions(validated.conditions);
+      setLogs(validated.logs);
+      setDiaryEntries(validated.diaryEntries);
+      setDiagnosticRecords(validated.diagnosticRecords);
+      await persist(
+        validated.conditions,
+        validated.logs,
+        validated.diaryEntries,
+        validated.diagnosticRecords
+      );
     } else {
       throw new Error('올바른 백업 파일 형식이 아닙니다.');
     }

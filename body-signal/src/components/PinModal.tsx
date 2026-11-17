@@ -11,6 +11,8 @@ interface PinModalProps {
   title?: string;
   errorMessage?: string;
   lockoutRemainingMs?: number;
+  expectedLength?: number;
+  required?: boolean;
 }
 
 export const PinModal: React.FC<PinModalProps> = ({
@@ -21,11 +23,14 @@ export const PinModal: React.FC<PinModalProps> = ({
   title,
   errorMessage,
   lockoutRemainingMs = 0,
+  expectedLength = 6,
+  required = false,
 }) => {
   const [pin, setPin] = useState('');
   const [firstPin, setFirstPin] = useState(''); // For set/change confirmation
   const [step, setStep] = useState<'enter' | 'confirm'>('enter');
   const [localError, setLocalError] = useState('');
+  const targetLength = mode === 'unlock' ? Math.max(4, Math.min(16, expectedLength)) : 6;
 
   // Lock background scrolling and handle Escape key while modal is open
   useEffect(() => {
@@ -37,7 +42,7 @@ export const PinModal: React.FC<PinModalProps> = ({
     document.body.style.touchAction = 'none';
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && mode !== 'unlock') {
+      if (e.key === 'Escape' && mode !== 'unlock' && !required) {
         handleClose();
       }
     };
@@ -48,7 +53,7 @@ export const PinModal: React.FC<PinModalProps> = ({
       document.body.style.touchAction = originalTouchAction;
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [isOpen, mode]);
+  }, [isOpen, mode, required]);
 
   // Reset internal state when opened
   useEffect(() => {
@@ -64,14 +69,14 @@ export const PinModal: React.FC<PinModalProps> = ({
 
   const handleDigit = async (digit: string) => {
     if (lockoutRemainingMs > 0) return;
-    if (pin.length >= 4) return;
+    if (pin.length >= targetLength) return;
 
     triggerHaptic();
     const nextPin = pin + digit;
     setPin(nextPin);
     setLocalError('');
 
-    if (nextPin.length === 4) {
+    if (nextPin.length === targetLength) {
       if (mode === 'unlock') {
         onSuccess(nextPin);
         setPin('');
@@ -115,7 +120,7 @@ export const PinModal: React.FC<PinModalProps> = ({
     (mode === 'unlock'
       ? 'PIN 입력'
       : step === 'enter'
-      ? '새 4자리 PIN 입력'
+      ? `새 ${targetLength}자리 PIN 입력`
       : 'PIN 확인 (한 번 더 입력)');
 
   const errorText =
@@ -132,7 +137,7 @@ export const PinModal: React.FC<PinModalProps> = ({
       aria-labelledby="pin-modal-title"
       className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-slate-950 w-screen h-screen min-h-[100dvh] overflow-hidden select-none px-4 pt-[max(1.5rem,env(safe-area-inset-top,0px))] pb-[max(1.5rem,env(safe-area-inset-bottom,0px))] pl-[max(1rem,env(safe-area-inset-left,0px))] pr-[max(1rem,env(safe-area-inset-right,0px))]"
     >
-      {mode !== 'unlock' && (
+      {mode !== 'unlock' && !required && (
         <button
           type="button"
           onClick={handleClose}
@@ -144,29 +149,44 @@ export const PinModal: React.FC<PinModalProps> = ({
       )}
 
       {/* Lock Icon & Title */}
-      <div className="mb-8 text-center text-white">
+      <div className="mb-6 text-center text-white">
         <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full border border-slate-700 bg-slate-900 shadow-lg">
           <Lock size={30} className="text-emerald-400" />
         </div>
         <h2 id="pin-modal-title" className="text-xl font-bold tracking-wider">{displayTitle}</h2>
-        <p className="mt-1 text-xs text-slate-400">데이터를 안전하게 암호화하여 보호합니다</p>
+        <p className="mt-1 text-xs text-slate-400">
+          {mode === 'unlock'
+            ? '데이터를 안전하게 암호화하여 보호합니다'
+            : '보안을 위해 6자리 숫자 PIN을 필수 적용합니다'}
+        </p>
       </div>
 
-      {/* 4 Dots Indicator */}
-      <div className="mb-4 flex gap-4 sm:gap-5 justify-center">
-        {[0, 1, 2, 3].map((i) => (
-          <div
-            key={i}
-            className={`h-4 w-4 sm:h-5 sm:w-5 rounded-full transition-all duration-200 ${
-              errorText
-                ? 'scale-110 bg-rose-500 border-2 border-rose-400 shadow-[0_0_12px_rgba(244,63,94,0.9)]'
-                : pin.length > i
-                ? 'scale-110 bg-emerald-400 border-2 border-emerald-300 shadow-[0_0_12px_rgba(52,211,153,0.9)]'
-                : 'border-2 border-slate-700 bg-slate-900/80'
-            }`}
-          />
-        ))}
-      </div>
+      {/* Dots Indicator */}
+      {targetLength <= 8 ? (
+        <div className="mb-4 flex gap-3.5 sm:gap-4 justify-center">
+          {Array.from({ length: targetLength }, (_, i) => (
+            <div
+              key={i}
+              className={`h-4 w-4 sm:h-5 sm:w-5 rounded-full transition-all duration-200 ${
+                errorText
+                  ? 'scale-110 bg-rose-500 border-2 border-rose-400 shadow-[0_0_12px_rgba(244,63,94,0.9)]'
+                  : pin.length > i
+                  ? 'scale-110 bg-emerald-400 border-2 border-emerald-300 shadow-[0_0_12px_rgba(52,211,153,0.9)]'
+                  : 'border-2 border-slate-700 bg-slate-900/80'
+              }`}
+            />
+          ))}
+        </div>
+      ) : (
+        <div className="mb-4 text-center">
+          <div className="rounded-xl border border-slate-800 bg-slate-900 px-4 py-2 font-mono text-base tracking-widest text-emerald-400">
+            {pin.length > 0 ? '•'.repeat(pin.length) : `${targetLength}자리 PIN 입력`}
+          </div>
+          <span className="mt-1 block text-[11px] font-mono text-slate-400">
+            {pin.length} / {targetLength}자리
+          </span>
+        </div>
+      )}
 
       {/* Error Message */}
       <div className="mb-8 flex h-6 items-center justify-center text-xs font-bold text-rose-400">

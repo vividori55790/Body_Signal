@@ -37,7 +37,7 @@ import BrandLogo, { LOGO_VARIANT_OPTIONS } from '../components/BrandLogo';
 import { PinModal } from '../components/PinModal';
 import DisclaimerModal from '../components/DisclaimerModal';
 import { triggerHaptic } from '../utils/native';
-import { testLocalLlmConnection } from '../utils/localLlm';
+import { testLocalLlmConnection, isOnDeviceLlmEndpoint } from '../utils/localLlm';
 import { encryptBackupWithPassphrase, decryptBackupWithPassphrase } from '../utils/crypto';
 import {
   generateTotpSecret,
@@ -89,12 +89,13 @@ export const SettingsPage: React.FC = () => {
   const { conditions, logs, exportBackupJson, importBackupJson, resetData } = useHealth();
   const {
     isPinSet,
+    pinLengthHint,
+    isOsCredentialOnly,
     setupNewPin,
-    disablePin,
     isBiometricAvailable,
     isBiometricEnabled,
     toggleBiometric,
-    setupOsCredentialLock,
+    setupOsCredentialLockWithRecovery,
     isTotpEnabled,
     enableTotp,
     disableTotp,
@@ -104,8 +105,13 @@ export const SettingsPage: React.FC = () => {
   // Modals state
   const [pinModalMode, setPinModalMode] = useState<'set' | 'change' | 'unlock' | null>(null);
   const [pendingSecurityAction, setPendingSecurityAction] = useState<
-    'toggleBiometric' | 'disablePin' | 'disableTotp' | null
+    'toggleBiometric' | 'changePin' | 'disableTotp' | null
   >(null);
+  const [osRecoveryPinModal, setOsRecoveryPinModal] = useState<string | null>(null);
+  const [csvWarningModalOpen, setCsvWarningModalOpen] = useState(false);
+  const [totpDisableModalOpen, setTotpDisableModalOpen] = useState(false);
+  const [totpDisableCode, setTotpDisableCode] = useState('');
+  const [totpDisableError, setTotpDisableError] = useState('');
   const [newMedName, setNewMedName] = useState('');
   const [showAddMed, setShowAddMed] = useState(false);
   const [feedbackMsg, setFeedbackMsg] = useState('');
@@ -138,7 +144,7 @@ export const SettingsPage: React.FC = () => {
 
   // Lock background scroll whenever any modal is open
   useEffect(() => {
-    if (!totpModalOpen && !backupModalMode) return;
+    if (!totpModalOpen && !backupModalMode && !totpDisableModalOpen && !osRecoveryPinModal && !csvWarningModalOpen) return;
     const prevBody = document.body.style.overflow;
     const prevHtml = document.documentElement.style.overflow;
     document.body.style.overflow = 'hidden';
@@ -147,7 +153,7 @@ export const SettingsPage: React.FC = () => {
       document.body.style.overflow = prevBody;
       document.documentElement.style.overflow = prevHtml;
     };
-  }, [totpModalOpen, backupModalMode]);
+  }, [totpModalOpen, backupModalMode, totpDisableModalOpen, osRecoveryPinModal, csvWarningModalOpen]);
 
   const showToast = (msg: string) => {
     setFeedbackMsg(msg);
@@ -169,14 +175,10 @@ export const SettingsPage: React.FC = () => {
     }
   };
 
-  const handleTogglePin = async () => {
+  const handleChangePin = () => {
     triggerHaptic();
-    if (isPinSet) {
-      setPendingSecurityAction('disablePin');
-      setPinModalMode('unlock');
-    } else {
-      setPinModalMode('set');
-    }
+    setPendingSecurityAction('changePin');
+    setPinModalMode('unlock');
   };
 
   const handleToggleBiometric = async () => {
@@ -192,8 +194,11 @@ export const SettingsPage: React.FC = () => {
 
   const handleEnableOsCredentialDirect = async () => {
     triggerHaptic();
-    const ok = await setupOsCredentialLock();
-    if (ok) {
+    const res = await setupOsCredentialLockWithRecovery();
+    if (res.success) {
+      if (res.recoveryPin) {
+        setOsRecoveryPinModal(res.recoveryPin);
+      }
       showToast('안드로이드 지문·PIN·비밀번호 잠금이 활성화되었습니다.');
     } else {
       showToast('기기 잠금 등록이 취소되었거나 OS 잠금이 설정되어 있지 않습니다.');
@@ -278,7 +283,17 @@ export const SettingsPage: React.FC = () => {
 
   const handleExportCsv = () => {
     triggerHaptic();
-    const escapeCsv = (v: any) => `"${String(v ?? '').replaceAll('"', '""')}"`;
+    setCsvWarningModalOpen(true);
+  };
+
+  const confirmExportCsv = () => {
+    triggerHaptic();
+    const escapeCsv = (v: any) => {
+      const raw = String(v ?? '');
+      // Neutralize spreadsheet formula injection (=, +, -, @, tab, CR)
+      const safe = /^[=+\-@\t\r]/.test(raw) ? `'${raw}` : raw;
+      return `"${safe.replaceAll('"', '""')}"`;
+    };
     const rows = [
       ['일시', '질환명', '발생부위', '통증강도(NRS)', '복용약물/치료', '임상메모'],
       ...logs.map((log) => {
@@ -302,7 +317,8 @@ export const SettingsPage: React.FC = () => {
     link.download = `body-signal-report-${new Date().toISOString().split('T')[0]}.csv`;
     link.click();
     URL.revokeObjectURL(url);
-    showToast('진료용 CSV 리포트가 다운로드되었습니다.');
+    setCsvWarningModalOpen(false);
+    showToast('평문 CSV 리포트가 다운로드되었습니다. 사용 후 안전하게 삭제하세요.');
   };
 
   const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -769,39 +785,30 @@ export const SettingsPage: React.FC = () => {
               <Lock size={18} className="text-indigo-500" />
               <div>
                 <span className="font-bold text-xs block">{t('appLockPin')}</span>
-                <span className="text-[10px] text-slate-400">AES-256 데이터 잠금</span>
+                <span className="text-[10px] text-slate-400">
+                  {isOsCredentialOnly
+                    ? 'OS 생체인증 · 16자리 비상 복구 PIN 활성'
+                    : 'AES-256 6자리 필수 데이터 잠금'}
+                </span>
               </div>
             </div>
-            <button
-              type="button"
-              onClick={handleTogglePin}
-              className={`w-11 h-6 rounded-full transition-colors ${
-                isPinSet ? 'bg-teal-600' : 'bg-slate-300 dark:bg-slate-700'
-              }`}
-            >
-              <div
-                className={`w-4 h-4 rounded-full bg-white transition-transform ${
-                  isPinSet ? 'translate-x-6' : 'translate-x-1'
-                }`}
-              />
-            </button>
+            <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2.5 py-1 rounded-full">
+              {isPinSet ? '필수 활성' : '미설정'}
+            </span>
           </div>
 
           {isPinSet && (
             <button
               type="button"
-              onClick={() => {
-                triggerHaptic();
-                setPinModalMode('change');
-              }}
+              onClick={handleChangePin}
               className="w-full text-left p-3.5 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-bold text-teal-700 dark:text-teal-400"
             >
-              <span>{t('changePin')}</span>
+              <span>{t('changePin')} (6자리)</span>
               <ChevronRight size={16} />
             </button>
           )}
 
-          {!isPinSet && isBiometricAvailable && (
+          {isPinSet && !isOsCredentialOnly && isBiometricAvailable && (
             <button
               type="button"
               onClick={handleEnableOsCredentialDirect}
@@ -811,7 +818,7 @@ export const SettingsPage: React.FC = () => {
                 <Fingerprint size={18} className="text-teal-600" />
                 <div>
                   <span className="font-bold text-xs block">안드로이드 지문·기기 잠금 바로 사용</span>
-                  <span className="text-[10px] text-slate-400">기기에 저장된 지문·PIN·비밀번호 연동</span>
+                  <span className="text-[10px] text-slate-400">16자리 랜덤 PIN 생성 + AndroidKeyStore 보호</span>
                 </div>
               </div>
               <ChevronRight size={16} className="text-slate-400" />
@@ -1013,7 +1020,7 @@ export const SettingsPage: React.FC = () => {
                   로컬 LLM (오프라인 프라이빗 AI)
                 </h2>
                 <span className="text-[10px] text-slate-400">
-                  로컬 LLM 임상 보조 연동 · HTTPS/로컬 전용
+                  로컬 LLM 임상 보조 연동 · 온디바이스 전용 (외부 전송 차단)
                 </span>
               </div>
               <input
@@ -1037,6 +1044,14 @@ export const SettingsPage: React.FC = () => {
                     placeholder="built-in://edge-ai 또는 http://localhost:11434/v1"
                     className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-mono"
                   />
+                  {!isOnDeviceLlmEndpoint(settings.localLlm) && (
+                    <div className="mt-2 p-2.5 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-300 dark:border-rose-800 text-[11px] text-rose-700 dark:text-rose-200 flex items-start gap-2">
+                      <AlertCircle size={14} className="shrink-0 mt-0.5 text-rose-600 dark:text-rose-400" />
+                      <span>
+                        외부 서버 엔드포인트는 보안 정책상 차단됩니다. <code className="font-bold">built-in://edge-ai</code> 또는 <code className="font-bold">localhost</code> / <code className="font-bold">127.0.0.1</code>만 사용할 수 있습니다.
+                      </span>
+                    </div>
+                  )}
                   <div className="flex flex-wrap gap-1 mt-1.5">
                     <button
                       type="button"
@@ -1273,7 +1288,10 @@ export const SettingsPage: React.FC = () => {
                     type="button"
                     onClick={() => {
                       navigator.clipboard?.writeText(buildOtpAuthUri(totpSecret));
-                      showToast('OTP 등록 URI가 복사되었습니다.');
+                      showToast('OTP 등록 URI가 복사되었습니다. (60초 후 자동 비움)');
+                      setTimeout(() => {
+                        navigator.clipboard?.writeText('').catch(() => {});
+                      }, 60_000);
                     }}
                     className="shrink-0 px-2 py-1 rounded bg-teal-700 text-white text-[10px] font-bold flex items-center gap-1"
                   >
@@ -1330,10 +1348,11 @@ export const SettingsPage: React.FC = () => {
         <PinModal
           isOpen={true}
           mode={pinModalMode}
+          expectedLength={pinLengthHint}
           title={
             pinModalMode === 'unlock'
-              ? pendingSecurityAction === 'disablePin'
-                ? '앱 잠금 해제 전 본인 확인'
+              ? pendingSecurityAction === 'changePin'
+                ? '현재 PIN 확인'
                 : pendingSecurityAction === 'disableTotp'
                 ? '2단계 인증 해제를 위한 본인 확인'
                 : '생체인증 설정을 위한 본인 확인'
@@ -1346,21 +1365,20 @@ export const SettingsPage: React.FC = () => {
                 showToast(res.message || 'PIN이 일치하지 않습니다.');
                 return;
               }
-              if (pendingSecurityAction === 'disablePin') {
-                await disablePin();
+              if (pendingSecurityAction === 'changePin') {
                 setPendingSecurityAction(null);
-                setPinModalMode(null);
-                showToast(t('pinRemoved'));
+                setPinModalMode('change');
               } else if (pendingSecurityAction === 'disableTotp') {
-                await disableTotp();
                 setPendingSecurityAction(null);
                 setPinModalMode(null);
-                showToast('2단계 인증이 해제되었습니다.');
+                setTotpDisableCode('');
+                setTotpDisableError('');
+                setTotpDisableModalOpen(true);
               } else if (pendingSecurityAction === 'toggleBiometric') {
                 const targetState = !isBiometricEnabled;
                 setPendingSecurityAction(null);
                 setPinModalMode(null);
-                const success = await toggleBiometric(targetState);
+                const success = await toggleBiometric(targetState, enteredPin);
                 showToast(
                   success
                     ? targetState
@@ -1371,9 +1389,13 @@ export const SettingsPage: React.FC = () => {
               }
               return;
             }
-            await setupNewPin(enteredPin);
+            const { biometricSynced } = await setupNewPin(enteredPin);
             setPinModalMode(null);
-            showToast(t('pinSetSuccess'));
+            showToast(
+              biometricSynced
+                ? t('pinSetSuccess')
+                : 'PIN이 변경되었으나 생체인증 재등록이 취소되어 생체인증이 비활성화되었습니다.'
+            );
           }}
           onCancel={() => {
             setPinModalMode(null);
@@ -1381,6 +1403,148 @@ export const SettingsPage: React.FC = () => {
           }}
         />
       )}
+
+      {/* Plaintext CSV Export Security Warning Modal */}
+      {csvWarningModalOpen &&
+        typeof document !== 'undefined' &&
+        createPortal(
+          <div
+            onClick={() => setCsvWarningModalOpen(false)}
+            className="fixed inset-0 z-[9998] bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4"
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              className="w-full max-w-sm rounded-2xl border border-amber-300 dark:border-amber-800 bg-white dark:bg-slate-900 p-5 shadow-2xl space-y-4"
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <AlertCircle size={18} className="text-amber-500" />
+                  <h3 className="font-bold text-sm text-amber-800 dark:text-amber-300">
+                    비암호화(평문) CSV 내보내기 주의
+                  </h3>
+                </div>
+                <button type="button" onClick={() => setCsvWarningModalOpen(false)} className="text-slate-400">
+                  <X size={18} />
+                </button>
+              </div>
+              <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-xs text-amber-900 dark:text-amber-200 space-y-1.5 leading-relaxed">
+                <p className="font-bold">CSV 파일은 암호화되지 않은 평문 파일입니다.</p>
+                <p>
+                  질환명, 통증 수치, 복용 약물, 메모가 그대로 포함되므로 외부 메신저나 클라우드에 올리지 마시고, 진료 참고 후 다운로드 폴더에서 즉시 삭제해 주세요.
+                </p>
+                <p className="text-[11px] opacity-80">
+                  * 기기 백업용으로는 &quot;JSON 암호화 백업 (AES-256)&quot; 사용을 권장합니다.
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setCsvWarningModalOpen(false)}
+                  className="flex-1 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-xs font-bold"
+                >
+                  {t('cancel')}
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmExportCsv}
+                  className="flex-1 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold"
+                >
+                  위험 확인 후 내보내기
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
+
+      {/* TOTP Disable Second-Factor Verification Modal */}
+      {totpDisableModalOpen &&
+        typeof document !== 'undefined' &&
+        createPortal(
+          <div
+            onClick={() => setTotpDisableModalOpen(false)}
+            className="fixed inset-0 z-[9998] bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4"
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              className="w-full max-w-sm rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-2xl space-y-4"
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <ShieldCheck size={18} className="text-rose-500" />
+                  <h3 className="font-bold text-sm">2단계 인증 해제 확인</h3>
+                </div>
+                <button type="button" onClick={() => setTotpDisableModalOpen(false)} className="text-slate-400">
+                  <X size={18} />
+                </button>
+              </div>
+              <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                보안을 위해 현재 인증 앱의 6자리 OTP 코드 또는 일회용 복구 코드를 입력해야 2단계 인증을 해제할 수 있습니다.
+              </p>
+              <input
+                type="text"
+                autoFocus
+                value={totpDisableCode}
+                onChange={(e) => {
+                  setTotpDisableCode(e.target.value);
+                  setTotpDisableError('');
+                }}
+                placeholder="6자리 코드 또는 복구 코드"
+                className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-center font-mono text-sm font-bold tracking-widest"
+              />
+              {totpDisableError && (
+                <p className="text-xs font-bold text-rose-500 flex items-center gap-1">
+                  <AlertCircle size={13} /> {totpDisableError}
+                </p>
+              )}
+              <button
+                type="button"
+                onClick={async () => {
+                  const res = await disableTotp(totpDisableCode);
+                  if (!res.success) {
+                    setTotpDisableError(res.message || '인증 코드가 일치하지 않습니다.');
+                    return;
+                  }
+                  setTotpDisableModalOpen(false);
+                  setTotpDisableCode('');
+                  showToast('2단계 인증이 해제되었습니다.');
+                }}
+                className="w-full py-2.5 rounded-xl bg-rose-600 text-white font-bold text-xs"
+              >
+                2단계 인증 해제 확정
+              </button>
+            </div>
+          </div>,
+          document.body
+        )}
+
+      {/* One-time 16-digit OS Credential Emergency Recovery PIN Modal */}
+      {osRecoveryPinModal &&
+        typeof document !== 'undefined' &&
+        createPortal(
+          <div className="fixed inset-0 z-[9998] bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="w-full max-w-sm rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-2xl space-y-4">
+              <div className="flex items-center gap-2">
+                <KeyRound size={18} className="text-amber-500" />
+                <h3 className="font-bold text-sm">비상 복구 PIN (16자리) 보관 안내</h3>
+              </div>
+              <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                기기 지문 추가/변경 시 안드로이드 보안 정책으로 생체 키가 무효화될 수 있습니다. 아래 16자리 비상 복구 PIN을 안전한 곳에 기록해 두세요.
+              </p>
+              <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 font-mono text-sm font-bold text-center tracking-wider text-amber-900 dark:text-amber-200 select-all">
+                {osRecoveryPinModal.replace(/(\d{4})(?=\d)/g, '$1-')}
+              </div>
+              <button
+                type="button"
+                onClick={() => setOsRecoveryPinModal(null)}
+                className="w-full py-2.5 rounded-xl bg-teal-700 text-white font-bold text-xs"
+              >
+                안전하게 기록했습니다
+              </button>
+            </div>
+          </div>,
+          document.body
+        )}
 
       {showDisclaimerModal && (
         <DisclaimerModal

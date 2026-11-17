@@ -1,7 +1,22 @@
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import { App as CapApp } from '@capacitor/app';
-import { isPinConfigured, verifyAppPin, setAppPin, removeAppPin, checkLockout } from '../utils/pin';
-import { reEncryptHealthData } from '../utils/storage';
+import {
+  isPinConfigured,
+  getPinRequirements,
+  ensurePinSessionSalt,
+  verifyAppPin,
+  setAppPin,
+  removeAppPin,
+  checkLockout,
+  FIXED_PIN_LENGTH,
+} from '../utils/pin';
+import {
+  SESSION_KEY_TOKEN,
+  initSessionCryptoKeyFromPin,
+  clearSessionCryptoKey,
+} from '../utils/crypto';
+import { reEncryptHealthData, migratePinRecordsToSessionKey } from '../utils/storage';
+import SecureAuth, { isNativeAndroidSecureAuth } from '../utils/secureAuthBridge';
 import {
   checkBiometricAvailability,
   getBiometricMeta,
@@ -21,6 +36,10 @@ interface AuthContextValue {
   isAuthReady: boolean;
   isUnlocked: boolean;
   isPinSet: boolean;
+  isDeviceCompromised: boolean;
+  deviceIntegrityReason: string;
+  pinLengthHint: number;
+  isOsCredentialOnly: boolean;
   activeSessionPin: string | null;
   lockoutRemainingMs: number;
   isPrivacyMasked: boolean;
@@ -33,24 +52,30 @@ interface AuthContextValue {
   unlockWithBiometric: () => Promise<boolean>;
   verifyTwoFactorAndUnlock: (code: string) => Promise<{ success: boolean; usedRecovery?: boolean; message?: string }>;
   cancelTwoFactor: () => void;
-  toggleBiometric: (enable: boolean) => Promise<boolean>;
+  toggleBiometric: (enable: boolean, verifiedPin?: string) => Promise<boolean>;
   setupOsCredentialLock: () => Promise<boolean>;
+  setupOsCredentialLockWithRecovery: () => Promise<{ success: boolean; recoveryPin?: string }>;
   enableTotp: (secret: string, recoveryCodes: string[]) => Promise<void>;
-  disableTotp: () => Promise<void>;
-  setupNewPin: (pin: string) => Promise<void>;
+  disableTotp: (verificationCode: string) => Promise<{ success: boolean; message?: string }>;
+  setupNewPin: (pin: string) => Promise<{ biometricSynced: boolean }>;
   disablePin: () => Promise<void>;
   lockApp: () => void;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-// Auto-lock timeout when backgrounded (default 60 seconds)
+// Auto-lock timeout when backgrounded (default 60 seconds) and idle timeout (3 minutes)
 const AUTO_LOCK_TIMEOUT_MS = 60_000;
+const IDLE_LOCK_TIMEOUT_MS = 3 * 60_000;
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [isUnlocked, setIsUnlocked] = useState(false);
   const [isPinSet, setIsPinSet] = useState(false);
+  const [isDeviceCompromised, setIsDeviceCompromised] = useState(false);
+  const [deviceIntegrityReason, setDeviceIntegrityReason] = useState('');
+  const [pinLengthHint, setPinLengthHint] = useState(FIXED_PIN_LENGTH);
+  const [isOsCredentialOnly, setIsOsCredentialOnly] = useState(false);
   const [activeSessionPin, setActiveSessionPin] = useState<string | null>(null);
   const [lockoutRemainingMs, setLockoutRemainingMs] = useState(0);
   const [isPrivacyMasked, setIsPrivacyMasked] = useState(false);
@@ -72,21 +97,48 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     isTotpEnabledRef.current = isTotpEnabled;
   }, [isTotpEnabled]);
 
+  const verifyNativeDeviceIntegrity = useCallback(async (): Promise<boolean> => {
+    if (!isNativeAndroidSecureAuth()) return true;
+    try {
+      const res = await SecureAuth.checkDeviceIntegrity();
+      if (res && res.secure === false) {
+        clearSessionCryptoKey();
+        pendingPinRef.current = null;
+        setPendingTwoFactor(false);
+        setActiveSessionPin(null);
+        setIsUnlocked(false);
+        setIsDeviceCompromised(true);
+        setDeviceIntegrityReason(
+          res.reason || '루팅 또는 보안 변조가 감지되어 앱을 실행할 수 없습니다.'
+        );
+        return false;
+      }
+    } catch {
+      // Fail-closed if native integrity bridge fails unexpectedly on Android
+    }
+    return true;
+  }, []);
+
   useEffect(() => {
     let mounted = true;
 
     Promise.all([
+      verifyNativeDeviceIntegrity(),
       isPinConfigured(),
+      getPinRequirements(),
       checkLockout(),
       checkBiometricAvailability(),
       getBiometricMeta(),
       getTotpMeta(),
     ])
-      .then(([configured, lockout, bioAvail, bioMeta, totpMeta]) => {
+      .then(([deviceOk, configured, pinReq, lockout, bioAvail, bioMeta, totpMeta]) => {
         if (!mounted) return;
         isPinSetRef.current = configured;
         setIsPinSet(configured);
-        setIsUnlocked(!configured);
+        setPinLengthHint(pinReq.pinLength);
+        setIsOsCredentialOnly(pinReq.isOsCredentialOnly);
+        // Gate unlocked state behind both device integrity and configured PIN
+        setIsUnlocked(deviceOk && !configured);
         if (lockout.isLocked) {
           setLockoutRemainingMs(lockout.remainingMs);
         }
@@ -115,14 +167,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const onAppForeground = () => {
       setIsPrivacyMasked(false);
+      verifyNativeDeviceIntegrity();
       if (backgroundTimeRef.current && isPinSetRef.current) {
         const elapsed = Date.now() - backgroundTimeRef.current;
         // When leaving and returning to app (after 1s or timeout), require PIN/Biometric
         if (elapsed >= 1000 || elapsed >= AUTO_LOCK_TIMEOUT_MS) {
+          clearSessionCryptoKey();
           pendingPinRef.current = null;
           setPendingTwoFactor(false);
           setActiveSessionPin(null);
           setIsUnlocked(false);
+          if (isNativeAndroidSecureAuth()) {
+            SecureAuth.clearWebViewMemory().catch(() => {});
+          }
         }
       }
       backgroundTimeRef.current = null;
@@ -177,7 +234,42 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => clearInterval(timer);
   }, [lockoutRemainingMs]);
 
-  const completePrimaryFactor = (pin: string, bypassSecondFactor = false): boolean => {
+  // Idle inactivity auto-lock to shrink runtime memory exposure window
+  useEffect(() => {
+    if (!isUnlocked || !isPinSet || typeof window === 'undefined') return;
+    let idleTimer: ReturnType<typeof setTimeout> | null = null;
+    const resetIdleTimer = () => {
+      if (idleTimer) clearTimeout(idleTimer);
+      idleTimer = setTimeout(() => {
+        clearSessionCryptoKey();
+        pendingPinRef.current = null;
+        setPendingTwoFactor(false);
+        setActiveSessionPin(null);
+        setIsUnlocked(false);
+        if (isNativeAndroidSecureAuth()) {
+          SecureAuth.clearWebViewMemory().catch(() => {});
+        }
+      }, IDLE_LOCK_TIMEOUT_MS);
+    };
+
+    resetIdleTimer();
+    const events: (keyof WindowEventMap)[] = ['pointerdown', 'keydown', 'touchstart'];
+    events.forEach((ev) => window.addEventListener(ev, resetIdleTimer, { passive: true }));
+    return () => {
+      if (idleTimer) clearTimeout(idleTimer);
+      events.forEach((ev) => window.removeEventListener(ev, resetIdleTimer));
+    };
+  }, [isUnlocked, isPinSet]);
+
+  const establishNonExtractableSession = async (pin: string) => {
+    const sessionSalt = await ensurePinSessionSalt();
+    await initSessionCryptoKeyFromPin(pin, sessionSalt);
+    await migratePinRecordsToSessionKey(pin);
+    setActiveSessionPin(SESSION_KEY_TOKEN);
+    setIsUnlocked(true);
+  };
+
+  const completePrimaryFactor = async (pin: string, bypassSecondFactor = false): Promise<boolean> => {
     if (isTotpEnabledRef.current && !bypassSecondFactor) {
       pendingPinRef.current = pin;
       setPendingTwoFactor(true);
@@ -185,17 +277,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     pendingPinRef.current = null;
     setPendingTwoFactor(false);
-    setActiveSessionPin(pin);
-    setIsUnlocked(true);
+    await establishNonExtractableSession(pin);
     return true;
   };
 
   const unlockApp = async (
     pin: string
   ): Promise<{ success: boolean; message?: string; requiresTwoFactor?: boolean }> => {
+    if (isDeviceCompromised) {
+      return { success: false, message: deviceIntegrityReason };
+    }
     const result = await verifyAppPin(pin);
     if (result.success) {
-      const fullyUnlocked = completePrimaryFactor(pin, isUnlocked);
+      const fullyUnlocked = await completePrimaryFactor(pin, isUnlocked);
       return { success: true, requiresTwoFactor: !fullyUnlocked };
     }
 
@@ -219,35 +313,45 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const unlockWithBiometric = useCallback(async (): Promise<boolean> => {
-    if (!isBiometricEnabled || lockoutRemainingMs > 0) {
+    if (isDeviceCompromised || !isBiometricEnabled || lockoutRemainingMs > 0) {
       return false;
     }
 
     const result = await authenticateWithBiometrics();
     if (result.success && result.pin) {
-      completePrimaryFactor(result.pin, isUnlocked);
+      await completePrimaryFactor(result.pin, isUnlocked);
       return true;
     }
 
     return false;
-  }, [isBiometricEnabled, lockoutRemainingMs, isUnlocked]);
+  }, [isDeviceCompromised, isBiometricEnabled, lockoutRemainingMs, isUnlocked]);
 
   const verifyTwoFactorAndUnlock = async (
     code: string
   ): Promise<{ success: boolean; usedRecovery?: boolean; message?: string }> => {
-    const res = await verifyStoredTotpOrRecovery(code);
+    const res = await verifyStoredTotpOrRecovery(code, pendingPinRef.current || undefined);
     if (!res.valid) {
+      if (res.lockoutMs) {
+        return {
+          success: false,
+          message: `인증 시도 횟수를 초과했습니다. ${Math.ceil(res.lockoutMs / 1000)}초 후 다시 시도해 주세요.`,
+        };
+      }
+      const attemptHint =
+        typeof res.remainingAttempts === 'number' ? ` (남은 기회: ${res.remainingAttempts}회)` : '';
       return {
         success: false,
-        message: '2단계 인증 코드 또는 복구 코드가 일치하지 않습니다.',
+        message: `2단계 인증 코드 또는 복구 코드가 일치하지 않습니다.${attemptHint}`,
       };
     }
-    if (pendingPinRef.current) {
-      setActiveSessionPin(pendingPinRef.current);
-      pendingPinRef.current = null;
-    }
+    const pendingPin = pendingPinRef.current;
+    pendingPinRef.current = null;
     setPendingTwoFactor(false);
-    setIsUnlocked(true);
+    if (pendingPin) {
+      await establishNonExtractableSession(pendingPin);
+    } else {
+      setIsUnlocked(true);
+    }
     return { success: true, usedRecovery: res.usedRecovery };
   };
 
@@ -256,48 +360,86 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setPendingTwoFactor(false);
   };
 
-  const setupOsCredentialLock = async (): Promise<boolean> => {
-    if (!isBiometricAvailable) return false;
-    // Generate a strong 16-digit cryptographically random internal PIN sealed by AndroidKeyStore
-    const bytes = crypto.getRandomValues(new Uint8Array(16));
-    const randomPin = Array.from(bytes, (b) => String(b % 10)).join('');
+  const generateUnbiasedRandomDigits = (length: number): string => {
+    const digits: string[] = [];
+    while (digits.length < length) {
+      const buf = crypto.getRandomValues(new Uint8Array(length * 2));
+      for (let i = 0; i < buf.length && digits.length < length; i++) {
+        // Rejection sampling (< 250) eliminates modulo bias for base-10 digits
+        if (buf[i] < 250) {
+          digits.push(String(buf[i] % 10));
+        }
+      }
+    }
+    return digits.join('');
+  };
+
+  const setupOsCredentialLockWithRecovery = async (): Promise<{ success: boolean; recoveryPin?: string }> => {
+    if (!isBiometricAvailable) return { success: false };
+    // Generate a strong 16-digit unbiased random internal PIN sealed by AndroidKeyStore
+    const randomPin = generateUnbiasedRandomDigits(16);
     await reEncryptHealthData(randomPin, activeSessionPin || undefined);
-    await setAppPin(randomPin);
+    const sessionSalt = await setAppPin(randomPin, { isOsCredentialOnly: true });
     const enrolled = await enrollBiometrics(randomPin);
     if (!enrolled) {
       await reEncryptHealthData(activeSessionPin || undefined, randomPin);
       if (!activeSessionPin) {
         await removeAppPin();
       }
-      return false;
+      return { success: false };
     }
+    await initSessionCryptoKeyFromPin(randomPin, sessionSalt);
+    await migratePinRecordsToSessionKey(randomPin);
     setIsPinSet(true);
+    setPinLengthHint(16);
+    setIsOsCredentialOnly(true);
     setIsBiometricEnabled(true);
-    setActiveSessionPin(randomPin);
+    setActiveSessionPin(SESSION_KEY_TOKEN);
     setIsUnlocked(true);
-    return true;
+    return { success: true, recoveryPin: randomPin };
+  };
+
+  const setupOsCredentialLock = async (): Promise<boolean> => {
+    const res = await setupOsCredentialLockWithRecovery();
+    return res.success;
   };
 
   const enableTotp = async (secret: string, recoveryCodes: string[]) => {
-    await enableTotp2FA(secret, recoveryCodes);
+    await enableTotp2FA(secret, recoveryCodes, activeSessionPin || undefined);
     isTotpEnabledRef.current = true;
     setIsTotpEnabled(true);
   };
 
-  const disableTotp = async () => {
+  const disableTotp = async (
+    verificationCode: string
+  ): Promise<{ success: boolean; message?: string }> => {
+    const res = await verifyStoredTotpOrRecovery(verificationCode, activeSessionPin || undefined);
+    if (!res.valid) {
+      if (res.lockoutMs) {
+        return {
+          success: false,
+          message: `시도 횟수를 초과했습니다. ${Math.ceil(res.lockoutMs / 1000)}초 후 다시 시도해 주세요.`,
+        };
+      }
+      return {
+        success: false,
+        message: '2단계 인증 코드 또는 복구 코드가 일치하지 않습니다.',
+      };
+    }
     await disableTotp2FA();
     isTotpEnabledRef.current = false;
     setIsTotpEnabled(false);
     pendingPinRef.current = null;
     setPendingTwoFactor(false);
+    return { success: true };
   };
 
-  const toggleBiometric = async (enable: boolean): Promise<boolean> => {
+  const toggleBiometric = async (enable: boolean, verifiedPin?: string): Promise<boolean> => {
     if (enable) {
-      if (!isPinSet || !activeSessionPin) {
+      if (!isPinSet || !verifiedPin) {
         return false;
       }
-      const ok = await enrollBiometrics(activeSessionPin);
+      const ok = await enrollBiometrics(verifiedPin);
       if (ok) {
         setIsBiometricEnabled(true);
         return true;
@@ -310,15 +452,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const setupNewPin = async (pin: string) => {
+  const setupNewPin = async (pin: string): Promise<{ biometricSynced: boolean }> => {
     await reEncryptHealthData(pin, activeSessionPin || undefined);
-    await setAppPin(pin);
+    const sessionSalt = await setAppPin(pin, { isOsCredentialOnly: false });
+    await initSessionCryptoKeyFromPin(pin, sessionSalt);
+    await migratePinRecordsToSessionKey(pin);
+    let biometricSynced = true;
     if (isBiometricEnabled) {
-      await updateBiometricPinToken(pin);
+      biometricSynced = await updateBiometricPinToken(pin);
+      if (!biometricSynced) {
+        // Keep KeyStore & UI consistent if user cancels biometric re-enrollment
+        await disableBiometrics();
+        setIsBiometricEnabled(false);
+      }
     }
     setIsPinSet(true);
-    setActiveSessionPin(pin);
+    setPinLengthHint(pin.length);
+    setIsOsCredentialOnly(false);
+    setActiveSessionPin(SESSION_KEY_TOKEN);
     setIsUnlocked(true);
+    return { biometricSynced };
   };
 
   const disablePin = async () => {
@@ -326,22 +479,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     await removeAppPin();
     await disableBiometrics();
     await disableTotp2FA();
+    clearSessionCryptoKey();
     setIsBiometricEnabled(false);
     isTotpEnabledRef.current = false;
     setIsTotpEnabled(false);
     pendingPinRef.current = null;
     setPendingTwoFactor(false);
     setIsPinSet(false);
+    setPinLengthHint(FIXED_PIN_LENGTH);
+    setIsOsCredentialOnly(false);
     setActiveSessionPin(null);
     setIsUnlocked(true);
   };
 
   const lockApp = () => {
     if (isPinSet) {
+      clearSessionCryptoKey();
       pendingPinRef.current = null;
       setPendingTwoFactor(false);
       setActiveSessionPin(null);
       setIsUnlocked(false);
+      if (isNativeAndroidSecureAuth()) {
+        SecureAuth.clearWebViewMemory().catch(() => {});
+      }
     }
   };
 
@@ -351,6 +511,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isAuthReady,
         isUnlocked,
         isPinSet,
+        isDeviceCompromised,
+        deviceIntegrityReason,
+        pinLengthHint,
+        isOsCredentialOnly,
         activeSessionPin,
         lockoutRemainingMs,
         isPrivacyMasked,
@@ -365,6 +529,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         cancelTwoFactor,
         toggleBiometric,
         setupOsCredentialLock,
+        setupOsCredentialLockWithRecovery,
         enableTotp,
         disableTotp,
         setupNewPin,

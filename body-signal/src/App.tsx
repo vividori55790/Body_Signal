@@ -10,6 +10,7 @@ import ClinicalBriefingPage from './pages/ClinicalBriefing';
 import ConditionDetailPage from './pages/ConditionDetail';
 import BrandSplash from './components/BrandSplash';
 import LockScreen from './components/LockScreen';
+import { PinModal } from './components/PinModal';
 import DisclaimerModal from './components/DisclaimerModal';
 import { SettingsProvider, useSettings } from './context/SettingsContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
@@ -22,7 +23,14 @@ import { BackButtonHandler, LockedBackButtonHandler } from './components/BackBut
 const SPLASH_DURATION_MS = 1050;
 
 const AppContent: React.FC = () => {
-  const { isAuthReady, isUnlocked } = useAuth();
+  const {
+    isAuthReady,
+    isUnlocked,
+    isPinSet,
+    isDeviceCompromised,
+    deviceIntegrityReason,
+    setupNewPin,
+  } = useAuth();
   const { settings, isSettingsLoaded, acceptDisclaimer } = useSettings();
   const [showIntroLogo, setShowIntroLogo] = useState(true);
 
@@ -38,6 +46,28 @@ const AppContent: React.FC = () => {
       <>
         <LockedBackButtonHandler />
         <BrandSplash statusText="보안 상태 확인 중..." />
+      </>
+    );
+  }
+
+  if (isDeviceCompromised) {
+    return (
+      <>
+        <LockedBackButtonHandler />
+        <main className="min-h-screen bg-slate-950 text-white flex items-center justify-center p-6">
+          <div className="w-full max-w-sm rounded-3xl border border-rose-500/40 bg-slate-900 p-6 text-center space-y-4 shadow-2xl">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-rose-500/15 text-rose-400 text-2xl font-black">
+              !
+            </div>
+            <h1 className="text-lg font-bold text-rose-300">보안 환경 검증 실패</h1>
+            <p className="text-xs leading-relaxed text-slate-300">
+              {deviceIntegrityReason || '루팅 또는 변조된 환경이 감지되어 앱 실행이 차단되었습니다.'}
+            </p>
+            <p className="text-[11px] text-slate-400">
+              민감한 의료 기록 보호를 위해 순정(비루팅) 환경에서만 실행할 수 있습니다.
+            </p>
+          </div>
+        </main>
       </>
     );
   }
@@ -74,6 +104,24 @@ const AppContent: React.FC = () => {
       <>
         <LockedBackButtonHandler />
         <DisclaimerModal mode="gate" onAccept={acceptDisclaimer} />
+      </>
+    );
+  }
+
+  if (!isPinSet) {
+    return (
+      <>
+        <LockedBackButtonHandler />
+        <PinModal
+          isOpen={true}
+          mode="set"
+          required={true}
+          title="초기 6자리 보안 PIN 설정"
+          onSuccess={async (newPin) => {
+            await setupNewPin(newPin);
+          }}
+          onCancel={() => {}}
+        />
       </>
     );
   }
