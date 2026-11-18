@@ -74,6 +74,20 @@ export async function saveEncryptedPhoto(
   }
 }
 
+export async function encryptDraftPhotos(
+  photos: string[],
+  pin?: string,
+  encryptFn: typeof saveEncryptedPhoto = saveEncryptedPhoto
+): Promise<string[]> {
+  const photoIds: string[] = [];
+  for (const dataUrl of photos) {
+    const pid = `diag_photo_${crypto.randomUUID()}`;
+    await encryptFn(pid, dataUrl, pin);
+    photoIds.push(pid);
+  }
+  return photoIds;
+}
+
 export async function loadEncryptedPhoto(
   photoId: string,
   pin?: string

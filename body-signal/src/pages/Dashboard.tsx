@@ -7,7 +7,7 @@ import {
   CheckCircle,
   Clock,
   Pill,
-  Zap,
+  // Zap,
   FolderPlus,
   BarChart3,
   TrendingDown,
@@ -24,7 +24,8 @@ import CalendarHeatmap from '../components/CalendarHeatmap';
 import QuickPainLogger from '../components/QuickPainLogger';
 import DefaultClosedSuggestion from '../components/DefaultClosedSuggestion';
 import TrustBadge from '../components/TrustBadge';
-import { useAcutePain } from '../context/AcutePainContext';
+// 1초 급성 통증 입력은 사용자 요청으로 일시 주석 처리함
+// import { useAcutePain } from '../context/AcutePainContext';
 
 const DetailedConditionCard: React.FC<{
   condition: Condition;
@@ -217,7 +218,7 @@ const DetailedConditionCard: React.FC<{
 export const DashboardPage: React.FC = () => {
   const navigate = useNavigate();
   const { conditions, logs, diaryEntries, diagnosticRecords, updateLog } = useHealth();
-  const { openAcute } = useAcutePain();
+  // const { openAcute } = useAcutePain();
   const {
     settings,
     t,
@@ -363,8 +364,9 @@ export const DashboardPage: React.FC = () => {
           <TrustBadge compact />
         </div>
 
-        {/* Unified Action Row (Calm Medical Styling) */}
-        <div className="grid grid-cols-2 gap-2">
+        {/* Primary Entry Row (1-Sec Acute Mode commented out per feedback; Full Entry + 3-Sec Quick Logger remain) */}
+        <div className="grid grid-cols-1 gap-2">
+          {/* 1초 급성 입력 일시 주석 처리
           <button
             type="button"
             onClick={() => {
@@ -376,6 +378,7 @@ export const DashboardPage: React.FC = () => {
           >
             <Zap size={14} /> {isEn ? '1-Sec Acute Log' : '1초 급성 기록'}
           </button>
+          */}
           <button
             type="button"
             onClick={() => {

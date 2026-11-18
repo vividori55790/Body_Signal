@@ -76,7 +76,7 @@ export const SettingsPage: React.FC = () => {
     setTheme,
     setLogoVariant,
     setHaptics,
-    setQuickSos,
+    // setQuickSos,
     setShowDiagnosticsTab,
     setDefaultQuickLoggerOpen,
     setDefaultBodyMapOpen,
@@ -778,7 +778,7 @@ export const SettingsPage: React.FC = () => {
             </button>
           </div>
 
-          {/* Optional Floating SOS Button */}
+          {/* 1초 급성 통증 플로팅 SOS 위젯 설정 일시 주석 처리
           <div className="p-3.5 flex items-center justify-between">
             <div className="pr-3">
               <span className="font-bold text-xs block">{t('quickSosSetting')}</span>
@@ -803,6 +803,7 @@ export const SettingsPage: React.FC = () => {
               />
             </button>
           </div>
+          */}
 
           {/* Daily Reminder */}
           <div className="p-3.5 space-y-2">

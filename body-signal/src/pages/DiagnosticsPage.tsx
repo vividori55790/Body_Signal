@@ -21,7 +21,7 @@ import { useAuth } from '../context/AuthContext';
 import { useSettings } from '../context/SettingsContext';
 import { DiagnosticRecord } from '../types/health';
 import { calculateInsuranceClaimStatus } from '../utils/insurance';
-import { compressAndStripExif, saveEncryptedPhoto, loadEncryptedPhoto } from '../utils/mediaStorage';
+import { compressAndStripExif, encryptDraftPhotos, saveEncryptedPhoto, loadEncryptedPhoto } from '../utils/mediaStorage';
 import { triggerHaptic } from '../utils/native';
 
 export const DiagnosticsPage: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
@@ -154,13 +154,18 @@ export const DiagnosticsPage: React.FC<{ embedded?: boolean }> = ({ embedded = f
     setFormError('');
     try {
       triggerHaptic();
-      const photoIds: string[] = [];
-      for (const dataUrl of draftPhotos) {
-        const pid = `diag_photo_${crypto.randomUUID()}`;
-        await saveEncryptedPhoto(pid, dataUrl, activeSessionPin || undefined);
-        photoIds.push(pid);
-        setDecryptedPhotos((prev) => ({ ...prev, [pid]: dataUrl }));
-      }
+      const photoIds = await encryptDraftPhotos(
+        draftPhotos,
+        activeSessionPin || undefined,
+        saveEncryptedPhoto
+      );
+      setDecryptedPhotos((prev) => {
+        const next = { ...prev };
+        photoIds.forEach((pid, idx) => {
+          if (draftPhotos[idx]) next[pid] = draftPhotos[idx];
+        });
+        return next;
+      });
 
       const parsedAmount = amountKrw.trim() ? Number(amountKrw.replace(/,/g, '')) : undefined;
       await addDiagnosticRecord({

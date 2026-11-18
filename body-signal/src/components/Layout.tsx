@@ -3,14 +3,15 @@ import { Outlet, NavLink } from 'react-router-dom';
 import { Home, History, Settings, FileCheck2 } from 'lucide-react';
 import { useSettings } from '../context/SettingsContext';
 import { useHealth } from '../context/HealthContext';
-import { useAcutePain } from '../context/AcutePainContext';
+// 1초 급성 통증 입력 위젯 일시 주석 처리
+// import { useAcutePain } from '../context/AcutePainContext';
 import { UNASSIGNED_CONDITION_ID } from '../types/health';
 import { triggerHaptic } from '../utils/native';
 
 export const Layout: React.FC = () => {
   const { settings, t } = useSettings();
   const { logs } = useHealth();
-  const { openAcute } = useAcutePain();
+  // const { openAcute } = useAcutePain();
   const unassignedCount = logs.filter((l) => l.conditionId === UNASSIGNED_CONDITION_ID).length;
 
   const navItems: Array<{ path: string; icon: typeof Home; label: string; highlight?: boolean }> = [
@@ -29,7 +30,7 @@ export const Layout: React.FC = () => {
         <Outlet />
       </main>
 
-      {/* Optional Floating Quick SOS Widget (Opt-in via Settings, default OFF) */}
+      {/* 1초 급성 통증 입력 위젯 일시 주석 처리
       {settings.quickSosEnabled === true && (
         <aside aria-label="1초 급성 통증 기록 위젯" className="fixed bottom-20 right-4 z-40 max-w-md mx-auto">
           <button
@@ -45,6 +46,7 @@ export const Layout: React.FC = () => {
           </button>
         </aside>
       )}
+      */}
 
       {/* Mobile Safe Area Bottom Navigation (4 core tabs by default) */}
       <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white/95 dark:bg-slate-900/95 backdrop-blur-lg border-t border-slate-200 dark:border-slate-800 px-2 pt-1.5 pb-[max(0.5rem,env(safe-area-inset-bottom))] shadow-lg">

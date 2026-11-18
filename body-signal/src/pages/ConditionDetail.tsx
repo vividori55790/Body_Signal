@@ -616,7 +616,9 @@ export const ConditionDetailPage: React.FC = () => {
               type="button"
               onClick={() => {
                 triggerHaptic();
-                navigate('/diagnostics', { state: { conditionId: condition.id } });
+                navigate('/entry', {
+                  state: { selectedConditionId: condition.id, includeDiagnostic: true },
+                });
               }}
               className="text-xs font-bold text-teal-600 dark:text-teal-400"
             >
