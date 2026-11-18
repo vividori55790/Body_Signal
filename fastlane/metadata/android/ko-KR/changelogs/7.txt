@@ -1,0 +1,3 @@
+v2.0.2
+- Android SDK 34 클린 빌드 환경(GitHub Actions / F-Droid)을 위한 @capacitor/android SystemBars.java 자동 postinstall 호환 패치 추가
+- GitHub Releases 정식 서명 APK 자동 빌드 및 첨부 워크플로우(.github/workflows/github-release.yml) 추가
