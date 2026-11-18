@@ -483,7 +483,7 @@ const tests = [
 
       const pinModalSrc = read('src/components/PinModal.tsx');
       assert.match(pinModalSrc, /required\s*=\s*false/);
-      assert.match(pinModalSrc, /mode !== 'unlock' && !required/);
+      assert.match(pinModalSrc, /\(mode !== 'unlock' \|\| cancellable\) && !required/);
       assert.doesNotMatch(pinModalSrc, /4자리/);
 
       const appSrc = read('src/App.tsx');
@@ -516,6 +516,44 @@ const tests = [
       assert.match(pluginJava, /public void checkDeviceIntegrity/);
       assert.match(pluginJava, /public void clearWebViewMemory/);
       assert.match(pluginJava, /Arrays\.fill\(plainBytes,\s*\(byte\)\s*0\)/);
+    },
+  },
+  {
+    name: 'UX Consolidation & Delete Auth: delete flows require biometric/PIN, gallery picker preserves session, portrait locked, EntryForm integrates diagnostics',
+    fn: () => {
+      const authSrc = read('src/context/AuthContext.tsx');
+      assert.match(authSrc, /beginExternalPickerGrace/);
+      assert.match(authSrc, /verifySensitiveActionPin/);
+      assert.match(authSrc, /verifySensitiveActionBiometric/);
+
+      const delModalSrc = read('src/components/DeleteAuthModal.tsx');
+      assert.match(delModalSrc, /useAuthorizedDelete/);
+      assert.match(delModalSrc, /verifySensitiveActionBiometric/);
+      assert.match(delModalSrc, /verifySensitiveActionPin/);
+
+      for (const pagePath of ['src/pages/History.tsx', 'src/pages/DiagnosticsPage.tsx', 'src/pages/Settings.tsx']) {
+        const src = read(pagePath);
+        assert.match(src, /requestAuthorizedDelete/, `${pagePath} must authorize deletions`);
+        assert.doesNotMatch(src, /window\.confirm/, `${pagePath} must not bypass auth with bare window.confirm`);
+      }
+
+      const medInlineSrc = read('src/components/AddMedicationInline.tsx');
+      assert.match(medInlineSrc, /createPortal/);
+      assert.doesNotMatch(medInlineSrc, /<form\b/i, 'AddMedicationInline must not nest <form> inside EntryForm');
+
+      const painSrc = read('src/components/PainLevelSelector.tsx');
+      assert.match(painSrc, /opacity-0 pointer-events-none/);
+
+      const manifestXml = read('android/app/src/main/AndroidManifest.xml');
+      assert.match(manifestXml, /android:screenOrientation="portrait"/);
+
+      const entrySrc = read('src/pages/EntryForm.tsx');
+      assert.match(entrySrc, /diagnosticOnly/);
+      assert.match(entrySrc, /diagnosticData/);
+      assert.match(entrySrc, /PhotoAttachmentField/);
+
+      const historySrc = read('src/pages/History.tsx');
+      assert.match(historySrc, /flex flex-col gap-2\.5/);
     },
   },
 ];

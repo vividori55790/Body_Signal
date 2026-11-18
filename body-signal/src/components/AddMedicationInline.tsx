@@ -70,7 +70,7 @@ export const AddMedicationInline: React.FC<AddMedicationInlineProps> = ({
     }
   };
 
-  // Portal outside any enclosing <form> and avoid nested <form> so Enter/Add never submits parent EntryForm
+  // Portal outside any enclosing form element so Enter/Add never submits parent EntryForm
   const modal = (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in"
