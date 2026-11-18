@@ -29,6 +29,7 @@ export default defineConfig({
         ],
         start_url: "/",
         display: "standalone",
+        orientation: "portrait",
         background_color: "#ffffff",
         shortcuts: [
           {

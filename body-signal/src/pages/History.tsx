@@ -801,7 +801,7 @@ export const HistoryPage: React.FC<{ initialTab?: 'list' | 'calendar' | 'diagnos
         selectionMode ? 'pb-40' : 'pb-28'
       }`}
     >
-      <header className="flex flex-wrap items-center justify-between gap-2">
+      <header className="flex flex-col gap-2.5">
         <h1 className="text-xl font-bold">
           {activeTab === 'list'
             ? selectionMode
@@ -821,11 +821,11 @@ export const HistoryPage: React.FC<{ initialTab?: 'list' | 'calendar' | 'diagnos
         </h1>
 
         {!selectionMode && (
-          <div className="flex bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-1 text-xs shadow-sm overflow-x-auto">
+          <div className="grid grid-cols-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-1 text-xs shadow-sm">
             <button
               type="button"
               onClick={() => handleTabSwitch('list')}
-              className={`flex items-center gap-1 px-2.5 py-1 rounded-lg font-bold whitespace-nowrap transition-all ${
+              className={`flex items-center justify-center gap-1 py-1.5 px-1 rounded-lg font-bold whitespace-nowrap transition-all ${
                 activeTab === 'list' ? 'bg-teal-700 text-white' : 'text-slate-500'
               }`}
             >
@@ -834,7 +834,7 @@ export const HistoryPage: React.FC<{ initialTab?: 'list' | 'calendar' | 'diagnos
             <button
               type="button"
               onClick={() => handleTabSwitch('calendar')}
-              className={`flex items-center gap-1 px-2.5 py-1 rounded-lg font-bold whitespace-nowrap transition-all ${
+              className={`flex items-center justify-center gap-1 py-1.5 px-1 rounded-lg font-bold whitespace-nowrap transition-all ${
                 activeTab === 'calendar' ? 'bg-teal-700 text-white' : 'text-slate-500'
               }`}
             >
@@ -843,7 +843,7 @@ export const HistoryPage: React.FC<{ initialTab?: 'list' | 'calendar' | 'diagnos
             <button
               type="button"
               onClick={() => handleTabSwitch('stats')}
-              className={`flex items-center gap-1 px-2.5 py-1 rounded-lg font-bold whitespace-nowrap transition-all ${
+              className={`flex items-center justify-center gap-1 py-1.5 px-1 rounded-lg font-bold whitespace-nowrap transition-all ${
                 activeTab === 'stats' ? 'bg-teal-700 text-white' : 'text-slate-500'
               }`}
             >
@@ -852,7 +852,7 @@ export const HistoryPage: React.FC<{ initialTab?: 'list' | 'calendar' | 'diagnos
             <button
               type="button"
               onClick={() => handleTabSwitch('diagnostics')}
-              className={`flex items-center gap-1 px-2.5 py-1 rounded-lg font-bold whitespace-nowrap transition-all ${
+              className={`flex items-center justify-center gap-1 py-1.5 px-1 rounded-lg font-bold whitespace-nowrap transition-all ${
                 activeTab === 'diagnostics' ? 'bg-teal-700 text-white' : 'text-slate-500'
               }`}
             >
