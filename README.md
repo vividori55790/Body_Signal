@@ -1,14 +1,61 @@
-# Body Signal (Bignal)
-
-**Offline-first, hardware-hardened personal pain, symptom & encrypted medical record vault for Android and the Web.**
-
-[![License: GPL-3.0-only](https://img.shields.io/badge/License-GPL--3.0--only-0d9488.svg)](./LICENSE)
-[![Version](https://img.shields.io/badge/Version-v2.0.2-0f172a.svg)](./fastlane/metadata/android/en-US/changelogs/7.txt)
-[![Platform](https://img.shields.io/badge/Platform-Android%20%7C%20Web%20PWA-14b8a6.svg)](#installation)
-[![Languages](https://img.shields.io/badge/Languages-English%20%7C%20%ED%95%9C%EA%B5%AD%EC%96%B4-334155.svg)](#bilingual-support)
+<div align="center">
+  <img src="./docs/images/logo-3d.png" alt="Body Signal (Bignal) Logo" width="128" />
+  <h1>Body Signal (Bignal)</h1>
+  <p><strong>Offline-first, hardware-hardened personal pain, symptom &amp; encrypted medical record vault for Android and the Web.</strong></p>
+  <p>
+    <a href="./LICENSE"><img src="https://img.shields.io/badge/License-GPL--3.0--only-0d9488.svg" alt="License: GPL-3.0-only" /></a>
+    <a href="./fastlane/metadata/android/en-US/changelogs/7.txt"><img src="https://img.shields.io/badge/Version-v2.0.2-0f172a.svg" alt="Version v2.0.2" /></a>
+    <a href="#installation"><img src="https://img.shields.io/badge/Platform-Android%20%7C%20Web%20PWA-14b8a6.svg" alt="Platform: Android | Web PWA" /></a>
+    <a href="#bilingual-support"><img src="https://img.shields.io/badge/Languages-English%20%7C%20%ED%95%9C%EA%B5%AD%EC%96%B4-334155.svg" alt="Languages: English | 한국어" /></a>
+  </p>
+</div>
 
 > **100% On-Device · Zero Telemetry · Zero Cloud Dependency**
 > Body Signal (`com.bodysignal.app`) keeps every pain log, body map entry, medication history, and medical image encrypted strictly inside your device. No accounts, no analytics SDKs, no ads, and no background network calls.
+
+---
+
+## Screenshots
+
+<table>
+  <tr>
+    <td align="center" width="25%">
+      <img src="./docs/images/screenshots/01-dashboard.png" alt="Dashboard & 3-Sec Quick Logger" width="190" /><br />
+      <sub><strong>Dashboard &amp; 3-Sec Quick Logger</strong></sub>
+    </td>
+    <td align="center" width="25%">
+      <img src="./docs/images/screenshots/02-acute-mode.png" alt="1-Sec Acute Pain Mode" width="190" /><br />
+      <sub><strong>1-Sec Acute Pain Mode</strong></sub>
+    </td>
+    <td align="center" width="25%">
+      <img src="./docs/images/screenshots/03-bodymap-entry.png" alt="Interactive Body Map & Clinical Entry" width="190" /><br />
+      <sub><strong>Body Map &amp; Entry</strong></sub>
+    </td>
+    <td align="center" width="25%">
+      <img src="./docs/images/screenshots/04-calendar.png" alt="Health Calendar & Daily Journal" width="190" /><br />
+      <sub><strong>Calendar &amp; Journal</strong></sub>
+    </td>
+  </tr>
+  <tr>
+    <td align="center" width="25%">
+      <img src="./docs/images/screenshots/05-stats.png" alt="Usage & Treatment Statistics" width="190" /><br />
+      <sub><strong>Treatment Statistics</strong></sub>
+    </td>
+    <td align="center" width="25%">
+      <img src="./docs/images/screenshots/06-diagnostics-vault.png" alt="Encrypted Diagnostic & Insurance Vault" width="190" /><br />
+      <sub><strong>Diagnostic &amp; Insurance Vault</strong></sub>
+    </td>
+    <td align="center" width="25%">
+      <img src="./docs/images/screenshots/07-settings.png" alt="Security, Backups & Settings" width="190" /><br />
+      <sub><strong>Security &amp; Settings</strong></sub>
+    </td>
+    <td align="center" width="25%">
+      <img src="./docs/images/logo-3d.png" alt="3D Glass Emblem" width="84" />
+      <img src="./docs/images/logo-2d.svg" alt="2D Mint Emblem" width="84" /><br />
+      <sub><strong>Official Brand Emblems (3D Glass / 2D Mint)</strong></sub>
+    </td>
+  </tr>
+</table>
 
 ---
 
@@ -112,9 +159,10 @@ cd android
 ├── body-signal/                # React + TypeScript + Capacitor Android application
 │   ├── android/                # Native Android shell (MainActivity, SecurityCheck, Gradle)
 │   ├── fdroid/                 # F-Droid build metadata (com.bodysignal.app.yml)
-│   ├── scripts/                # Security & data verification runners
+│   ├── scripts/                # Security, patch & data verification runners
 │   ├── src/                    # UI pages, components, crypto, clinical triage & i18n
 │   └── test/                   # Security hardening & E2E suites
+├── docs/images/                # README brand logos & app screenshots
 ├── fastlane/metadata/android/  # Store descriptions, icons & changelogs (en-US, ko-KR)
 ├── LICENSE                     # GNU General Public License v3.0 (GPL-3.0-only)
 └── README.md
