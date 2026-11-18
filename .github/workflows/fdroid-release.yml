@@ -46,8 +46,9 @@ jobs:
 
       - name: Build unsigned release APK
         run: |
-          chmod +x android/gradlew
-          android/gradlew assembleRelease --no-daemon
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleRelease --no-daemon
 
       - name: Upload unsigned APK
         uses: actions/upload-artifact@v4
