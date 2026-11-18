@@ -1,0 +1,4 @@
+v1.2.1
+- Added Bignal shield & pulse brand logo, launcher icons, and store icon
+- Added launch brand splash screen before presenting LockScreen
+- Added required first-use medical & data-backup disclaimer agreement (reviewable in Settings)

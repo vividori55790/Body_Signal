@@ -1,5 +1,6 @@
 Categories:
-  - Health
+  - Sports & Health
+  - Security
 License: GPL-3.0-only
 AuthorName: vividori55790
 SourceCode: https://github.com/vividori55790/Body_Signal
@@ -25,7 +26,7 @@ Repo: https://github.com/vividori55790/Body_Signal.git
 
 Builds:
   - versionName: 1.2.1
-    versionCode: 3
+    versionCode: 4
     commit: v1.2.1
     subdir: body-signal/android/app
     gradle: yes
@@ -37,7 +38,7 @@ Builds:
       - popd
     output: build/outputs/apk/release/app-release-unsigned.apk
 
-AutoUpdateMode: Version
+AutoUpdateMode: Version v%v
 UpdateCheckMode: Tags
 CurrentVersion: 1.2.1
-CurrentVersionCode: 3
+CurrentVersionCode: 4

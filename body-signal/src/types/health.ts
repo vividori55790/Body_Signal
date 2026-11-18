@@ -95,16 +95,24 @@ export const LocalLlmConfigSchema = z.object({
 
 export type LocalLlmConfig = z.infer<typeof LocalLlmConfigSchema>;
 
+export const LogoVariantSchema = z.enum(['cube-3d', 'cube-2d', 'shield']);
+export type LogoVariant = z.infer<typeof LogoVariantSchema>;
+
 // User Settings
 export const UserSettingsSchema = z.object({
   language: z.enum(['ko', 'en']).default('ko'),
   theme: z.enum(['light', 'dark', 'system']).default('system'),
+  logoVariant: LogoVariantSchema.default('cube-3d'),
   hapticsEnabled: z.boolean().default(true),
   reminderEnabled: z.boolean().default(false),
   reminderTime: z.string().default('21:00'), // HH:mm
   pinEnabled: z.boolean().default(false),
   quickSosEnabled: z.boolean().default(false),
   showDiagnosticsTab: z.boolean().default(false),
+  defaultQuickLoggerOpen: z.boolean().default(true),
+  defaultBodyMapOpen: z.boolean().default(true),
+  quickLoggerUnusedCloseCount: z.number().int().min(0).default(0),
+  bodyMapUnusedCloseCount: z.number().int().min(0).default(0),
   emrFormat: z.enum(['standard', 'soap']).default('standard'),
   localLlm: LocalLlmConfigSchema.default({
     enabled: false,
@@ -124,6 +132,7 @@ export const UserSettingsSchema = z.object({
   symptomPresets: z.array(z.string()).default([
     '욱신거림', '찌르는 듯함', '뻐근함', '타는 듯함', '저림', '조이는 느낌', '두통', '관절통'
   ]),
+  disclaimerAcceptedAt: z.string().optional(),
 });
 
 export type UserSettings = z.infer<typeof UserSettingsSchema>;

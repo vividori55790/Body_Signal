@@ -11,11 +11,18 @@ export const PROJECT_DIR = path.resolve(__dirname, '../../..');
 export const REPO_ROOT = path.resolve(PROJECT_DIR, '..');
 export const SRC_DIR = path.resolve(PROJECT_DIR, 'src');
 export const ANDROID_DIR = path.resolve(PROJECT_DIR, 'android');
-export const APK_PATH = fs.existsSync(path.resolve(REPO_ROOT, 'Bignal-v1.2.0-debug.apk'))
-  ? path.resolve(REPO_ROOT, 'Bignal-v1.2.0-debug.apk')
-  : fs.existsSync(path.resolve(REPO_ROOT, 'Bignal-v1.1.0-debug.apk'))
-  ? path.resolve(REPO_ROOT, 'Bignal-v1.1.0-debug.apk')
-  : path.resolve(REPO_ROOT, 'Bignal-v0.1.0-debug.apk');
+const pkgVersion = JSON.parse(
+  fs.readFileSync(path.resolve(PROJECT_DIR, 'package.json'), 'utf8')
+).version;
+
+const APK_CANDIDATES = [
+  path.resolve(REPO_ROOT, `Bignal-v${pkgVersion}-debug.apk`),
+  path.resolve(ANDROID_DIR, 'app/build/outputs/apk/debug/app-debug.apk'),
+  path.resolve(REPO_ROOT, 'Bignal-v1.2.0-debug.apk'),
+];
+
+export const APK_PATH =
+  APK_CANDIDATES.find((candidate) => fs.existsSync(candidate)) ?? APK_CANDIDATES[1];
 
 // Colors for terminal formatting
 export const colors = {

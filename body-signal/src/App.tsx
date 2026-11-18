@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Layout from './components/Layout';
 import DashboardPage from './pages/Dashboard';
@@ -8,8 +8,10 @@ import HistoryPage from './pages/History';
 import DiagnosticsPage from './pages/DiagnosticsPage';
 import ClinicalBriefingPage from './pages/ClinicalBriefing';
 import ConditionDetailPage from './pages/ConditionDetail';
+import BrandSplash from './components/BrandSplash';
 import LockScreen from './components/LockScreen';
-import { SettingsProvider } from './context/SettingsContext';
+import DisclaimerModal from './components/DisclaimerModal';
+import { SettingsProvider, useSettings } from './context/SettingsContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { HealthProvider } from './context/HealthContext';
 
@@ -17,15 +19,35 @@ import { AcutePainProvider } from './context/AcutePainContext';
 import DeepLinkHandler from './components/DeepLinkHandler';
 import { BackButtonHandler, LockedBackButtonHandler } from './components/BackButtonHandler';
 
+const SPLASH_DURATION_MS = 1050;
+
 const AppContent: React.FC = () => {
   const { isAuthReady, isUnlocked } = useAuth();
+  const { settings, isSettingsLoaded, acceptDisclaimer } = useSettings();
+  const [showIntroLogo, setShowIntroLogo] = useState(true);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setShowIntroLogo(false);
+    }, SPLASH_DURATION_MS);
+    return () => window.clearTimeout(timer);
+  }, []);
 
   if (!isAuthReady) {
     return (
-      <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950 text-slate-400 text-xs font-bold">
+      <>
         <LockedBackButtonHandler />
-        <span>보안 상태 확인 중...</span>
-      </div>
+        <BrandSplash statusText="보안 상태 확인 중..." />
+      </>
+    );
+  }
+
+  if (showIntroLogo) {
+    return (
+      <>
+        <LockedBackButtonHandler />
+        <BrandSplash />
+      </>
     );
   }
 
@@ -34,6 +56,24 @@ const AppContent: React.FC = () => {
       <>
         <LockedBackButtonHandler />
         <LockScreen />
+      </>
+    );
+  }
+
+  if (!isSettingsLoaded) {
+    return (
+      <>
+        <LockedBackButtonHandler />
+        <BrandSplash statusText="설정 불러오는 중..." />
+      </>
+    );
+  }
+
+  if (!settings.disclaimerAcceptedAt) {
+    return (
+      <>
+        <LockedBackButtonHandler />
+        <DisclaimerModal mode="gate" onAccept={acceptDisclaimer} />
       </>
     );
   }

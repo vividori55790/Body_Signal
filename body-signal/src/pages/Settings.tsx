@@ -31,8 +31,11 @@ import {
   EyeOff,
   Sliders,
   Database,
+  Sparkles,
 } from 'lucide-react';
+import BrandLogo, { LOGO_VARIANT_OPTIONS } from '../components/BrandLogo';
 import { PinModal } from '../components/PinModal';
+import DisclaimerModal from '../components/DisclaimerModal';
 import { triggerHaptic } from '../utils/native';
 import { testLocalLlmConnection } from '../utils/localLlm';
 import { encryptBackupWithPassphrase, decryptBackupWithPassphrase } from '../utils/crypto';
@@ -71,9 +74,12 @@ export const SettingsPage: React.FC = () => {
     t,
     setLanguage,
     setTheme,
+    setLogoVariant,
     setHaptics,
     setQuickSos,
     setShowDiagnosticsTab,
+    setDefaultQuickLoggerOpen,
+    setDefaultBodyMapOpen,
     setReminder,
     addMedicationPreset,
     removeMedicationPreset,
@@ -117,6 +123,7 @@ export const SettingsPage: React.FC = () => {
 
   // Encrypted Backup Modal State
   const [backupModalMode, setBackupModalMode] = useState<'export' | 'importDecrypt' | 'importPreview' | null>(null);
+  const [showDisclaimerModal, setShowDisclaimerModal] = useState(false);
   const [backupPassphrase, setBackupPassphrase] = useState('');
   const [backupPassphraseConfirm, setBackupPassphraseConfirm] = useState('');
   const [backupError, setBackupError] = useState('');
@@ -572,6 +579,47 @@ export const SettingsPage: React.FC = () => {
             </div>
           </div>
 
+          {/* Brand Logo Style */}
+          <div className="p-3.5 space-y-2.5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Sparkles size={18} className="text-emerald-600 dark:text-emerald-400" />
+                <div>
+                  <span className="font-bold text-xs block">
+                    {settings.language === 'en' ? 'Brand Emblem' : '대표 로고 스타일'}
+                  </span>
+                  <span className="text-[10px] text-slate-400">
+                    {settings.language === 'en'
+                      ? 'Shown on launch splash, lock screen & welcome header'
+                      : '시작 스플래시와 잠금 화면 로고에 적용됩니다'}
+                  </span>
+                </div>
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              {LOGO_VARIANT_OPTIONS.map((opt) => {
+                const selected = settings.logoVariant === opt.id;
+                return (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    onClick={() => setLogoVariant(opt.id)}
+                    className={`flex flex-col items-center rounded-xl border p-2 transition-all ${
+                      selected
+                        ? 'border-emerald-500 bg-emerald-50/70 dark:bg-emerald-950/40 ring-1 ring-emerald-500/30'
+                        : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
+                    }`}
+                  >
+                    <BrandLogo variant={opt.id} size={36} showFrame={true} />
+                    <span className="mt-1.5 text-[11px] font-bold text-slate-700 dark:text-slate-200">
+                      {settings.language === 'en' ? opt.labelEn : opt.labelKo}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
           {/* Haptics */}
           <div className="p-3.5 flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -593,11 +641,52 @@ export const SettingsPage: React.FC = () => {
             </button>
           </div>
 
+          {/* Default Quick Pain Logger & BodyMap Open States */}
+          <div className="p-3.5 flex items-center justify-between">
+            <div className="pr-3">
+              <span className="font-bold text-xs block">홈 화면 &lsquo;3초 기록&rsquo; 기본 펼침</span>
+              <span className="text-[10px] text-slate-400">끄면 홈 진입 시 접힌 상태로 시작합니다</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setDefaultQuickLoggerOpen(!(settings.defaultQuickLoggerOpen ?? true))}
+              className={`w-11 h-6 rounded-full shrink-0 transition-colors ${
+                (settings.defaultQuickLoggerOpen ?? true) ? 'bg-teal-600' : 'bg-slate-300 dark:bg-slate-700'
+              }`}
+            >
+              <div
+                className={`w-4 h-4 rounded-full bg-white transition-transform ${
+                  (settings.defaultQuickLoggerOpen ?? true) ? 'translate-x-6' : 'translate-x-1'
+                }`}
+              />
+            </button>
+          </div>
+
+          <div className="p-3.5 flex items-center justify-between">
+            <div className="pr-3">
+              <span className="font-bold text-xs block">상세 기록 &lsquo;인체 바디맵&rsquo; 기본 펼침</span>
+              <span className="text-[10px] text-slate-400">끄면 부위 선택 시 필요할 때만 바디맵을 엽니다</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setDefaultBodyMapOpen(!(settings.defaultBodyMapOpen ?? true))}
+              className={`w-11 h-6 rounded-full shrink-0 transition-colors ${
+                (settings.defaultBodyMapOpen ?? true) ? 'bg-teal-600' : 'bg-slate-300 dark:bg-slate-700'
+              }`}
+            >
+              <div
+                className={`w-4 h-4 rounded-full bg-white transition-transform ${
+                  (settings.defaultBodyMapOpen ?? true) ? 'translate-x-6' : 'translate-x-1'
+                }`}
+              />
+            </button>
+          </div>
+
           {/* Optional Bottom Bar Shortcut: Diagnostics */}
           <div className="p-3.5 flex items-center justify-between">
             <div className="pr-3">
               <span className="font-bold text-xs block">하단 패널에 진단·실손 바로가기 추가</span>
-              <span className="text-[10px] text-slate-400">끄면 기본 4개 탭으로 간결하게 유지됩니다</span>
+              <span className="text-[10px] text-slate-400">끄면 기본 3개 탭(홈·기록·설정)으로 간결하게 유지됩니다</span>
             </div>
             <button
               type="button"
@@ -1293,11 +1382,31 @@ export const SettingsPage: React.FC = () => {
         />
       )}
 
-      <div className="text-center pt-2">
-        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-200/60 dark:bg-slate-800 text-[10px] font-bold text-slate-500">
-          <Shield size={12} className="text-teal-600" />
-          Body Signal Mobile v1.2.0 (Encrypted)
-        </span>
+      {showDisclaimerModal && (
+        <DisclaimerModal
+          mode="view"
+          acceptedAt={settings.disclaimerAcceptedAt}
+          onClose={() => setShowDisclaimerModal(false)}
+        />
+      )}
+
+      <div className="text-center pt-2 space-y-2">
+        <button
+          type="button"
+          onClick={() => {
+            triggerHaptic();
+            setShowDisclaimerModal(true);
+          }}
+          className="text-[11px] font-bold text-slate-500 hover:text-teal-600 dark:text-slate-400 underline underline-offset-2"
+        >
+          면책조항 및 이용 안내 보기
+        </button>
+        <div>
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-200/60 dark:bg-slate-800 text-[10px] font-bold text-slate-500">
+            <Shield size={12} className="text-teal-600" />
+            Body Signal Mobile v1.2.1 (Encrypted)
+          </span>
+        </div>
       </div>
     </div>
   );
