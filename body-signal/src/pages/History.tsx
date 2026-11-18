@@ -33,6 +33,7 @@ import { triggerHaptic } from '../utils/native';
 import CalendarPage from './CalendarPage';
 import DiagnosticsPage from './DiagnosticsPage';
 import StatsPage from './StatsPage';
+import { useAuthorizedDelete } from '../components/DeleteAuthModal';
 // import ClinicalBriefingPage from './ClinicalBriefing'; // 일시 주석 처리
 
 interface HistoryItemProps {
@@ -43,7 +44,7 @@ interface HistoryItemProps {
   selectable?: boolean;
   selected?: boolean;
   onToggleSelect?: (id: string) => void;
-  onDelete: (id: string) => Promise<boolean>;
+  onDelete: (id: string) => Promise<boolean> | Promise<void> | void;
   onUpdate: (id: string, updates: Partial<PainLog>) => Promise<boolean>;
 }
 
@@ -108,14 +109,8 @@ const HistoryItem: React.FC<HistoryItemProps> = ({
 
   const handleDelete = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (
-      window.confirm(
-        isEn ? 'Delete this health record?' : '이 건강 기록을 삭제하시겠습니까?'
-      )
-    ) {
-      triggerHaptic();
-      await onDelete(log.id);
-    }
+    triggerHaptic();
+    await onDelete(log.id);
   };
 
   const beginEdit = (e: React.MouseEvent) => {
@@ -500,6 +495,7 @@ export const HistoryPage: React.FC<{ initialTab?: 'list' | 'calendar' | 'diagnos
   const navigate = useNavigate();
   const { logs, conditions, deleteLog, updateLog, assignLogsToCondition } = useHealth();
   const { settings, t } = useSettings();
+  const { requestAuthorizedDelete, authModal: deleteAuthModal } = useAuthorizedDelete();
   const isEn = settings.language === 'en';
   const [searchParams, setSearchParams] = useSearchParams();
   const paramTab = searchParams.get('tab');
@@ -1107,7 +1103,17 @@ export const HistoryPage: React.FC<{ initialTab?: 'list' | 'calendar' | 'diagnos
                           selectable={selectionMode}
                           selected={selectedIds.includes(log.id)}
                           onToggleSelect={toggleSelectLog}
-                          onDelete={deleteLog}
+                          onDelete={async (logId) => {
+                            requestAuthorizedDelete({
+                              title: isEn ? 'Delete Health Record' : '건강 기록 삭제',
+                              description: isEn
+                                ? 'Delete this health record? Once deleted, it cannot be recovered.'
+                                : '이 건강 기록을 삭제하시겠습니까? 삭제 후에는 복구할 수 없습니다.',
+                              onAuthorized: async () => {
+                                await deleteLog(logId);
+                              },
+                            });
+                          }}
                           onUpdate={updateLog}
                         />
                       );
@@ -1273,6 +1279,8 @@ export const HistoryPage: React.FC<{ initialTab?: 'list' | 'calendar' | 'diagnos
           </div>,
           document.body
         )}
+
+      {deleteAuthModal}
     </div>
   );
 };

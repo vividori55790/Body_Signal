@@ -295,6 +295,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const isEnUi = () =>
     typeof document !== 'undefined' && document.documentElement?.dataset?.lang === 'en';
 
+  const buildPinFailureResult = (result: { lockoutMs?: number; remainingAttempts?: number }) => {
+    if (result.lockoutMs) {
+      setLockoutRemainingMs(result.lockoutMs);
+      const secs = Math.ceil(result.lockoutMs / 1000);
+      return {
+        success: false,
+        message: isEnUi()
+          ? `Too many failed attempts. Try again in ${secs}s.`
+          : `입력 횟수를 초과했습니다. ${secs}초 후 다시 시도해 주세요.`,
+      };
+    }
+    const left = result.remainingAttempts ?? 0;
+    return {
+      success: false,
+      message: isEnUi()
+        ? `Incorrect PIN. (${left} attempts remaining)`
+        : `PIN이 일치하지 않습니다. (남은 기회: ${left}회)`,
+    };
+  };
+
   const unlockApp = async (
     pin: string
   ): Promise<{ success: boolean; message?: string; requiresTwoFactor?: boolean }> => {
@@ -306,25 +326,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const fullyUnlocked = await completePrimaryFactor(pin, isUnlocked);
       return { success: true, requiresTwoFactor: !fullyUnlocked };
     }
-
-    if (result.lockoutMs) {
-      setLockoutRemainingMs(result.lockoutMs);
-      const secs = Math.ceil(result.lockoutMs / 1000);
-      return {
-        success: false,
-        message: isEnUi()
-          ? `Too many failed attempts. Try again in ${secs}s.`
-          : `입력 횟수를 초과했습니다. ${secs}초 후 다시 시도해 주세요.`,
-      };
-    }
-
-    const left = result.remainingAttempts ?? 0;
-    return {
-      success: false,
-      message: isEnUi()
-        ? `Incorrect PIN. (${left} attempts remaining)`
-        : `PIN이 일치하지 않습니다. (남은 기회: ${left}회)`,
-    };
+    return buildPinFailureResult(result);
   };
 
   const unlockWithPin = async (pin: string): Promise<boolean> => {
@@ -536,23 +538,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (result.success) {
       return { success: true };
     }
-    if (result.lockoutMs) {
-      setLockoutRemainingMs(result.lockoutMs);
-      const secs = Math.ceil(result.lockoutMs / 1000);
-      return {
-        success: false,
-        message: isEnUi()
-          ? `Too many failed attempts. Try again in ${secs}s.`
-          : `입력 횟수를 초과했습니다. ${secs}초 후 다시 시도해 주세요.`,
-      };
-    }
-    const left = result.remainingAttempts ?? 0;
-    return {
-      success: false,
-      message: isEnUi()
-        ? `Incorrect PIN. (${left} attempts remaining)`
-        : `PIN이 일치하지 않습니다. (남은 기회: ${left}회)`,
-    };
+    return buildPinFailureResult(result);
   };
 
   const verifySensitiveActionBiometric = async (): Promise<boolean> => {

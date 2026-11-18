@@ -16,6 +16,7 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 import PhotoAttachmentField from '../components/PhotoAttachmentField';
+import { useAuthorizedDelete } from '../components/DeleteAuthModal';
 import { useHealth } from '../context/HealthContext';
 import { useAuth } from '../context/AuthContext';
 import { useSettings } from '../context/SettingsContext';
@@ -29,6 +30,7 @@ export const DiagnosticsPage: React.FC<{ embedded?: boolean }> = ({ embedded = f
   const { conditions, diagnosticRecords, addDiagnosticRecord, updateDiagnosticRecord, deleteDiagnosticRecord } = useHealth();
   const { activeSessionPin, isUnlocked } = useAuth();
   const { settings } = useSettings();
+  const { requestAuthorizedDelete, authModal: deleteAuthModal } = useAuthorizedDelete();
   const isEn = settings.language === 'en';
 
   const [viewMode, setViewMode] = useState<'feed' | 'grid'>('feed');
@@ -198,23 +200,23 @@ export const DiagnosticsPage: React.FC<{ embedded?: boolean }> = ({ embedded = f
     });
   };
 
-  const handleDelete = async (rec: DiagnosticRecord) => {
-    if (
-      !window.confirm(
-        isEn
-          ? 'Permanently delete this diagnostic record and its encrypted photos?'
-          : '이 진단 기록과 첨부된 암호화 사진을 영구 삭제하시겠습니까?'
-      )
-    )
-      return;
-    triggerHaptic();
-    await deleteDiagnosticRecord(rec.id);
-    setDecryptedPhotos((prev) => {
-      const next = { ...prev };
-      for (const pid of rec.photoIds || []) {
-        delete next[pid];
-      }
-      return next;
+  const handleDelete = (rec: DiagnosticRecord) => {
+    requestAuthorizedDelete({
+      title: isEn ? 'Delete Diagnostic Record' : '진단·실손 기록 삭제',
+      description: isEn
+        ? 'Permanently delete this diagnostic record and its encrypted photos?'
+        : '이 진단 기록과 첨부된 암호화 사진을 영구 삭제하시겠습니까?',
+      onAuthorized: async () => {
+        triggerHaptic();
+        await deleteDiagnosticRecord(rec.id);
+        setDecryptedPhotos((prev) => {
+          const next = { ...prev };
+          for (const pid of rec.photoIds || []) {
+            delete next[pid];
+          }
+          return next;
+        });
+      },
     });
   };
 
@@ -730,6 +732,8 @@ export const DiagnosticsPage: React.FC<{ embedded?: boolean }> = ({ embedded = f
           />
         </div>
       )}
+
+      {deleteAuthModal}
     </div>
   );
 };

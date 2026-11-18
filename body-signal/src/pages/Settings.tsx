@@ -36,6 +36,7 @@ import {
 import BrandLogo, { LOGO_VARIANT_OPTIONS } from '../components/BrandLogo';
 import { PinModal } from '../components/PinModal';
 import DisclaimerModal from '../components/DisclaimerModal';
+import { useAuthorizedDelete } from '../components/DeleteAuthModal';
 import { triggerHaptic } from '../utils/native';
 import { testLocalLlmConnection, isOnDeviceLlmEndpoint } from '../utils/localLlm';
 import { encryptBackupWithPassphrase, decryptBackupWithPassphrase } from '../utils/crypto';
@@ -100,7 +101,9 @@ export const SettingsPage: React.FC = () => {
     enableTotp,
     disableTotp,
     unlockApp,
+    beginExternalPickerGrace,
   } = useAuth();
+  const { requestAuthorizedDelete, authModal: deleteAuthModal } = useAuthorizedDelete();
 
   // Modals state
   const [pinModalMode, setPinModalMode] = useState<'set' | 'change' | 'unlock' | null>(null);
@@ -417,11 +420,15 @@ export const SettingsPage: React.FC = () => {
     }
   };
 
-  const handleReset = async () => {
-    if (window.confirm(t('resetConfirmPrompt'))) {
-      await resetData();
-      window.location.reload();
-    }
+  const handleReset = () => {
+    requestAuthorizedDelete({
+      title: t('resetApp'),
+      description: t('resetConfirmPrompt'),
+      onAuthorized: async () => {
+        await resetData();
+        window.location.reload();
+      },
+    });
   };
 
   const sectionTitles: Record<SettingsSection, string> = {
@@ -1084,7 +1091,13 @@ export const SettingsPage: React.FC = () => {
                 </span>
               </div>
             </div>
-            <input type="file" accept=".json,application/json" onChange={handleImportFile} className="hidden" />
+            <input
+              type="file"
+              accept=".json,application/json"
+              onClick={() => beginExternalPickerGrace()}
+              onChange={handleImportFile}
+              className="hidden"
+            />
             <ChevronRight size={16} className="text-slate-300" />
           </label>
 
@@ -1746,6 +1759,8 @@ export const SettingsPage: React.FC = () => {
           </span>
         </div>
       </div>
+
+      {deleteAuthModal}
     </div>
   );
 };
