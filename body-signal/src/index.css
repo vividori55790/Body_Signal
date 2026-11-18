@@ -19,6 +19,17 @@
   }
 }
 
+/* Suppress Recharts SVG/wrapper focus bounding box when tapped or clicked */
+.recharts-wrapper,
+.recharts-wrapper *,
+.recharts-surface,
+.recharts-surface:focus,
+.recharts-surface:focus-visible {
+  outline: none !important;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+
 /* Custom scrollbar hiding for horizontal chip carousels */
 .scrollbar-hide::-webkit-scrollbar {
   display: none;

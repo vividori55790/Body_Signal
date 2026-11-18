@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
   Activity,
+  Calendar,
   Edit3,
   PlusCircle,
   X,
@@ -14,7 +15,7 @@ import {
   Check,
   AlertTriangle,
 } from 'lucide-react';
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine } from 'recharts';
 import { format } from 'date-fns';
 import { useHealth } from '../context/HealthContext';
 import { useSettings } from '../context/SettingsContext';
@@ -50,12 +51,50 @@ export const ConditionDetailPage: React.FC = () => {
   }, [logs, id]);
 
   const chartData = useMemo(() => {
-    return [...conditionLogs].reverse().map((l) => ({
-      date: format(new Date(l.date), 'M/d'),
-      intensity: l.intensity,
-      note: l.notes || '',
-    }));
-  }, [conditionLogs]);
+    return [...conditionLogs].reverse().map((l) => {
+      const dt = new Date(l.date);
+      return {
+        timestamp: dt.getTime(),
+        dateKey: format(dt, 'yyyy-MM-dd'),
+        date: format(dt, 'M/d'),
+        fullDate: format(dt, isEn ? 'yyyy-MM-dd h:mm a' : 'yyyy-MM-dd a h:mm'),
+        intensity: l.intensity,
+        medication: l.medication || '',
+        note: l.notes || '',
+      };
+    });
+  }, [conditionLogs, isEn]);
+
+  const diagnosticMilestones = useMemo(() => {
+    const grouped = new Map<string, typeof conditionDiagnostics>();
+    for (const rec of [...conditionDiagnostics].reverse()) {
+      const existing = grouped.get(rec.diagnosisDate) || [];
+      existing.push(rec);
+      grouped.set(rec.diagnosisDate, existing);
+    }
+    return Array.from(grouped.entries()).map(([dateStr, records]) => {
+      const [y, m, d] = dateStr.split('-').map(Number);
+      const dt = y && m && d ? new Date(y, m - 1, d, 12, 0, 0) : new Date(dateStr);
+      return {
+        dateStr,
+        shortLabel: m && d ? `${m}/${d}` : dateStr,
+        timestamp: dt.getTime(),
+        records,
+      };
+    });
+  }, [conditionDiagnostics]);
+
+  const chartDomain = useMemo<[number, number] | ['auto', 'auto']>(() => {
+    const timestamps = [
+      ...chartData.map((d) => d.timestamp),
+      ...diagnosticMilestones.map((m) => m.timestamp),
+    ].filter((n) => Number.isFinite(n));
+    if (timestamps.length === 0) return ['auto', 'auto'];
+    const minTs = Math.min(...timestamps);
+    const maxTs = Math.max(...timestamps);
+    const pad = Math.max(21_600_000, Math.round((maxTs - minTs) * 0.06));
+    return [minTs - pad, maxTs + pad];
+  }, [chartData, diagnosticMilestones]);
 
   const doctorSummary = useMemo(() => {
     if (!condition) return null;
@@ -473,6 +512,63 @@ export const ConditionDetailPage: React.FC = () => {
           </section>
         )}
 
+        {/* Condition Timeline & Diagnosis Overview */}
+        <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3.5 shadow-sm space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            <span className="flex items-center gap-1.5 text-[11px] font-extrabold text-slate-600 dark:text-slate-300 uppercase">
+              <Calendar size={13} className="text-teal-600 dark:text-teal-400" />
+              {isEn ? 'Onset & Diagnosis Dates' : '발병일 · 진단 이력'}
+            </span>
+            <span className="text-[11px] font-semibold text-slate-400">
+              {isEn ? `Onset ${condition.onsetDate}` : `발병일 ${condition.onsetDate}`}
+            </span>
+          </div>
+
+          {conditionDiagnostics.length > 0 ? (
+            <div className="flex flex-wrap gap-1.5">
+              {conditionDiagnostics.map((rec) => (
+                <button
+                  key={rec.id}
+                  type="button"
+                  onClick={() => {
+                    triggerHaptic();
+                    navigate('/diagnostics');
+                  }}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-teal-50 dark:bg-teal-950/60 border border-teal-200 dark:border-teal-800 text-teal-800 dark:text-teal-200 text-[11px] font-bold hover:bg-teal-100 dark:hover:bg-teal-900/60 transition-colors"
+                >
+                  <FileCheck2 size={12} className="text-teal-600 dark:text-teal-400 shrink-0" />
+                  <span>{rec.diagnosisDate}</span>
+                  <span className="opacity-70">·</span>
+                  <span className="truncate max-w-[140px]">{rec.diagnosisName}</span>
+                  {rec.hospitalName && (
+                    <span className="text-[10px] font-semibold opacity-75">({rec.hospitalName})</span>
+                  )}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="flex items-center justify-between text-[11px] text-slate-400">
+              <span>
+                {isEn
+                  ? 'No diagnosis date recorded for this condition yet.'
+                  : '아직 이 질병에 연결된 진료·진단일이 없습니다.'}
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  triggerHaptic();
+                  navigate('/entry', {
+                    state: { selectedConditionId: condition.id, includeDiagnostic: true },
+                  });
+                }}
+                className="font-bold text-teal-600 dark:text-teal-400 shrink-0 ml-2"
+              >
+                {isEn ? '+ Add Diagnosis' : '+ 진단 등록'}
+              </button>
+            </div>
+          )}
+        </div>
+
         {/* Key Stats Grid */}
         <div className="grid grid-cols-2 gap-3">
           <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-sm text-center">
@@ -499,37 +595,90 @@ export const ConditionDetailPage: React.FC = () => {
           </div>
         </div>
 
-        {/* 30-Day Line Chart */}
+        {/* Chronological Pain & Diagnosis Timeline Chart */}
         {chartData.length > 0 ? (
           <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-sm space-y-3">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
               <span className="flex items-center gap-1.5 text-xs font-bold text-slate-700 dark:text-slate-300">
                 <Activity size={16} className="text-emerald-500" />
                 {t('painTrendChart')}
               </span>
-              <span className="text-[10px] text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-full font-bold">
-                {isEn ? 'Last 30 Days' : '최근 30일'}
-              </span>
+              <div className="flex items-center gap-1.5">
+                {diagnosticMilestones.length > 0 && (
+                  <span className="inline-flex items-center gap-1 text-[10px] text-teal-700 dark:text-teal-300 bg-teal-50 dark:bg-teal-950/60 border border-teal-200 dark:border-teal-800 px-2 py-0.5 rounded-full font-bold">
+                    <span className="w-2.5 border-t-2 border-dashed border-teal-600 dark:border-teal-400 inline-block" />
+                    {isEn ? 'Diagnosis' : '진단일'}
+                  </span>
+                )}
+                <span className="text-[10px] text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-full font-bold">
+                  {isEn ? `${chartData.length} logs` : `총 ${chartData.length}건`}
+                </span>
+              </div>
             </div>
 
-            <div className="h-44 w-full">
+            <div className="h-48 w-full select-none">
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={chartData}>
+                <LineChart data={chartData} accessibilityLayer={false} margin={{ top: 18, right: 10, left: 0, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} opacity={0.5} />
-                  <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#94a3b8' }} />
-                  <YAxis domain={[0, 10]} axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#94a3b8' }} width={20} />
+                  <XAxis
+                    dataKey="timestamp"
+                    type="number"
+                    scale="time"
+                    domain={chartDomain}
+                    axisLine={false}
+                    tickLine={false}
+                    tickCount={5}
+                    tickFormatter={(ts) => format(new Date(Number(ts)), 'M/d')}
+                    tick={{ fontSize: 10, fill: '#94a3b8' }}
+                  />
+                  <YAxis domain={[0, 10]} axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#94a3b8' }} width={24} />
                   <Tooltip
-                    contentStyle={{
-                      borderRadius: '12px',
-                      backgroundColor: '#1e293b',
-                      border: 'none',
-                      color: '#fff',
-                      fontSize: '12px',
+                    content={({ active, payload }) => {
+                      if (!active || !payload || payload.length === 0) return null;
+                      const pt = payload[0]?.payload as (typeof chartData)[number] | undefined;
+                      if (!pt) return null;
+                      const dayDiags = diagnosticMilestones.find((m) => m.dateStr === pt.dateKey)?.records || [];
+                      return (
+                        <div className="rounded-xl bg-slate-900 text-white px-3 py-2 shadow-lg border border-slate-700 text-[11px] space-y-1 max-w-[220px]">
+                          <div className="font-bold text-slate-300">{pt.fullDate}</div>
+                          <div className="font-extrabold text-emerald-400">
+                            {isEn ? `Pain Intensity: NRS ${pt.intensity}/10` : `통증 강도: NRS ${pt.intensity} / 10`}
+                          </div>
+                          {pt.medication && (
+                            <div className="text-blue-300 font-semibold truncate">💊 {pt.medication}</div>
+                          )}
+                          {pt.note && (
+                            <div className="text-slate-300 italic truncate">&ldquo;{pt.note}&rdquo;</div>
+                          )}
+                          {dayDiags.length > 0 && (
+                            <div className="pt-1 border-t border-slate-700 text-teal-300 font-bold">
+                              {dayDiags.map((d) => `📋 ${d.diagnosisName}${d.hospitalName ? ` (${d.hospitalName})` : ''}`).join(' / ')}
+                            </div>
+                          )}
+                        </div>
+                      );
                     }}
                   />
+                  {diagnosticMilestones.map((m) => (
+                    <ReferenceLine
+                      key={m.dateStr}
+                      x={m.timestamp}
+                      stroke="#0d9488"
+                      strokeDasharray="4 3"
+                      strokeWidth={1.75}
+                      label={{
+                        value: `${isEn ? 'Dx' : '진단'} ${m.shortLabel}`,
+                        position: 'top',
+                        fill: '#0d9488',
+                        fontSize: 10,
+                        fontWeight: 700,
+                      }}
+                    />
+                  ))}
                   <Line
                     type="monotone"
                     dataKey="intensity"
+                    name={isEn ? 'Pain (NRS)' : '통증 강도 (NRS)'}
                     stroke="#10b981"
                     strokeWidth={3}
                     dot={{ fill: '#10b981', r: 3 }}
