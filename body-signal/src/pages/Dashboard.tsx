@@ -20,6 +20,7 @@ import { useSettings } from '../context/SettingsContext';
 import { Condition, DiagnosticRecord, PainLog, UNASSIGNED_CONDITION_ID } from '../types/health';
 import { triggerHaptic } from '../utils/native';
 import { computeTreatmentMetrics } from '../utils/treatmentMetrics';
+import { format } from 'date-fns';
 import { LineChart, Line, ResponsiveContainer, YAxis } from 'recharts';
 import CalendarHeatmap from '../components/CalendarHeatmap';
 import QuickPainLogger from '../components/QuickPainLogger';
@@ -643,7 +644,16 @@ export const DashboardPage: React.FC = () => {
       {/* 4. Overall Pain Heatmap */}
       <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3.5 shadow-sm space-y-2">
         <h3 className="text-[11px] font-bold text-slate-400 uppercase">{t('overallPainHeatmap')}</h3>
-        <CalendarHeatmap logs={logs} />
+        <CalendarHeatmap
+          logs={logs}
+          diagnosticRecords={diagnosticRecords}
+          onDateClick={({ date }) => {
+            triggerHaptic();
+            navigate('/history?tab=calendar', {
+              state: { selectedDate: format(date, 'yyyy-MM-dd') },
+            });
+          }}
+        />
       </div>
 
       {/* 5. Unassigned (Unknown Cause) Symptoms Grouping Signal Card */}

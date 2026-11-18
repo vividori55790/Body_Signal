@@ -21,6 +21,7 @@ import { useHealth } from '../context/HealthContext';
 import { useSettings } from '../context/SettingsContext';
 import { triggerHaptic } from '../utils/native';
 import { calculateInsuranceClaimStatus } from '../utils/insurance';
+import { parseLocalDate } from '../utils/dateUtils';
 
 export const ConditionDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -73,11 +74,10 @@ export const ConditionDetailPage: React.FC = () => {
       grouped.set(rec.diagnosisDate, existing);
     }
     return Array.from(grouped.entries()).map(([dateStr, records]) => {
-      const [y, m, d] = dateStr.split('-').map(Number);
-      const dt = y && m && d ? new Date(y, m - 1, d, 12, 0, 0) : new Date(dateStr);
+      const dt = parseLocalDate(dateStr, 12) || new Date(dateStr);
       return {
         dateStr,
-        shortLabel: m && d ? `${m}/${d}` : dateStr,
+        shortLabel: format(dt, 'M/d'),
         timestamp: dt.getTime(),
         records,
       };
