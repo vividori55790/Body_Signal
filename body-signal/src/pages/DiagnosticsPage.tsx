@@ -15,6 +15,7 @@ import {
   Building2,
   AlertTriangle,
 } from 'lucide-react';
+import PhotoAttachmentField from '../components/PhotoAttachmentField';
 import { useHealth } from '../context/HealthContext';
 import { useAuth } from '../context/AuthContext';
 import { useSettings } from '../context/SettingsContext';
@@ -127,20 +128,6 @@ export const DiagnosticsPage: React.FC<{ embedded?: boolean }> = ({ embedded = f
       urgentCount: urgent.length,
     };
   }, [enrichedRecords]);
-
-  const handlePhotoFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
-    if (files.length === 0) return;
-    setFormError('');
-    try {
-      const processed = await Promise.all(files.map((f) => compressAndStripExif(f)));
-      setDraftPhotos((prev) => [...prev, ...processed].slice(0, 6));
-    } catch (err: any) {
-      setFormError(err?.message || (isEn ? 'Failed to process photos.' : '사진을 처리할 수 없습니다.'));
-    } finally {
-      e.target.value = '';
-    }
-  };
 
   const resetForm = () => {
     setDiagnosisDate(new Date().toISOString().slice(0, 10));
@@ -680,51 +667,12 @@ export const DiagnosticsPage: React.FC<{ embedded?: boolean }> = ({ embedded = f
               </div>
             </div>
 
-            <div>
-              <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">
-                {isEn
-                  ? 'Attach Photos (EXIF Stripped, AES-256 Encrypted, max 6)'
-                  : '진단서·영수증 사진 첨부 (EXIF 제거 후 AES-256 암호화, 최대 6장)'}
-              </label>
-              <div className="flex gap-2">
-                <label className="flex-1 py-2.5 px-3 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer">
-                  <Camera size={15} /> {isEn ? 'Camera' : '카메라 촬영'}
-                  <input
-                    type="file"
-                    accept="image/*"
-                    capture="environment"
-                    onChange={handlePhotoFiles}
-                    className="hidden"
-                  />
-                </label>
-                <label className="flex-1 py-2.5 px-3 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer">
-                  <ImageIcon size={15} /> {isEn ? 'Gallery' : '앨범 선택'}
-                  <input
-                    type="file"
-                    accept="image/*"
-                    multiple
-                    onChange={handlePhotoFiles}
-                    className="hidden"
-                  />
-                </label>
-              </div>
-              {draftPhotos.length > 0 && (
-                <div className="flex gap-2 mt-2 overflow-x-auto">
-                  {draftPhotos.map((src, idx) => (
-                    <div key={idx} className="relative h-16 w-16 shrink-0 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700">
-                      <img src={src} alt={isEn ? 'Preview' : '미리보기'} className="w-full h-full object-cover" />
-                      <button
-                        type="button"
-                        onClick={() => setDraftPhotos((prev) => prev.filter((_, i) => i !== idx))}
-                        className="absolute top-0.5 right-0.5 rounded-full bg-slate-900/80 text-white p-0.5"
-                      >
-                        <X size={11} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+            <PhotoAttachmentField
+              photos={draftPhotos}
+              onChange={setDraftPhotos}
+              onError={setFormError}
+              processFile={compressAndStripExif}
+            />
 
             <div>
               <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">

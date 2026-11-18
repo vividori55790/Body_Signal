@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Pill, Plus, X, Check } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { Pill, X, Check } from 'lucide-react';
 import { useSettings } from '../context/SettingsContext';
 import { triggerHaptic } from '../utils/native';
 import { formatMedicationPreset, validateMedicationInput } from '../utils/medication';
@@ -28,7 +29,8 @@ export const AddMedicationInline: React.FC<AddMedicationInlineProps> = ({
 
   if (!isOpen) return null;
 
-  const handleCancel = () => {
+  const handleCancel = (e?: React.MouseEvent) => {
+    e?.stopPropagation();
     triggerHaptic();
     setName('');
     setDosage('');
@@ -36,8 +38,9 @@ export const AddMedicationInline: React.FC<AddMedicationInlineProps> = ({
     onClose();
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleAdd = async (e?: React.SyntheticEvent) => {
+    e?.preventDefault();
+    e?.stopPropagation();
     triggerHaptic();
 
     const validation = validateMedicationInput(name, dosage);
@@ -67,11 +70,26 @@ export const AddMedicationInline: React.FC<AddMedicationInlineProps> = ({
     }
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in">
+  // Portal outside any enclosing <form> and avoid nested <form> so Enter/Add never submits parent EntryForm
+  const modal = (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in"
+      onClick={handleCancel}
+    >
       <div
         className="w-full max-w-sm rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl p-5 space-y-4"
         onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            e.stopPropagation();
+            handleAdd();
+          } else if (e.key === 'Escape') {
+            e.preventDefault();
+            e.stopPropagation();
+            handleCancel();
+          }
+        }}
       >
         <div className="flex items-center justify-between pb-1 border-b border-slate-100 dark:border-slate-800">
           <div className="flex items-center gap-2">
@@ -92,14 +110,13 @@ export const AddMedicationInline: React.FC<AddMedicationInlineProps> = ({
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-3.5">
+        <div className="space-y-3.5">
           <div>
             <label className="block text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">
               {isEn ? 'Medication Name' : '약 이름'} <span className="text-rose-500">*</span>
             </label>
             <input
               type="text"
-              required
               autoFocus
               maxLength={80}
               placeholder={resolvedPlaceholder}
@@ -141,17 +158,23 @@ export const AddMedicationInline: React.FC<AddMedicationInlineProps> = ({
               {isEn ? 'Cancel' : '취소'}
             </button>
             <button
-              type="submit"
+              type="button"
               disabled={isSubmitting}
+              onClick={handleAdd}
               className="w-full min-h-[44px] py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-md shadow-blue-500/20 active:scale-95 transition-all disabled:opacity-50"
             >
               <Check size={16} /> {isEn ? 'Add & Select' : '추가 및 선택'}
             </button>
           </div>
-        </form>
+        </div>
       </div>
     </div>
   );
+
+  if (typeof document !== 'undefined') {
+    return createPortal(modal, document.body);
+  }
+  return modal;
 };
 
 export default AddMedicationInline;

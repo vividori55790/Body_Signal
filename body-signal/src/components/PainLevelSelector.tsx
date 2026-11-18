@@ -30,6 +30,7 @@ export const PainLevelSelector: React.FC<PainLevelSelectorProps> = ({
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pointerDownRef = useRef(false);
   const startXRef = useRef(0);
+  const startYRef = useRef(0);
   const sliderActivatedRef = useRef(false);
   const valueRef = useRef(value);
   valueRef.current = value;
@@ -110,12 +111,21 @@ export const PainLevelSelector: React.FC<PainLevelSelectorProps> = ({
 
   // Global pointer tracking during press/hold/slide; auto-reverts to Button Mode on release
   useEffect(() => {
-    const handleMove = (clientX: number) => {
+    const handleMove = (clientX: number, clientY?: number) => {
       if (!pointerDownRef.current) return;
-      if (!sliderActivatedRef.current && Math.abs(clientX - startXRef.current) >= 10) {
-        clearLongPressTimer();
-        activateSliderAt(clientX);
-        return;
+      if (!sliderActivatedRef.current) {
+        const dx = Math.abs(clientX - startXRef.current);
+        const dy = clientY !== undefined ? Math.abs(clientY - startYRef.current) : 0;
+        if (dy >= 10 && dy > dx) {
+          clearLongPressTimer();
+          pointerDownRef.current = false;
+          return;
+        }
+        if (dx >= 8) {
+          clearLongPressTimer();
+          activateSliderAt(clientX);
+          return;
+        }
       }
       if (sliderActivatedRef.current) {
         const next = calculateIntensityFromPosition(clientX);
@@ -126,14 +136,17 @@ export const PainLevelSelector: React.FC<PainLevelSelectorProps> = ({
       }
     };
 
-    const onMouseMove = (e: MouseEvent) => handleMove(e.clientX);
+    const onMouseMove = (e: MouseEvent) => handleMove(e.clientX, e.clientY);
     const onTouchMove = (e: TouchEvent) => {
       if (!pointerDownRef.current) return;
+      const touch = e.touches[0];
+      if (!touch) return;
       if (sliderActivatedRef.current) {
         e.preventDefault();
       }
-      if (e.touches[0]) {
-        handleMove(e.touches[0].clientX);
+      handleMove(touch.clientX, touch.clientY);
+      if (sliderActivatedRef.current && e.cancelable) {
+        e.preventDefault();
       }
     };
 
@@ -163,9 +176,10 @@ export const PainLevelSelector: React.FC<PainLevelSelectorProps> = ({
     };
   }, [activateSliderAt, calculateIntensityFromPosition, onChange]);
 
-  const handleRowPointerDown = (clientX: number, initialNum?: number) => {
+  const handleRowPointerDown = (clientX: number, clientY: number, initialNum?: number) => {
     pointerDownRef.current = true;
     startXRef.current = clientX;
+    startYRef.current = clientY;
     sliderActivatedRef.current = false;
 
     clearLongPressTimer();
@@ -208,13 +222,43 @@ export const PainLevelSelector: React.FC<PainLevelSelectorProps> = ({
         </span>
       </div>
 
-      {/* Main Selector Track Container (Button Mode by default, merges into Slider while holding/sliding) */}
+      {/* Main Selector Track Container (Button Mode stays mounted so long-press -> drag never drops touch target) */}
       <div
         ref={containerRef}
-        className="w-full touch-pan-y select-none"
+        className={`relative w-full select-none ${isSliderMode ? 'touch-none' : 'touch-pan-y'}`}
       >
-        {isSliderMode ? (
-          <div className="py-1.5 px-1">
+        <div
+          className={`grid grid-cols-10 gap-1 select-none transition-opacity duration-75 ${
+            isSliderMode ? 'opacity-0 pointer-events-none' : 'opacity-100'
+          }`}
+        >
+          {Array.from({ length: 10 }, (_, i) => i + 1).map((num) => {
+            const isSelected = value === num;
+            return (
+              <button
+                key={num}
+                type="button"
+                onClick={() => handleButtonClick(num)}
+                onMouseDown={(e) => handleRowPointerDown(e.clientX, e.clientY, num)}
+                onTouchStart={(e) => {
+                  if (e.touches[0]) {
+                    handleRowPointerDown(e.touches[0].clientX, e.touches[0].clientY, num);
+                  }
+                }}
+                aria-label={isEn ? `Pain level ${num}` : `통증 강도 ${num}점`}
+                className={`min-h-[44px] h-11 rounded-xl font-black text-sm flex items-center justify-center transition-all select-none ${getColorClass(
+                  num,
+                  isSelected
+                )}`}
+              >
+                {num}
+              </button>
+            );
+          })}
+        </div>
+
+        {isSliderMode && (
+          <div className="absolute inset-0 flex items-center px-1 z-10 pointer-events-none">
             <div
               role="slider"
               aria-valuemin={1}
@@ -256,32 +300,6 @@ export const PainLevelSelector: React.FC<PainLevelSelectorProps> = ({
                 {value}
               </div>
             </div>
-          </div>
-        ) : (
-          <div className="grid grid-cols-10 gap-1 select-none">
-            {Array.from({ length: 10 }, (_, i) => i + 1).map((num) => {
-              const isSelected = value === num;
-              return (
-                <button
-                  key={num}
-                  type="button"
-                  onClick={() => handleButtonClick(num)}
-                  onMouseDown={(e) => handleRowPointerDown(e.clientX, num)}
-                  onTouchStart={(e) => {
-                    if (e.touches[0]) {
-                      handleRowPointerDown(e.touches[0].clientX, num);
-                    }
-                  }}
-                  aria-label={isEn ? `Pain level ${num}` : `통증 강도 ${num}점`}
-                  className={`min-h-[44px] h-11 rounded-xl font-black text-sm flex items-center justify-center transition-all select-none ${getColorClass(
-                    num,
-                    isSelected
-                  )}`}
-                >
-                  {num}
-                </button>
-              );
-            })}
           </div>
         )}
       </div>

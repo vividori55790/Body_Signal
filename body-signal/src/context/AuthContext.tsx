@@ -60,6 +60,9 @@ interface AuthContextValue {
   setupNewPin: (pin: string) => Promise<{ biometricSynced: boolean }>;
   disablePin: () => Promise<void>;
   lockApp: () => void;
+  beginExternalPickerGrace: (durationMs?: number) => void;
+  verifySensitiveActionPin: (pin: string) => Promise<{ success: boolean; message?: string }>;
+  verifySensitiveActionBiometric: () => Promise<boolean>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -85,9 +88,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [pendingTwoFactor, setPendingTwoFactor] = useState(false);
 
   const backgroundTimeRef = useRef<number | null>(null);
+  const externalPickerGraceUntilRef = useRef<number | null>(null);
   const isPinSetRef = useRef<boolean>(false);
   const isTotpEnabledRef = useRef<boolean>(false);
   const pendingPinRef = useRef<string | null>(null);
+
+  const beginExternalPickerGrace = useCallback((durationMs = 180_000) => {
+    externalPickerGraceUntilRef.current = Date.now() + durationMs;
+  }, []);
 
   useEffect(() => {
     isPinSetRef.current = isPinSet;
@@ -168,10 +176,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const onAppForeground = () => {
       setIsPrivacyMasked(false);
       verifyNativeDeviceIntegrity();
+      const graceUntil = externalPickerGraceUntilRef.current;
+      externalPickerGraceUntilRef.current = null;
+      const inExternalPickerGrace = Boolean(graceUntil && Date.now() <= graceUntil);
       if (backgroundTimeRef.current && isPinSetRef.current) {
         const elapsed = Date.now() - backgroundTimeRef.current;
-        // When leaving and returning to app (after 1s or timeout), require PIN/Biometric
-        if (elapsed >= 1000 || elapsed >= AUTO_LOCK_TIMEOUT_MS) {
+        // Skip instant 1s re-lock once while returning from an active OS photo picker / biometric prompt
+        if (!inExternalPickerGrace && (elapsed >= 1000 || elapsed >= AUTO_LOCK_TIMEOUT_MS)) {
           clearSessionCryptoKey();
           pendingPinRef.current = null;
           setPendingTwoFactor(false);
@@ -515,6 +526,48 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setIsUnlocked(true);
   };
 
+  const verifySensitiveActionPin = async (
+    pin: string
+  ): Promise<{ success: boolean; message?: string }> => {
+    if (isDeviceCompromised) {
+      return { success: false, message: deviceIntegrityReason };
+    }
+    const result = await verifyAppPin(pin);
+    if (result.success) {
+      return { success: true };
+    }
+    if (result.lockoutMs) {
+      setLockoutRemainingMs(result.lockoutMs);
+      const secs = Math.ceil(result.lockoutMs / 1000);
+      return {
+        success: false,
+        message: isEnUi()
+          ? `Too many failed attempts. Try again in ${secs}s.`
+          : `입력 횟수를 초과했습니다. ${secs}초 후 다시 시도해 주세요.`,
+      };
+    }
+    const left = result.remainingAttempts ?? 0;
+    return {
+      success: false,
+      message: isEnUi()
+        ? `Incorrect PIN. (${left} attempts remaining)`
+        : `PIN이 일치하지 않습니다. (남은 기회: ${left}회)`,
+    };
+  };
+
+  const verifySensitiveActionBiometric = async (): Promise<boolean> => {
+    if (isDeviceCompromised || !isBiometricEnabled || lockoutRemainingMs > 0) {
+      return false;
+    }
+    beginExternalPickerGrace(120_000);
+    try {
+      const result = await authenticateWithBiometrics();
+      return Boolean(result.success && result.pin);
+    } finally {
+      externalPickerGraceUntilRef.current = null;
+    }
+  };
+
   const lockApp = () => {
     if (isPinSet) {
       clearSessionCryptoKey();
@@ -558,6 +611,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setupNewPin,
         disablePin,
         lockApp,
+        beginExternalPickerGrace,
+        verifySensitiveActionPin,
+        verifySensitiveActionBiometric,
       }}
     >
       {/* Privacy Mask for App Switcher */}
