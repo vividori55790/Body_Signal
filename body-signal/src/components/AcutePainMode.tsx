@@ -9,17 +9,20 @@ import { PainLevelSelector } from './PainLevelSelector';
 
 // Top 6 Most Common Acute Pain Regions with clear, high-contrast emojis & 56dp+ tap targets
 const ACUTE_BODY_PARTS = [
-  { id: 'head', name: '머리/두통', icon: '🧠', desc: '이마, 관자놀이, 뒷머리' },
-  { id: 'neck', name: '목/경추', icon: '🧣', desc: '목덜미, 뻐근함' },
-  { id: 'shoulder', name: '어깨/등', icon: '💪', desc: '견갑골, 오십견' },
-  { id: 'lower_back', name: '허리/요통', icon: '🧍', desc: '디스크, 삐끗함' },
-  { id: 'knee', name: '무릎/관절', icon: '🦵', desc: '무릎, 고관절, 다리' },
-  { id: 'stomach', name: '배/복부', icon: '🫄', desc: '위경련, 체함, 복통' },
+  { id: 'head', name: '머리/두통', nameEn: 'Head / Headache', icon: '🧠', desc: '이마, 관자놀이, 뒷머리', descEn: 'Forehead, temples, occiput' },
+  { id: 'neck', name: '목/경추', nameEn: 'Neck / Cervical', icon: '🧣', desc: '목덜미, 뻐근함', descEn: 'Nape, stiffness' },
+  { id: 'shoulder', name: '어깨/등', nameEn: 'Shoulder / Back', icon: '💪', desc: '견갑골, 오십견', descEn: 'Scapula, upper back' },
+  { id: 'lower_back', name: '허리/요통', nameEn: 'Lower Back', icon: '🧍', desc: '디스크, 삐끗함', descEn: 'Lumbar strain, disc' },
+  { id: 'knee', name: '무릎/관절', nameEn: 'Knee / Joint', icon: '🦵', desc: '무릎, 고관절, 다리', descEn: 'Knee, hip, leg' },
+  { id: 'stomach', name: '배/복부', nameEn: 'Abdomen / GI', icon: '🫄', desc: '위경련, 체함, 복통', descEn: 'Cramps, indigestion' },
 ];
 
 export const AcutePainMode: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const { conditions, saveEntry } = useHealth();
   const { settings } = useSettings();
+  const isEn = settings.language === 'en';
+  const partDisplayName = (name: string) =>
+    isEn ? ACUTE_BODY_PARTS.find((p) => p.name === name)?.nameEn || name : name;
 
   const effectiveMeds =
     settings?.medicationPresets && settings.medicationPresets.length > 0
@@ -107,9 +110,11 @@ export const AcutePainMode: React.FC<{ onClose: () => void }> = ({ onClose }) =>
           <div className="w-20 h-20 rounded-full bg-white/20 mx-auto flex items-center justify-center text-4xl shadow-inner animate-bounce">
             ✓
           </div>
-          <h2 className="text-2xl font-black">3초 저장 완료!</h2>
+          <h2 className="text-2xl font-black">{isEn ? 'Saved in 3s!' : '3초 저장 완료!'}</h2>
           <p className="text-sm text-emerald-100 font-medium leading-relaxed">
-            NRS {intensity}점 ({selectedPart}) 통증이 안전하게 기록되었습니다. 무리하지 마시고 편안히 쉬세요.
+            {isEn
+              ? `NRS ${intensity} (${partDisplayName(selectedPart)}) pain has been encrypted & saved. Rest comfortably.`
+              : `NRS ${intensity}점 (${selectedPart}) 통증이 안전하게 기록되었습니다. 무리하지 마시고 편안히 쉬세요.`}
           </p>
         </div>
       </div>
@@ -148,13 +153,13 @@ export const AcutePainMode: React.FC<{ onClose: () => void }> = ({ onClose }) =>
           }}
           className="min-h-[48px] min-w-[72px] flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs active:scale-95 transition-all"
         >
-          <ArrowLeft size={18} /> 닫기
+          <ArrowLeft size={18} /> {isEn ? 'Close' : '닫기'}
         </button>
         <div className="flex items-center gap-2">
           <span className="flex h-3 w-3 rounded-full bg-rose-500 animate-ping" />
           <h1 className="font-black text-sm tracking-wide text-rose-400 flex items-center gap-1">
             <Zap size={16} className="fill-rose-400" />
-            급성 통증 1초 집중 기록 모드
+            {isEn ? '1-Sec Acute Pain Mode' : '급성 통증 1초 집중 기록 모드'}
           </h1>
         </div>
       </div>
@@ -173,7 +178,7 @@ export const AcutePainMode: React.FC<{ onClose: () => void }> = ({ onClose }) =>
         {/* Step 2: Instant Single-Tap Selection for Primary Body Parts */}
         <section className="space-y-3">
           <span className="block text-xs font-bold uppercase tracking-wider text-slate-400">
-            2. 어디가 가장 아프신가요? (원터치 선택)
+            {isEn ? '2. Where does it hurt most? (1-Tap)' : '2. 어디가 가장 아프신가요? (원터치 선택)'}
           </span>
 
           <div className="grid grid-cols-2 gap-2.5">
@@ -193,8 +198,8 @@ export const AcutePainMode: React.FC<{ onClose: () => void }> = ({ onClose }) =>
                 >
                   <span className="text-2xl shrink-0">{part.icon}</span>
                   <div className="min-w-0">
-                    <h3 className="font-black text-sm truncate">{part.name}</h3>
-                    <p className="text-[10px] text-slate-400 mt-0.5 truncate">{part.desc}</p>
+                    <h3 className="font-black text-sm truncate">{isEn ? part.nameEn : part.name}</h3>
+                    <p className="text-[10px] text-slate-400 mt-0.5 truncate">{isEn ? part.descEn : part.desc}</p>
                   </div>
                 </button>
               );
@@ -207,7 +212,9 @@ export const AcutePainMode: React.FC<{ onClose: () => void }> = ({ onClose }) =>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Pill size={18} className="text-blue-400" />
-              <span className="font-bold text-xs text-slate-200">진통제나 약을 드셨나요?</span>
+              <span className="font-bold text-xs text-slate-200">
+                {isEn ? 'Did you take any medication?' : '진통제나 약을 드셨나요?'}
+              </span>
             </div>
             <div className="flex gap-1.5 bg-slate-900 p-1 rounded-xl">
               <button
@@ -220,7 +227,7 @@ export const AcutePainMode: React.FC<{ onClose: () => void }> = ({ onClose }) =>
                   !tookMed ? 'bg-slate-700 text-white shadow' : 'text-slate-400'
                 }`}
               >
-                안 먹음
+                {isEn ? 'No' : '안 먹음'}
               </button>
               <button
                 type="button"
@@ -232,14 +239,16 @@ export const AcutePainMode: React.FC<{ onClose: () => void }> = ({ onClose }) =>
                   tookMed ? 'bg-blue-600 text-white shadow' : 'text-slate-400'
                 }`}
               >
-                먹었음
+                {isEn ? 'Yes' : '먹었음'}
               </button>
             </div>
           </div>
 
           {tookMed && (
             <div className="space-y-2 pt-2 border-t border-slate-700/60 animate-in fade-in">
-              <span className="text-[11px] font-bold text-slate-300 block">복용한 약 선택:</span>
+              <span className="text-[11px] font-bold text-slate-300 block">
+                {isEn ? 'Select Medication:' : '복용한 약 선택:'}
+              </span>
               <div className="grid grid-cols-2 gap-2">
                 {effectiveMeds.map((med) => {
                   const isSelected = selectedMed === med;
@@ -270,7 +279,7 @@ export const AcutePainMode: React.FC<{ onClose: () => void }> = ({ onClose }) =>
                   }}
                   className="min-h-[44px] p-2 rounded-xl text-xs font-bold transition-all text-left flex items-center justify-center gap-1.5 border border-dashed border-blue-400/60 bg-blue-950/30 text-blue-300 hover:bg-blue-900/40 active:scale-95"
                 >
-                  <Plus size={14} /> + 약 추가
+                  <Plus size={14} /> {isEn ? '+ Add Med' : '+ 약 추가'}
                 </button>
               </div>
             </div>
@@ -298,10 +307,16 @@ export const AcutePainMode: React.FC<{ onClose: () => void }> = ({ onClose }) =>
             className="w-full min-h-[60px] py-4 rounded-2xl bg-gradient-to-r from-emerald-600 via-emerald-500 to-teal-600 hover:from-emerald-500 hover:to-teal-500 active:scale-98 text-white font-black text-lg shadow-xl shadow-emerald-600/30 flex items-center justify-center gap-2 transition-all select-none disabled:opacity-50"
           >
             <Zap size={22} className="fill-white" />
-            <span>[NRS {intensity}점 • {selectedPart}] 3초 즉시 저장</span>
+            <span>
+              {isEn
+                ? `[NRS ${intensity} • ${partDisplayName(selectedPart)}] Save Now`
+                : `[NRS ${intensity}점 • ${selectedPart}] 3초 즉시 저장`}
+            </span>
           </button>
           <p className="text-center text-[10px] text-slate-400 font-medium">
-            원터치로 건강 기록에 즉시 암호화 저장됩니다 (3초 완료)
+            {isEn
+              ? 'Immediately encrypted & saved to your on-device log'
+              : '원터치로 건강 기록에 즉시 암호화 저장됩니다 (3초 완료)'}
           </p>
         </div>
       </div>

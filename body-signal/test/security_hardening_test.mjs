@@ -57,14 +57,17 @@ const tests = [
     },
   },
   {
-    name: 'localLlm enforces HTTPS for non-loopback hosts and preserves loopback http:// compatibility',
+    name: 'localLlm enforces strict on-device-only (loopback / built-in) policy and blocks all external servers',
     fn: () => {
       const llm = read('src/utils/localLlm.ts');
       assert.match(llm, /export function isLoopbackHost/);
       assert.match(llm, /export function validateEndpointSecurity/);
       assert.match(llm, /const secCheck = validateEndpointSecurity\(base\)/);
+      assert.match(llm, /redirect:\s*'error'/);
+      assert.match(llm, /credentials:\s*'omit'/);
+      assert.match(llm, /<clinical_record_data>/);
 
-      // Replicate exact policy checks
+      // Replicate exact strict on-device policy checks
       const isLoopback = (h) => ['localhost', '127.0.0.1', '::1', '[::1]'].includes((h || '').toLowerCase().trim());
       const normalize = (url) => {
         let c = (url || '').trim().replace(/\/+$/, '');
@@ -76,14 +79,16 @@ const tests = [
       };
       const validate = (u) => {
         const p = new URL(u);
-        return p.protocol === 'https:' || (p.protocol === 'http:' && isLoopback(p.hostname));
+        return (p.protocol === 'http:' || p.protocol === 'https:') && isLoopback(p.hostname);
       };
 
       assert.equal(normalize('localhost:11434'), 'http://localhost:11434');
       assert.equal(normalize('192.168.0.10:11434'), 'https://192.168.0.10:11434');
       assert.equal(validate('http://localhost:11434/v1'), true);
-      assert.equal(validate('https://192.168.0.10:11434/v1'), true);
+      assert.equal(validate('http://127.0.0.1:11434/v1'), true);
+      assert.equal(validate('https://192.168.0.10:11434/v1'), false);
       assert.equal(validate('http://192.168.0.10:11434/v1'), false);
+      assert.equal(validate('https://api.openai.com/v1'), false);
     },
   },
   {
@@ -299,6 +304,218 @@ const tests = [
       assert.match(disclaimerSrc, /onAccept/);
       const typesSrc = read('src/types/health.ts');
       assert.match(typesSrc, /disclaimerAcceptedAt/);
+    },
+  },
+  {
+    name: 'Complete Security Hardening: constant-time checks, exponential PIN/TOTP lockouts, encrypted settings, legacy purge, atomic AndroidKeyStore rotation, CSV/Zod/CSP/R8',
+    fn: () => {
+      const cryptoSrc = read('src/utils/crypto.ts');
+      assert.match(cryptoSrc, /export function constantTimeEqual/);
+      assert.match(cryptoSrc, /constantTimeEqual\(calculatedChecksum,\s*envelope\.checksum\)/);
+
+      const pinSrc = read('src/utils/pin.ts');
+      assert.match(pinSrc, /constantTimeEqual\(hash,\s*meta\.hash\)/);
+      assert.match(pinSrc, /consecutiveLockouts/);
+      assert.match(pinSrc, /getPinRequirements/);
+
+      const storageSrc = read('src/utils/storage.ts');
+      assert.match(storageSrc, /localStorage\.removeItem\(LEGACY_STORAGE_KEY\)/);
+      assert.match(storageSrc, /encryptWithDeviceKey\(JSON\.stringify\(settings\),\s*deviceKey\)/);
+      assert.match(storageSrc, /decryptWithDeviceKey\(stored as EncryptedPackage,\s*deviceKey\)/);
+
+      const totpSrc = read('src/utils/totp.ts');
+      assert.match(totpSrc, /TOTP_MAX_ATTEMPTS\s*=\s*5/);
+      assert.match(totpSrc, /lastUsedStep/);
+      assert.match(totpSrc, /reEncryptTotpSecret/);
+
+      const authSrc = read('src/context/AuthContext.tsx');
+      assert.match(authSrc, /setupOsCredentialLockWithRecovery/);
+      assert.match(authSrc, /biometricSynced/);
+      assert.match(authSrc, /disableTotp\s*=\s*async\s*\(\s*verificationCode/);
+
+      const lockSrc = read('src/components/LockScreen.tsx');
+      assert.match(lockSrc, /pinLengthHint/);
+      assert.match(lockSrc, /isOsCredentialOnly/);
+
+      const healthCtxSrc = read('src/context/HealthContext.tsx');
+      assert.match(healthCtxSrc, /HealthDataPayloadSchema\.parse/);
+
+      const settingsSrc = read('src/pages/Settings.tsx');
+      assert.match(settingsSrc, /totpDisableModalOpen/);
+      assert.match(settingsSrc, /osRecoveryPinModal/);
+      assert.match(settingsSrc, /isOnDeviceLlmEndpoint/);
+
+      const pluginJava = read('android/app/src/main/java/com/bodysignal/app/SecureAuthPlugin.java');
+      assert.match(pluginJava, /BIO_KEY_ALIAS_ALT/);
+      assert.match(pluginJava, /LEGACY_CRED_KEY_ALIAS/);
+      assert.match(pluginJava, /getOrCreateLegacyCredentialKey/);
+
+      const indexHtml = read('index.html');
+      assert.match(indexHtml, /http-equiv="Content-Security-Policy"/);
+      assert.doesNotMatch(indexHtml, /connect-src[^"]*https:;/);
+
+      const appGradle = read('android/app/build.gradle');
+      assert.match(appGradle, /minifyEnabled true/);
+      assert.match(appGradle, /shrinkResources true/);
+
+      const proguard = read('android/app/proguard-rules.pro');
+      assert.match(proguard, /com\.bodysignal\.app\.\*\*/);
+      assert.match(proguard, /com\.getcapacitor\.PluginMethod/);
+    },
+  },
+  {
+    name: 'Runtime verification: constantTimeEqual, extended record signatures, and isExternalHttpsEndpoint',
+    fn: async () => {
+      const {
+        constantTimeEqual,
+        computeRecordSignature,
+        verifyRecordSignature,
+        encryptBackupWithPassphrase,
+        decryptBackupWithPassphrase,
+      } = await import('../src/utils/crypto.ts');
+      const {
+        isExternalHttpsEndpoint,
+        isOnDeviceLlmEndpoint,
+        validateEndpointSecurity,
+        sanitizePromptText,
+        testLocalLlmConnection,
+        streamChatCompletions,
+      } = await import('../src/utils/localLlm.ts');
+      const { HealthDataPayloadSchema } = await import('../src/types/health.ts');
+
+      assert.equal(constantTimeEqual('abc123', 'abc123'), true);
+      assert.equal(constantTimeEqual('abc123', 'abc124'), false);
+      assert.equal(constantTimeEqual('abc123', 'abc1234'), false);
+
+      // Extended clinical fields are now tamper-protected
+      const rec = {
+        id: 'r1',
+        conditionId: 'c1',
+        date: '2026-11-17T10:00:00.000Z',
+        intensity: 6,
+        medication: '타이레놀',
+        notes: '심한 두통',
+        redFlags: ['마비/감각 저하'],
+      };
+      const sig = await computeRecordSignature(rec, '');
+      assert.equal(await verifyRecordSignature({ ...rec, signature: sig, prevSignature: '' }), true);
+      assert.equal(
+        await verifyRecordSignature({ ...rec, notes: '변조된 메모', signature: sig, prevSignature: '' }),
+        false
+      );
+      assert.equal(
+        await verifyRecordSignature({ ...rec, redFlags: [], signature: sig, prevSignature: '' }),
+        false
+      );
+
+      // Encrypted backup round-trip + tamper detection
+      const payload = JSON.stringify({ conditions: [], logs: [], diaryEntries: [] });
+      const encrypted = await encryptBackupWithPassphrase(payload, 'StrongPassphrase123!');
+      assert.equal(await decryptBackupWithPassphrase(encrypted, 'StrongPassphrase123!'), payload);
+      await assert.rejects(() => decryptBackupWithPassphrase(encrypted, 'WrongPassphrase123!'));
+
+      // Strict On-Device AI enforcement: external & LAN URLs blocked, loopback & built-in allowed
+      assert.equal(isExternalHttpsEndpoint('http://localhost:11434/v1'), false);
+      assert.equal(isExternalHttpsEndpoint('http://127.0.0.1:11434/v1'), false);
+      assert.equal(isExternalHttpsEndpoint('built-in://edge-ai'), false);
+      assert.equal(isExternalHttpsEndpoint('https://api.example.com/v1'), true);
+      assert.equal(isOnDeviceLlmEndpoint({ enabled: true, endpoint: 'built-in://edge-ai', model: 'gemini-nano' }), true);
+      assert.equal(isOnDeviceLlmEndpoint({ enabled: true, endpoint: 'http://localhost:11434/v1', model: 'llama3.2' }), true);
+      assert.equal(isOnDeviceLlmEndpoint({ enabled: true, endpoint: 'https://api.openai.com/v1', model: 'gpt-4o' }), false);
+      assert.equal(isOnDeviceLlmEndpoint({ enabled: true, endpoint: 'http://192.168.0.10:11434/v1', model: 'llama3.2' }), false);
+      assert.equal(validateEndpointSecurity('https://api.openai.com/v1').valid, false);
+
+      const blockedConn = await testLocalLlmConnection({
+        enabled: true,
+        endpoint: 'https://api.openai.com/v1',
+        model: 'gpt-4o',
+      });
+      assert.equal(blockedConn.success, false);
+      await assert.rejects(() =>
+        streamChatCompletions(
+          { enabled: true, endpoint: 'https://api.openai.com/v1', model: 'gpt-4o' },
+          [{ role: 'user', content: 'test' }],
+          () => {}
+        )
+      );
+
+      // Prompt sanitization strips control characters and enforces max length
+      assert.equal(sanitizePromptText('hello\u0000\u0007\nworld', 100), 'hello\nworld');
+      assert.equal(sanitizePromptText('a'.repeat(50), 10).length, 10);
+
+      // Zod backup schema rejects malformed intensity
+      assert.throws(() =>
+        HealthDataPayloadSchema.parse({
+          conditions: [{ id: '', label: 'x', bodyPart: 'head', onsetDate: '2026-01-01', isArchived: false }],
+          logs: [],
+          diaryEntries: [],
+        })
+      );
+
+      // Runtime verification of non-extractable session key vault
+      const {
+        SESSION_KEY_TOKEN,
+        generateSaltHex,
+        initSessionCryptoKeyFromPin,
+        encryptWithActiveSessionKey,
+        decryptWithActiveSessionKey,
+        clearSessionCryptoKey,
+        hasActiveSessionCryptoKey,
+      } = await import('../src/utils/crypto.ts');
+      assert.equal(SESSION_KEY_TOKEN, '__NON_EXTRACTABLE_SESSION_KEY__');
+      const sSalt = generateSaltHex();
+      await initSessionCryptoKeyFromPin('654321', sSalt);
+      assert.equal(hasActiveSessionCryptoKey(), true);
+      const sessPkg = await encryptWithActiveSessionKey('secret-clinical-note');
+      assert.equal(sessPkg.salt, sSalt);
+      assert.equal(await decryptWithActiveSessionKey(sessPkg), 'secret-clinical-note');
+      clearSessionCryptoKey();
+      assert.equal(hasActiveSessionCryptoKey(), false);
+      await assert.rejects(() => decryptWithActiveSessionKey(sessPkg));
+    },
+  },
+  {
+    name: 'Mandatory 6-digit PIN gate, Root/Hook/Debugger blocking, runtime memory hardening, and CSV plaintext warning modal',
+    fn: () => {
+      const pinSrc = read('src/utils/pin.ts');
+      assert.match(pinSrc, /FIXED_PIN_LENGTH\s*=\s*6/);
+      assert.match(pinSrc, /pin\.length\s*!==\s*FIXED_PIN_LENGTH/);
+
+      const pinModalSrc = read('src/components/PinModal.tsx');
+      assert.match(pinModalSrc, /required\s*=\s*false/);
+      assert.match(pinModalSrc, /mode !== 'unlock' && !required/);
+      assert.doesNotMatch(pinModalSrc, /4자리/);
+
+      const appSrc = read('src/App.tsx');
+      assert.match(appSrc, /if\s*\(isDeviceCompromised\)/);
+      assert.match(appSrc, /if\s*\(!isPinSet\)/);
+      assert.match(appSrc, /required=\{true\}/);
+
+      const settingsSrc = read('src/pages/Settings.tsx');
+      assert.match(settingsSrc, /csvWarningModalOpen/);
+      assert.match(settingsSrc, /confirmExportCsv/);
+      assert.doesNotMatch(settingsSrc, /disablePin/);
+
+      const authSrc = read('src/context/AuthContext.tsx');
+      assert.match(authSrc, /IDLE_LOCK_TIMEOUT_MS/);
+      assert.match(authSrc, /clearSessionCryptoKey/);
+      assert.match(authSrc, /checkDeviceIntegrity/);
+      assert.match(authSrc, /SESSION_KEY_TOKEN/);
+
+      const secCheckJava = read('android/app/src/main/java/com/bodysignal/app/SecurityCheck.java');
+      assert.match(secCheckJava, /\/system\/bin\/su/);
+      assert.match(secCheckJava, /com\.topjohnwu\.magisk/);
+      assert.match(secCheckJava, /frida/);
+      assert.match(secCheckJava, /isDebuggerConnected/);
+
+      const mainActivityJava = read('android/app/src/main/java/com/bodysignal/app/MainActivity.java');
+      assert.match(mainActivityJava, /setWebContentsDebuggingEnabled\(false\)/);
+      assert.match(mainActivityJava, /enforceDeviceIntegrity/);
+
+      const pluginJava = read('android/app/src/main/java/com/bodysignal/app/SecureAuthPlugin.java');
+      assert.match(pluginJava, /public void checkDeviceIntegrity/);
+      assert.match(pluginJava, /public void clearWebViewMemory/);
+      assert.match(pluginJava, /Arrays\.fill\(plainBytes,\s*\(byte\)\s*0\)/);
     },
   },
 ];

@@ -20,6 +20,7 @@ export const PainLevelSelector: React.FC<PainLevelSelectorProps> = ({
 }) => {
   const settingsCtx = useContext(SettingsContext);
   const t = settingsCtx?.t || ((k: keyof typeof translations.ko) => translations.ko[k] || (k as string));
+  const isEn = settingsCtx?.settings.language === 'en';
 
   // Ephemeral slider state: defaults to button mode, merges to slider on hold/slide, reverts on release
   const [isSliderMode, setIsSliderMode] = useState(false);
@@ -190,7 +191,8 @@ export const PainLevelSelector: React.FC<PainLevelSelectorProps> = ({
       {/* Header */}
       <div className="flex items-center justify-between">
         <span className="text-xs font-bold text-slate-500 dark:text-slate-400">
-          {t('painLevelTitle')} <span className="font-normal opacity-75">· 밀어서 조절</span>
+          {t('painLevelTitle')}{' '}
+          <span className="font-normal opacity-75">· {isEn ? 'Hold & slide' : '밀어서 조절'}</span>
         </span>
 
         <span
@@ -218,7 +220,7 @@ export const PainLevelSelector: React.FC<PainLevelSelectorProps> = ({
               aria-valuemin={1}
               aria-valuemax={10}
               aria-valuenow={value}
-              aria-label="통증 강도 슬라이더"
+              aria-label={isEn ? 'Pain intensity slider' : '통증 강도 슬라이더'}
               className="relative h-11 w-full flex items-center touch-none select-none"
             >
               <div className="h-3 w-full rounded-full bg-slate-200 dark:bg-slate-800 overflow-hidden relative border border-slate-300 dark:border-slate-700">
@@ -270,7 +272,7 @@ export const PainLevelSelector: React.FC<PainLevelSelectorProps> = ({
                       handleRowPointerDown(e.touches[0].clientX, num);
                     }
                   }}
-                  aria-label={`통증 강도 ${num}점`}
+                  aria-label={isEn ? `Pain level ${num}` : `통증 강도 ${num}점`}
                   className={`min-h-[44px] h-11 rounded-xl font-black text-sm flex items-center justify-center transition-all select-none ${getColorClass(
                     num,
                     isSelected

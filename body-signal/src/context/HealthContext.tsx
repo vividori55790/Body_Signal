@@ -5,6 +5,7 @@ import {
   DiaryEntry,
   DiagnosticRecord,
   HealthDataPayload,
+  HealthDataPayloadSchema,
   ClinicalBriefing,
   UNASSIGNED_CONDITION_ID,
 } from '../types/health';
@@ -116,7 +117,12 @@ export const HealthProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     nextDiagnostics: DiagnosticRecord[] = diagnosticRecords
   ) => {
     if (isPinSet && !activeSessionPin) {
-      throw new Error('앱이 잠겨 있어 암호화 키에 접근할 수 없습니다.');
+      const isEn = typeof document !== 'undefined' && document.documentElement?.dataset?.lang === 'en';
+      throw new Error(
+        isEn
+          ? 'App is locked; cannot access the encryption key.'
+          : '앱이 잠겨 있어 암호화 키에 접근할 수 없습니다.'
+      );
     }
     const payload: HealthDataPayload = {
       conditions: nextConditions,
@@ -424,11 +430,13 @@ export const HealthProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       };
     });
 
+    const isEn = typeof document !== 'undefined' && document.documentElement?.dataset?.lang === 'en';
+
     // Body Part distribution (split comma-separated multi-region parts)
     const bodyPartDist: Record<string, { count: number; maxIntensity: number }> = {};
     logs.forEach((log) => {
       const cond = conditions.find((c) => c.id === log.conditionId);
-      const rawPart = log.bodyPartOverride || cond?.bodyPart || '미지정';
+      const rawPart = log.bodyPartOverride || cond?.bodyPart || (isEn ? 'Unspecified' : '미지정');
       const parts = rawPart.includes(',')
         ? rawPart.split(',').map((s) => s.trim()).filter(Boolean)
         : [rawPart];
@@ -462,26 +470,52 @@ export const HealthProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     // Build Standard SOAP Note
     const chiefComplaints = conditionsSummary.map((c) => `${c.condition.label} (${c.condition.bodyPart})`).join(', ');
-    const sQualities = Object.keys(qualityMap).join(', ') || '특이 양상 미기재';
-    const soapSubjective = `주호소(CC): ${chiefComplaints || '없음'}\n통증 양상(PQRST): ${sQualities}\n방사통: ${
-      conditionsSummary.flatMap((c) => c.radiations).join(', ') || '없음'
-    }\n유발인자: ${conditionsSummary.flatMap((c) => c.triggers).join(', ') || '없음'}\n완화인자: ${
-      conditionsSummary.flatMap((c) => c.reliefFactors).join(', ') || '없음'
-    }`;
+    const sQualities = Object.keys(qualityMap).join(', ') || (isEn ? 'None specified' : '특이 양상 미기재');
+    const noneLabel = isEn ? 'None' : '없음';
+    const soapSubjective = isEn
+      ? `Chief Complaint (CC): ${chiefComplaints || noneLabel}\nPain Quality (PQRST): ${sQualities}\nRadiation: ${
+          conditionsSummary.flatMap((c) => c.radiations).join(', ') || noneLabel
+        }\nTriggers: ${conditionsSummary.flatMap((c) => c.triggers).join(', ') || noneLabel}\nRelieving Factors: ${
+          conditionsSummary.flatMap((c) => c.reliefFactors).join(', ') || noneLabel
+        }`
+      : `주호소(CC): ${chiefComplaints || '없음'}\n통증 양상(PQRST): ${sQualities}\n방사통: ${
+          conditionsSummary.flatMap((c) => c.radiations).join(', ') || '없음'
+        }\n유발인자: ${conditionsSummary.flatMap((c) => c.triggers).join(', ') || '없음'}\n완화인자: ${
+          conditionsSummary.flatMap((c) => c.reliefFactors).join(', ') || '없음'
+        }`;
 
-    const soapObjective = `통증 강도(NRS): 7일 평균 ${
-      conditionsSummary[0]?.avgIntensity7Days ?? '-'
-    }/10, 최고 ${conditionsSummary[0]?.peakIntensity ?? '-'}/10, 최근 ${
-      conditionsSummary[0]?.recentIntensity ?? '-'
-    }/10\n투약 순응도: ${conditionsSummary[0]?.medicationAdherenceRate ?? 0}%\n위험징후(Red Flags): ${
-      Array.from(redFlagsSet).join(', ') || '특이소견 없음(음성)'
-    }`;
+    const soapObjective = isEn
+      ? `Pain Intensity (NRS): 7d Avg ${conditionsSummary[0]?.avgIntensity7Days ?? '-'}/10, Peak ${
+          conditionsSummary[0]?.peakIntensity ?? '-'
+        }/10, Latest ${conditionsSummary[0]?.recentIntensity ?? '-'}/10\nMedication Adherence: ${
+          conditionsSummary[0]?.medicationAdherenceRate ?? 0
+        }%\nRed Flags: ${Array.from(redFlagsSet).join(', ') || 'None detected (Negative)'}`
+      : `통증 강도(NRS): 7일 평균 ${
+          conditionsSummary[0]?.avgIntensity7Days ?? '-'
+        }/10, 최고 ${conditionsSummary[0]?.peakIntensity ?? '-'}/10, 최근 ${
+          conditionsSummary[0]?.recentIntensity ?? '-'
+        }/10\n투약 순응도: ${conditionsSummary[0]?.medicationAdherenceRate ?? 0}%\n위험징후(Red Flags): ${
+          Array.from(redFlagsSet).join(', ') || '특이소견 없음(음성)'
+        }`;
 
-    const soapAssessment = `경과 상태: ${
-      conditionsSummary.map((c) => `${c.condition.label}: ${c.trend === 'improving' ? '호전' : c.trend === 'worsening' ? '악화' : '유지'}`).join('; ')
-    }\n복약 반응: ${medicationResponse.map((m) => `${m.medication}(평균 NRS ${m.avgIntensityWhenTaken})`).join(', ') || '기록 없음'}`;
+    const soapAssessment = isEn
+      ? `Course: ${conditionsSummary
+          .map(
+            (c) =>
+              `${c.condition.label}: ${
+                c.trend === 'improving' ? 'Improving' : c.trend === 'worsening' ? 'Worsening' : 'Stable'
+              }`
+          )
+          .join('; ')}\nMedication Response: ${
+          medicationResponse.map((m) => `${m.medication} (Avg NRS ${m.avgIntensityWhenTaken})`).join(', ') || 'No records'
+        }`
+      : `경과 상태: ${
+          conditionsSummary.map((c) => `${c.condition.label}: ${c.trend === 'improving' ? '호전' : c.trend === 'worsening' ? '악화' : '유지'}`).join('; ')
+        }\n복약 반응: ${medicationResponse.map((m) => `${m.medication}(평균 NRS ${m.avgIntensityWhenTaken})`).join(', ') || '기록 없음'}`;
 
-    const soapPlan = `투약 관리: 현재 처방약 복용 지속 여부 및 증량/변경 평가 요망\n추적 관찰: NRS 7 이상 지속 시 전문 정밀 진단 권고`;
+    const soapPlan = isEn
+      ? `Medication Management: Evaluate continuation, titration, or adjustment of current regimen\nFollow-up: Consider specialist diagnostic workup if NRS >= 7 persists`
+      : `투약 관리: 현재 처방약 복용 지속 여부 및 증량/변경 평가 요망\n추적 관찰: NRS 7 이상 지속 시 전문 정밀 진단 권고`;
 
     return {
       patientSummary: {
@@ -506,6 +540,7 @@ export const HealthProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   // Generate EMR Formatted Text for Doctors & Nurses
   const generateEMRSummaryText = (formatType: 'standard' | 'soap' = 'standard'): string => {
+    const isEn = typeof document !== 'undefined' && document.documentElement?.dataset?.lang === 'en';
     const briefing = getClinicalBriefing();
     const today = format(new Date(), 'yyyy-MM-dd HH:mm');
 
@@ -518,8 +553,63 @@ export const HealthProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       soap += `[A - Assessment]\n${briefing.soapNote.assessment}\n\n`;
       soap += `[P - Plan]\n${briefing.soapNote.plan}\n`;
       soap += `--------------------------------------------------\n`;
-      soap += `* 국제 통증 표준(NRS 0-10) 및 환자 온디바이스 자가 기록 기반 무결성 검증 완료.`;
+      soap += isEn
+        ? `* Integrity verified on-device based on patient self-reported logs (NRS 0-10 standard).`
+        : `* 국제 통증 표준(NRS 0-10) 및 환자 온디바이스 자가 기록 기반 무결성 검증 완료.`;
       return soap;
+    }
+
+    if (isEn) {
+      let text = `[Body Signal Clinical Visit Summary - ${today}]\n`;
+      text += `■ Tracking Overview: ${briefing.patientSummary.activeConditionsCount} active conditions / ${briefing.patientSummary.daysTracked} days tracked\n`;
+
+      if (briefing.redFlagsDetected.length > 0) {
+        text += `🚨 [Alert: Emergency Red Flags Detected]\n- ${briefing.redFlagsDetected.join(', ')}\n\n`;
+      }
+
+      briefing.conditionsSummary.forEach((item, idx) => {
+        text += `[Condition ${idx + 1}] ${item.condition.label} (${item.condition.bodyPart})\n`;
+        text += `- Onset: ${item.condition.onsetDate || 'Unknown'}\n`;
+        text += `- Latest Pain: ${item.recentIntensity !== null ? `NRS ${item.recentIntensity}/10` : 'No record'}\n`;
+        text += `- 7d Avg: ${item.avgIntensity7Days !== null ? `NRS ${item.avgIntensity7Days}` : '-'} | Peak: NRS ${item.peakIntensity ?? '-'}\n`;
+        text += `- Trend: ${
+          item.trend === 'improving' ? 'Improving (↓)' : item.trend === 'worsening' ? 'Worsening (↑)' : 'Stable (→)'
+        } (${item.delta ? (item.delta > 0 ? `+${item.delta}` : item.delta) : 0})\n`;
+
+        if (item.painQualities.length > 0) {
+          text += `- Qualities: ${item.painQualities.join(', ')}\n`;
+        }
+        if (item.radiations.length > 0) {
+          text += `- Radiation: ${item.radiations.join(', ')}\n`;
+        }
+        if (item.triggers.length > 0) {
+          text += `- Triggers: ${item.triggers.join(', ')}\n`;
+        }
+        if (item.reliefFactors.length > 0) {
+          text += `- Relieving Factors: ${item.reliefFactors.join(', ')}\n`;
+        }
+        if (item.frequentMedications.length > 0) {
+          text += `- Medications: ${item.frequentMedications.join(', ')} (Logging rate: ${item.medicationAdherenceRate}%)\n`;
+        }
+        if (item.recentLogs.length > 0) {
+          text += `- Recent Logs:\n`;
+          item.recentLogs.slice(0, 3).forEach((l) => {
+            text += `  * ${format(new Date(l.date), 'MM/dd HH:mm')} [NRS ${l.intensity}] ${l.medication ? `Med: ${l.medication}` : ''} ${l.notes ? `"${l.notes}"` : ''}\n`;
+          });
+        }
+        text += `\n`;
+      });
+
+      if (Object.keys(briefing.bodyPartDistribution).length > 0) {
+        text += `■ Affected Body Regions:\n`;
+        Object.entries(briefing.bodyPartDistribution).forEach(([part, data]) => {
+          text += `- ${part}: ${data.count} logs (Peak NRS ${data.maxIntensity})\n`;
+        });
+        text += `\n`;
+      }
+
+      text += `* Automatically compiled from encrypted on-device self-reported records in Body Signal.`;
+      return text;
     }
 
     let text = `[Body Signal 임상 진료 요약 - ${today}]\n`;
@@ -626,16 +716,28 @@ export const HealthProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   const importBackupJson = async (jsonStr: string) => {
     const parsed = JSON.parse(jsonStr);
-    const data = parsed?.data || parsed;
-    if (data && Array.isArray(data.conditions) && Array.isArray(data.logs)) {
-      const nextDiagnostics = Array.isArray(data.diagnosticRecords) ? data.diagnosticRecords : [];
-      setConditions(data.conditions);
-      setLogs(data.logs);
-      setDiaryEntries(data.diaryEntries || []);
-      setDiagnosticRecords(nextDiagnostics);
-      await persist(data.conditions, data.logs, data.diaryEntries || [], nextDiagnostics);
+    const raw = parsed?.data || parsed;
+    if (raw && Array.isArray(raw.conditions) && Array.isArray(raw.logs)) {
+      const validated = HealthDataPayloadSchema.parse({
+        conditions: raw.conditions,
+        logs: raw.logs,
+        diaryEntries: Array.isArray(raw.diaryEntries) ? raw.diaryEntries : [],
+        diagnosticRecords: Array.isArray(raw.diagnosticRecords) ? raw.diagnosticRecords : [],
+        lastUpdated: typeof raw.lastUpdated === 'string' ? raw.lastUpdated : new Date().toISOString(),
+      });
+      setConditions(validated.conditions);
+      setLogs(validated.logs);
+      setDiaryEntries(validated.diaryEntries);
+      setDiagnosticRecords(validated.diagnosticRecords);
+      await persist(
+        validated.conditions,
+        validated.logs,
+        validated.diaryEntries,
+        validated.diagnosticRecords
+      );
     } else {
-      throw new Error('올바른 백업 파일 형식이 아닙니다.');
+      const isEn = typeof document !== 'undefined' && document.documentElement?.dataset?.lang === 'en';
+      throw new Error(isEn ? 'Invalid backup file format.' : '올바른 백업 파일 형식이 아닙니다.');
     }
   };
 

@@ -25,7 +25,8 @@ export const ConditionDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { conditions, logs, diagnosticRecords, updateCondition } = useHealth();
-  const { t } = useSettings();
+  const { settings, t } = useSettings();
+  const isEn = settings.language === 'en';
 
   const condition = conditions.find((c) => c.id === id);
 
@@ -98,35 +99,65 @@ export const ConditionDetailPage: React.FC = () => {
         : null;
 
     const lines = [
-      `[진료 요약] ${condition.label} (${condition.bodyPart})`,
-      `- 상태: ${condition.isArchived ? '치료 완료/보관' : '추적 관리 중'} · 발병일: ${condition.onsetDate}`,
+      isEn
+        ? `[Clinical Summary] ${condition.label} (${condition.bodyPart})`
+        : `[진료 요약] ${condition.label} (${condition.bodyPart})`,
+      isEn
+        ? `- Status: ${condition.isArchived ? 'Resolved / Archived' : 'Active Tracking'} · Onset: ${condition.onsetDate}`
+        : `- 상태: ${condition.isArchived ? '치료 완료/보관' : '추적 관리 중'} · 발병일: ${condition.onsetDate}`,
       conditionLogs.length > 0
-        ? `- 총 ${conditionLogs.length}회 기록 | 평균 NRS ${avgVal} (최저 ${minVal} / 최고 ${maxVal})`
+        ? isEn
+          ? `- ${conditionLogs.length} logs | Mean NRS ${avgVal} (Min ${minVal} / Max ${maxVal})`
+          : `- 총 ${conditionLogs.length}회 기록 | 평균 NRS ${avgVal} (최저 ${minVal} / 최고 ${maxVal})`
+        : isEn
+        ? '- No pain logs recorded yet.'
         : '- 아직 통증 기록이 없습니다.',
       first && latest
-        ? `- 통증 변화: 최초 ${first.intensity}/10 (${format(new Date(first.date), 'yyyy.M.d')}) → 최근 ${latest.intensity}/10 (${format(new Date(latest.date), 'yyyy.M.d')})${
-            painDelta !== null
-              ? painDelta > 0
-                ? ` (${painDelta}점 완화)`
-                : painDelta < 0
-                ? ` (${Math.abs(painDelta)}점 상승)`
-                : ' (변동 없음)'
-              : ''
-          }`
+        ? isEn
+          ? `- Pain Trend: First ${first.intensity}/10 (${format(new Date(first.date), 'yyyy-MM-dd')}) → Latest ${latest.intensity}/10 (${format(new Date(latest.date), 'yyyy-MM-dd')})${
+              painDelta !== null
+                ? painDelta > 0
+                  ? ` (-${painDelta} improved)`
+                  : painDelta < 0
+                  ? ` (+${Math.abs(painDelta)} worse)`
+                  : ' (no change)'
+                : ''
+            }`
+          : `- 통증 변화: 최초 ${first.intensity}/10 (${format(new Date(first.date), 'yyyy.M.d')}) → 최근 ${latest.intensity}/10 (${format(new Date(latest.date), 'yyyy.M.d')})${
+              painDelta !== null
+                ? painDelta > 0
+                  ? ` (${painDelta}점 완화)`
+                  : painDelta < 0
+                  ? ` (${Math.abs(painDelta)}점 상승)`
+                  : ' (변동 없음)'
+                : ''
+            }`
         : '',
-      qualities.length ? `- 통증 양상: ${qualities.join(', ')}` : '',
-      triggers.length ? `- 악화/유발 요인: ${triggers.join(', ')}` : '',
-      reliefFactors.length ? `- 완화 요인: ${reliefFactors.join(', ')}` : '',
-      redFlags.length ? `- 주의(적신호) 증상: ${redFlags.join(', ')}` : '',
+      qualities.length ? (isEn ? `- Pain Quality: ${qualities.join(', ')}` : `- 통증 양상: ${qualities.join(', ')}`) : '',
+      triggers.length ? (isEn ? `- Triggers: ${triggers.join(', ')}` : `- 악화/유발 요인: ${triggers.join(', ')}`) : '',
+      reliefFactors.length
+        ? isEn
+          ? `- Relief Factors: ${reliefFactors.join(', ')}`
+          : `- 완화 요인: ${reliefFactors.join(', ')}`
+        : '',
+      redFlags.length ? (isEn ? `- Red Flags: ${redFlags.join(', ')}` : `- 주의(적신호) 증상: ${redFlags.join(', ')}`) : '',
       medications.length
-        ? `- 복용/처치 약물: ${medications.join(', ')}${
-            avgMedRelief !== null ? ` (복약 후 평균 NRS ${avgMedRelief > 0 ? `-${avgMedRelief}` : avgMedRelief})` : ''
-          }`
+        ? isEn
+          ? `- Medications / Treatment: ${medications.join(', ')}${
+              avgMedRelief !== null ? ` (Mean post-med NRS ${avgMedRelief > 0 ? `-${avgMedRelief}` : avgMedRelief})` : ''
+            }`
+          : `- 복용/처치 약물: ${medications.join(', ')}${
+              avgMedRelief !== null ? ` (복약 후 평균 NRS ${avgMedRelief > 0 ? `-${avgMedRelief}` : avgMedRelief})` : ''
+            }`
         : '',
       conditionDiagnostics.length
-        ? `- 관련 진단 기록: ${conditionDiagnostics
-            .map((d) => `${d.diagnosisDate} ${d.hospitalName} (${d.diagnosisName})`)
-            .join(' / ')}`
+        ? isEn
+          ? `- Linked Diagnostics: ${conditionDiagnostics
+              .map((d) => `${d.diagnosisDate} ${d.hospitalName} (${d.diagnosisName})`)
+              .join(' / ')}`
+          : `- 관련 진단 기록: ${conditionDiagnostics
+              .map((d) => `${d.diagnosisDate} ${d.hospitalName} (${d.diagnosisName})`)
+              .join(' / ')}`
         : '',
     ].filter(Boolean);
 
@@ -145,7 +176,7 @@ export const ConditionDetailPage: React.FC = () => {
       avgMedRelief,
       plainText: lines.join('\n'),
     };
-  }, [condition, conditionLogs, conditionDiagnostics]);
+  }, [condition, conditionLogs, conditionDiagnostics, isEn]);
 
   if (!condition) {
     return (
@@ -212,7 +243,7 @@ export const ConditionDetailPage: React.FC = () => {
             }`}
           >
             <Stethoscope size={14} />
-            의료진 요약
+            {isEn ? 'Doctor View' : '의료진 요약'}
           </button>
           <button
             type="button"
@@ -223,7 +254,7 @@ export const ConditionDetailPage: React.FC = () => {
               setIsEditing(true);
             }}
             className="p-1.5 text-slate-400 hover:text-emerald-500"
-            aria-label="질병 정보 수정"
+            aria-label={isEn ? 'Edit condition info' : '질병 정보 수정'}
           >
             <Edit3 size={18} />
           </button>
@@ -288,15 +319,20 @@ export const ConditionDetailPage: React.FC = () => {
               <div>
                 <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-teal-300">
                   <Stethoscope size={14} />
-                  의료진 제시용 진료 요약 (Doctor View)
+                  {isEn ? 'Doctor View Summary' : '의료진 제시용 진료 요약 (Doctor View)'}
                 </div>
                 <h2 className="text-xl font-extrabold mt-1">
                   {condition.label}{' '}
                   <span className="text-sm font-semibold text-slate-300">· {condition.bodyPart}</span>
                 </h2>
                 <p className="text-xs text-slate-300 mt-0.5">
-                  발병/시작일 {condition.onsetDate} ·{' '}
-                  {condition.isArchived ? '치료 완료/보관' : '추적 관리 중'} · 총 {conditionLogs.length}회 기록
+                  {isEn
+                    ? `Onset ${condition.onsetDate} · ${
+                        condition.isArchived ? 'Resolved / Archived' : 'Active'
+                      } · ${conditionLogs.length} logs`
+                    : `발병/시작일 ${condition.onsetDate} · ${
+                        condition.isArchived ? '치료 완료/보관' : '추적 관리 중'
+                      } · 총 ${conditionLogs.length}회 기록`}
                 </p>
               </div>
               <button
@@ -314,13 +350,13 @@ export const ConditionDetailPage: React.FC = () => {
                 className="shrink-0 flex items-center gap-1 rounded-xl bg-teal-600 hover:bg-teal-500 px-3 py-1.5 text-xs font-bold text-white transition-colors"
               >
                 {copiedSummary ? <Check size={14} /> : <Copy size={14} />}
-                {copiedSummary ? '복사됨' : '요약 복사'}
+                {copiedSummary ? (isEn ? 'Copied' : '복사됨') : isEn ? 'Copy' : '요약 복사'}
               </button>
             </div>
 
             <div className="grid grid-cols-3 gap-2 text-center">
               <div className="rounded-2xl bg-slate-800/90 p-3">
-                <div className="text-[11px] text-slate-400">최초 → 최근</div>
+                <div className="text-[11px] text-slate-400">{isEn ? 'First → Latest' : '최초 → 최근'}</div>
                 <div className="text-base font-extrabold mt-0.5 tabular-nums">
                   {doctorSummary.first && doctorSummary.latest
                     ? `${doctorSummary.first.intensity} → ${doctorSummary.latest.intensity}`
@@ -328,7 +364,7 @@ export const ConditionDetailPage: React.FC = () => {
                 </div>
               </div>
               <div className="rounded-2xl bg-slate-800/90 p-3">
-                <div className="text-[11px] text-slate-400">통증 변화</div>
+                <div className="text-[11px] text-slate-400">{isEn ? 'Pain Delta' : '통증 변화'}</div>
                 <div
                   className={`text-base font-extrabold mt-0.5 tabular-nums ${
                     doctorSummary.painDelta === null
@@ -341,16 +377,24 @@ export const ConditionDetailPage: React.FC = () => {
                   }`}
                 >
                   {doctorSummary.painDelta === null
-                    ? '단일 기록'
+                    ? isEn
+                      ? 'Single Log'
+                      : '단일 기록'
                     : doctorSummary.painDelta > 0
-                    ? `-${doctorSummary.painDelta} 완화`
+                    ? isEn
+                      ? `-${doctorSummary.painDelta} better`
+                      : `-${doctorSummary.painDelta} 완화`
                     : doctorSummary.painDelta < 0
-                    ? `+${Math.abs(doctorSummary.painDelta)} 악화`
+                    ? isEn
+                      ? `+${Math.abs(doctorSummary.painDelta)} worse`
+                      : `+${Math.abs(doctorSummary.painDelta)} 악화`
+                    : isEn
+                    ? 'Stable'
                     : '변동 없음'}
                 </div>
               </div>
               <div className="rounded-2xl bg-slate-800/90 p-3">
-                <div className="text-[11px] text-slate-400">평균 / 최고</div>
+                <div className="text-[11px] text-slate-400">{isEn ? 'Mean / Peak' : '평균 / 최고'}</div>
                 <div className="text-base font-extrabold mt-0.5 tabular-nums">
                   {doctorSummary.avgVal} / {doctorSummary.maxVal}
                 </div>
@@ -362,43 +406,48 @@ export const ConditionDetailPage: React.FC = () => {
                 <div className="flex items-start gap-2 rounded-2xl bg-rose-950/70 border border-rose-700/60 p-3 text-rose-100">
                   <AlertTriangle size={15} className="shrink-0 mt-0.5 text-rose-400" />
                   <div>
-                    <span className="font-bold">주의(적신호) 증상: </span>
+                    <span className="font-bold">{isEn ? 'Red Flags: ' : '주의(적신호) 증상: '}</span>
                     {doctorSummary.redFlags.join(', ')}
                   </div>
                 </div>
               )}
               {doctorSummary.qualities.length > 0 && (
                 <div>
-                  <span className="font-bold text-slate-400">통증 양상: </span>
+                  <span className="font-bold text-slate-400">{isEn ? 'Quality: ' : '통증 양상: '}</span>
                   {doctorSummary.qualities.join(', ')}
                 </div>
               )}
               {doctorSummary.triggers.length > 0 && (
                 <div>
-                  <span className="font-bold text-slate-400">유발/악화 요인: </span>
+                  <span className="font-bold text-slate-400">{isEn ? 'Triggers: ' : '유발/악화 요인: '}</span>
                   {doctorSummary.triggers.join(', ')}
                 </div>
               )}
               {doctorSummary.reliefFactors.length > 0 && (
                 <div>
-                  <span className="font-bold text-slate-400">완화 요인: </span>
+                  <span className="font-bold text-slate-400">{isEn ? 'Relief Factors: ' : '완화 요인: '}</span>
                   {doctorSummary.reliefFactors.join(', ')}
                 </div>
               )}
               {doctorSummary.medications.length > 0 && (
                 <div>
-                  <span className="font-bold text-slate-400">복용 약물/처치: </span>
+                  <span className="font-bold text-slate-400">
+                    {isEn ? 'Medications / Treatment: ' : '복용 약물/처치: '}
+                  </span>
                   {doctorSummary.medications.join(', ')}
                   {doctorSummary.avgMedRelief !== null && (
                     <span className="ml-1.5 text-teal-300 font-semibold">
-                      (복약 후 평균 NRS {doctorSummary.avgMedRelief > 0 ? `-${doctorSummary.avgMedRelief}` : doctorSummary.avgMedRelief})
+                      ({isEn ? 'Mean post-med NRS ' : '복약 후 평균 NRS '}
+                      {doctorSummary.avgMedRelief > 0 ? `-${doctorSummary.avgMedRelief}` : doctorSummary.avgMedRelief})
                     </span>
                   )}
                 </div>
               )}
               {conditionDiagnostics.length > 0 && (
                 <div>
-                  <span className="font-bold text-slate-400">연결된 진단: </span>
+                  <span className="font-bold text-slate-400">
+                    {isEn ? 'Linked Diagnostics: ' : '연결된 진단: '}
+                  </span>
                   {conditionDiagnostics
                     .map((d) => `${d.diagnosisDate} ${d.hospitalName} (${d.diagnosisName})`)
                     .join(' / ')}
@@ -406,7 +455,9 @@ export const ConditionDetailPage: React.FC = () => {
               )}
               {conditionLogs.length > 0 && (
                 <div className="pt-1 border-t border-slate-800">
-                  <div className="font-bold text-slate-400 mb-1">최근 경과 메모</div>
+                  <div className="font-bold text-slate-400 mb-1">
+                    {isEn ? 'Recent Notes' : '최근 경과 메모'}
+                  </div>
                   <ul className="space-y-1">
                     {conditionLogs.slice(0, 3).map((l) => (
                       <li key={l.id} className="text-[11px] text-slate-300">
@@ -457,7 +508,7 @@ export const ConditionDetailPage: React.FC = () => {
                 {t('painTrendChart')}
               </span>
               <span className="text-[10px] text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-full font-bold">
-                최근 30일
+                {isEn ? 'Last 30 Days' : '최근 30일'}
               </span>
             </div>
 
@@ -490,7 +541,7 @@ export const ConditionDetailPage: React.FC = () => {
           </div>
         ) : (
           <div className="rounded-2xl border border-dashed border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-8 text-center text-xs text-slate-400">
-            표시할 통증 기록이 없습니다.
+            {isEn ? 'No pain logs to display yet.' : '표시할 통증 기록이 없습니다.'}
           </div>
         )}
 
@@ -518,7 +569,7 @@ export const ConditionDetailPage: React.FC = () => {
               >
                 <div className="flex-1 mr-3 space-y-1">
                   <div className="text-xs font-bold text-slate-600 dark:text-slate-300">
-                    {format(new Date(log.date), 'yyyy-MM-dd a h:mm')}
+                    {format(new Date(log.date), isEn ? 'yyyy-MM-dd h:mm a' : 'yyyy-MM-dd a h:mm')}
                   </div>
                   {log.medication && (
                     <div className="flex items-center gap-1 text-[11px] font-bold text-blue-600 dark:text-blue-400">
@@ -527,7 +578,8 @@ export const ConditionDetailPage: React.FC = () => {
                   )}
                   {log.reliefFactors && log.reliefFactors.length > 0 && (
                     <div className="text-[11px] font-semibold text-teal-600 dark:text-teal-400">
-                      완화/자관리: {log.reliefFactors.join(', ')}
+                      {isEn ? 'Relief: ' : '완화/자관리: '}
+                      {log.reliefFactors.join(', ')}
                     </div>
                   )}
                   {log.notes && (
@@ -555,7 +607,10 @@ export const ConditionDetailPage: React.FC = () => {
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <h3 className="font-bold text-sm text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-              <FileCheck2 size={15} className="text-teal-600" /> 연결된 진료·진단서 ({conditionDiagnostics.length}건)
+              <FileCheck2 size={15} className="text-teal-600" />{' '}
+              {isEn
+                ? `Linked Diagnostics (${conditionDiagnostics.length})`
+                : `연결된 진료·진단서 (${conditionDiagnostics.length}건)`}
             </h3>
             <button
               type="button"
@@ -565,18 +620,26 @@ export const ConditionDetailPage: React.FC = () => {
               }}
               className="text-xs font-bold text-teal-600 dark:text-teal-400"
             >
-              + 진단서 추가
+              {isEn ? '+ Add Record' : '+ 진단서 추가'}
             </button>
           </div>
 
           {conditionDiagnostics.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 text-center text-xs text-slate-400">
-              이 질병에 연결된 진료·진단서 기록이 없습니다.
+              {isEn
+                ? 'No diagnostic or claim records linked to this condition.'
+                : '이 질병에 연결된 진료·진단서 기록이 없습니다.'}
             </div>
           ) : (
             <div className="space-y-2">
               {conditionDiagnostics.map((rec) => {
-                const info = calculateInsuranceClaimStatus(rec.diagnosisDate, rec.claimStatus, rec.claimDeadlineYears || 3);
+                const info = calculateInsuranceClaimStatus(
+                  rec.diagnosisDate,
+                  rec.claimStatus,
+                  rec.claimDeadlineYears || 3,
+                  new Date(),
+                  settings.language
+                );
                 return (
                   <div
                     key={rec.id}

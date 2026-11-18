@@ -20,8 +20,10 @@ export function calculateInsuranceClaimStatus(
   diagnosisDateStr: string,
   claimStatus: 'pending' | 'claimed' | 'not_applicable' = 'pending',
   years: number = 3,
-  referenceDate: Date = new Date()
+  referenceDate: Date = new Date(),
+  lang: 'ko' | 'en' = 'ko'
 ): InsuranceDeadlineInfo {
+  const isEn = lang === 'en';
   const parsed = parseISO(diagnosisDateStr);
   const safeBase = isValid(parsed) ? parsed : referenceDate;
   const deadline = addYears(safeBase, Math.max(1, years));
@@ -41,7 +43,7 @@ export function calculateInsuranceClaimStatus(
       recommendedLatestDate,
       daysRemaining,
       urgency: 'claimed',
-      badgeText: '청구 완료',
+      badgeText: isEn ? 'Claimed' : '청구 완료',
     };
   }
 
@@ -52,7 +54,7 @@ export function calculateInsuranceClaimStatus(
       recommendedLatestDate,
       daysRemaining,
       urgency: 'not_applicable',
-      badgeText: '청구 대상 아님',
+      badgeText: isEn ? 'N/A' : '청구 대상 아님',
     };
   }
 
@@ -63,7 +65,7 @@ export function calculateInsuranceClaimStatus(
       recommendedLatestDate,
       daysRemaining,
       urgency: 'expired',
-      badgeText: `시효 만료 (${Math.abs(daysRemaining)}일 경과)`,
+      badgeText: isEn ? `Expired (${Math.abs(daysRemaining)}d ago)` : `시효 만료 (${Math.abs(daysRemaining)}일 경과)`,
     };
   }
 
@@ -74,7 +76,7 @@ export function calculateInsuranceClaimStatus(
       recommendedLatestDate,
       daysRemaining,
       urgency: 'critical',
-      badgeText: 'D-Day (오늘 마감)',
+      badgeText: isEn ? 'Due Today (D-Day)' : 'D-Day (오늘 마감)',
     };
   }
 
@@ -85,7 +87,7 @@ export function calculateInsuranceClaimStatus(
       recommendedLatestDate,
       daysRemaining,
       urgency: 'critical',
-      badgeText: `마감 임박 D-${daysRemaining}`,
+      badgeText: isEn ? `Due Soon D-${daysRemaining}` : `마감 임박 D-${daysRemaining}`,
     };
   }
 
@@ -96,7 +98,7 @@ export function calculateInsuranceClaimStatus(
       recommendedLatestDate,
       daysRemaining,
       urgency: 'soon',
-      badgeText: `마감 주의 D-${daysRemaining}`,
+      badgeText: isEn ? `Upcoming D-${daysRemaining}` : `마감 주의 D-${daysRemaining}`,
     };
   }
 
@@ -106,6 +108,6 @@ export function calculateInsuranceClaimStatus(
     recommendedLatestDate,
     daysRemaining,
     urgency: 'safe',
-    badgeText: `청구 여유 D-${daysRemaining}`,
+    badgeText: isEn ? `D-${daysRemaining}` : `청구 여유 D-${daysRemaining}`,
   };
 }

@@ -59,7 +59,8 @@ const HistoryItem: React.FC<HistoryItemProps> = ({
   onUpdate,
 }) => {
   const navigate = useNavigate();
-  const { t } = useSettings();
+  const { settings, t } = useSettings();
+  const isEn = settings.language === 'en';
   const [expanded, setExpanded] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editDate, setEditDate] = useState('');
@@ -107,7 +108,11 @@ const HistoryItem: React.FC<HistoryItemProps> = ({
 
   const handleDelete = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (window.confirm('이 건강 기록을 삭제하시겠습니까?')) {
+    if (
+      window.confirm(
+        isEn ? 'Delete this health record?' : '이 건강 기록을 삭제하시겠습니까?'
+      )
+    ) {
       triggerHaptic();
       await onDelete(log.id);
     }
@@ -162,7 +167,15 @@ const HistoryItem: React.FC<HistoryItemProps> = ({
                 triggerHaptic();
                 onToggleSelect?.(log.id);
               }}
-              aria-label={selected ? '선택 해제' : '질병 묶기 선택'}
+              aria-label={
+                selected
+                  ? isEn
+                    ? 'Deselect'
+                    : '선택 해제'
+                  : isEn
+                  ? 'Select for grouping'
+                  : '질병 묶기 선택'
+              }
               className={`mt-1 shrink-0 transition-colors ${
                 selected ? 'text-teal-600 dark:text-teal-400' : 'text-slate-300 dark:text-slate-600'
               }`}
@@ -178,7 +191,11 @@ const HistoryItem: React.FC<HistoryItemProps> = ({
           <div className="min-w-0 flex-1 space-y-1">
             <div className="flex items-center gap-1.5 flex-wrap">
               <h3 className="font-bold text-sm text-slate-800 dark:text-slate-100">
-                {log.conditionId === UNASSIGNED_CONDITION_ID ? '원인 미상 증상' : condition?.label || '미지정'}
+                {log.conditionId === UNASSIGNED_CONDITION_ID
+                  ? isEn
+                    ? 'Unassigned Symptom'
+                    : '원인 미상 증상'
+                  : condition?.label || (isEn ? 'Unspecified' : '미지정')}
               </h3>
               {isNewType && (
                 <span className="text-[9px] bg-blue-600 text-white px-1.5 py-0.5 rounded font-bold uppercase">
@@ -187,19 +204,30 @@ const HistoryItem: React.FC<HistoryItemProps> = ({
               )}
               {log.postMedIntensity !== undefined && (
                 <span className="text-[10px] bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 px-1.5 py-0.5 rounded font-extrabold border border-emerald-300 dark:border-emerald-800">
-                  복약 효과: {log.intensity}→{log.postMedIntensity}
+                  {isEn
+                    ? `Med Effect: ${log.intensity}→${log.postMedIntensity}`
+                    : `복약 효과: ${log.intensity}→${log.postMedIntensity}`}
                 </span>
               )}
               {hasRedFlags && (
                 <span className="inline-flex items-center gap-0.5 text-[10px] bg-rose-100 dark:bg-rose-950 text-rose-700 dark:text-rose-300 px-1.5 py-0.5 rounded font-bold">
-                  <AlertCircle size={10} /> 위험징후
+                  <AlertCircle size={10} /> {isEn ? 'Red Flag' : '위험징후'}
                 </span>
               )}
             </div>
 
             <div className="text-[11px] text-slate-400">
-              {log.bodyPartOverride || condition?.bodyPart || '미지정'} •{' '}
-              {format(new Date(log.date), showFullDate ? 'yyyy.M.d a h:mm' : 'a h:mm')}
+              {log.bodyPartOverride || condition?.bodyPart || (isEn ? 'Unspecified' : '미지정')} •{' '}
+              {format(
+                new Date(log.date),
+                isEn
+                  ? showFullDate
+                    ? 'yyyy-MM-dd h:mm a'
+                    : 'h:mm a'
+                  : showFullDate
+                  ? 'yyyy.M.d a h:mm'
+                  : 'a h:mm'
+              )}
             </div>
 
             {/* Inline summary so user clearly identifies what was recorded even before expanding */}
@@ -225,7 +253,7 @@ const HistoryItem: React.FC<HistoryItemProps> = ({
                         key={tr}
                         className="px-1.5 py-0.5 rounded-md bg-amber-50 dark:bg-amber-950/50 text-[10px] font-semibold text-amber-700 dark:text-amber-300"
                       >
-                        유발: {tr}
+                        {isEn ? `Trigger: ${tr}` : `유발: ${tr}`}
                       </span>
                     ))}
                   </div>
@@ -270,7 +298,9 @@ const HistoryItem: React.FC<HistoryItemProps> = ({
             <div className="space-y-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 text-xs">
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="block text-[10px] font-bold text-slate-400 mb-1">일시</label>
+                  <label className="block text-[10px] font-bold text-slate-400 mb-1">
+                    {isEn ? 'Date & Time' : '일시'}
+                  </label>
                   <input
                     type="datetime-local"
                     value={editDate}
@@ -280,7 +310,7 @@ const HistoryItem: React.FC<HistoryItemProps> = ({
                 </div>
                 <div>
                   <label className="block text-[10px] font-bold text-slate-400 mb-1">
-                    강도: {editIntensity}
+                    {isEn ? `Intensity: ${editIntensity}` : `강도: ${editIntensity}`}
                   </label>
                   <input
                     type="range"
@@ -294,7 +324,9 @@ const HistoryItem: React.FC<HistoryItemProps> = ({
               </div>
 
               <div>
-                <label className="block text-[10px] font-bold text-slate-400 mb-1">복용 약물</label>
+                <label className="block text-[10px] font-bold text-slate-400 mb-1">
+                  {isEn ? 'Medication' : '복용 약물'}
+                </label>
                 <input
                   type="text"
                   value={editMedication}
@@ -304,7 +336,9 @@ const HistoryItem: React.FC<HistoryItemProps> = ({
               </div>
 
               <div>
-                <label className="block text-[10px] font-bold text-slate-400 mb-1">메모</label>
+                <label className="block text-[10px] font-bold text-slate-400 mb-1">
+                  {isEn ? 'Notes' : '메모'}
+                </label>
                 <textarea
                   rows={2}
                   value={editNotes}
@@ -355,31 +389,37 @@ const HistoryItem: React.FC<HistoryItemProps> = ({
             <div className="rounded-xl border border-slate-200 dark:border-slate-700/70 bg-white dark:bg-slate-900 p-2.5 space-y-1.5 text-[11px]">
               {hasQuality && (
                 <div>
-                  <span className="font-bold text-slate-500 mr-1.5">양상:</span>
+                  <span className="font-bold text-slate-500 mr-1.5">{isEn ? 'Quality:' : '양상:'}</span>
                   <span className="text-slate-700 dark:text-slate-200">{log.painQuality?.join(', ')}</span>
                 </div>
               )}
               {log.radiation && (
                 <div>
-                  <span className="font-bold text-slate-500 mr-1.5">방사통:</span>
+                  <span className="font-bold text-slate-500 mr-1.5">{isEn ? 'Radiation:' : '방사통:'}</span>
                   <span className="text-slate-700 dark:text-slate-200">{log.radiation}</span>
                 </div>
               )}
               {hasTriggers && (
                 <div>
-                  <span className="font-bold text-amber-600 dark:text-amber-400 mr-1.5">악화/유발:</span>
+                  <span className="font-bold text-amber-600 dark:text-amber-400 mr-1.5">
+                    {isEn ? 'Triggers:' : '악화/유발:'}
+                  </span>
                   <span className="text-slate-700 dark:text-slate-200">{log.triggers?.join(', ')}</span>
                 </div>
               )}
               {hasRelief && (
                 <div>
-                  <span className="font-bold text-emerald-600 dark:text-emerald-400 mr-1.5">완화 요인:</span>
+                  <span className="font-bold text-emerald-600 dark:text-emerald-400 mr-1.5">
+                    {isEn ? 'Relief:' : '완화 요인:'}
+                  </span>
                   <span className="text-slate-700 dark:text-slate-200">{log.reliefFactors?.join(', ')}</span>
                 </div>
               )}
               {hasRedFlags && (
                 <div>
-                  <span className="font-bold text-rose-600 dark:text-rose-400 mr-1.5">위험 징후:</span>
+                  <span className="font-bold text-rose-600 dark:text-rose-400 mr-1.5">
+                    {isEn ? 'Red Flags:' : '위험 징후:'}
+                  </span>
                   <span className="text-rose-700 dark:text-rose-300 font-semibold">{log.redFlags?.join(', ')}</span>
                 </div>
               )}
@@ -398,18 +438,28 @@ const HistoryItem: React.FC<HistoryItemProps> = ({
             <div className="flex flex-wrap items-center justify-between gap-1 text-xs bg-emerald-50 dark:bg-emerald-950/50 p-2.5 rounded-xl border border-emerald-200 dark:border-emerald-800 text-emerald-900 dark:text-emerald-200">
               <div className="flex items-center gap-1.5 font-bold">
                 <span className="flex h-5 w-5 items-center justify-center rounded bg-emerald-600 text-white text-[10px]">💊</span>
-                <span>복약 효과: NRS {log.intensity} → {log.postMedIntensity}</span>
+                <span>
+                  {isEn
+                    ? `Med Effect: NRS ${log.intensity} → ${log.postMedIntensity}`
+                    : `복약 효과: NRS ${log.intensity} → ${log.postMedIntensity}`}
+                </span>
                 <span className="text-[11px] font-extrabold text-emerald-700 dark:text-emerald-300">
                   ({log.intensity > log.postMedIntensity
-                    ? `${log.intensity - log.postMedIntensity}점 완화`
+                    ? isEn
+                      ? `-${log.intensity - log.postMedIntensity} improved`
+                      : `${log.intensity - log.postMedIntensity}점 완화`
                     : log.intensity === log.postMedIntensity
-                    ? '변화 없음'
+                    ? isEn
+                      ? 'no change'
+                      : '변화 없음'
+                    : isEn
+                    ? `+${log.postMedIntensity - log.intensity} worse`
                     : `${log.postMedIntensity - log.intensity}점 악화`})
                 </span>
               </div>
               {log.postMedEvaluatedAt && (
                 <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">
-                  {format(new Date(log.postMedEvaluatedAt), 'HH:mm')} 평가
+                  {format(new Date(log.postMedEvaluatedAt), 'HH:mm')} {isEn ? 'evaluated' : '평가'}
                 </span>
               )}
             </div>
@@ -417,7 +467,9 @@ const HistoryItem: React.FC<HistoryItemProps> = ({
 
           {log.postMedSideEffects && log.postMedSideEffects.length > 0 && (
             <div className="flex flex-wrap items-center gap-1.5 text-xs bg-amber-50 dark:bg-amber-950/40 p-2.5 rounded-xl border border-amber-200 dark:border-amber-800/60 text-amber-900 dark:text-amber-200">
-              <span className="font-bold text-[11px] text-amber-800 dark:text-amber-300">보고된 부작용:</span>
+              <span className="font-bold text-[11px] text-amber-800 dark:text-amber-300">
+                {isEn ? 'Reported Side Effects:' : '보고된 부작용:'}
+              </span>
               <div className="flex flex-wrap gap-1">
                 {log.postMedSideEffects.map((se) => (
                   <span
@@ -447,7 +499,8 @@ export const HistoryPage: React.FC<{ initialTab?: 'list' | 'calendar' | 'diagnos
 }) => {
   const navigate = useNavigate();
   const { logs, conditions, deleteLog, updateLog, assignLogsToCondition } = useHealth();
-  const { t } = useSettings();
+  const { settings, t } = useSettings();
+  const isEn = settings.language === 'en';
   const [searchParams, setSearchParams] = useSearchParams();
   const paramTab = searchParams.get('tab');
   const paramGroup = searchParams.get('group');
@@ -598,7 +651,12 @@ export const HistoryPage: React.FC<{ initialTab?: 'list' | 'calendar' | 'diagnos
         const avg = (condLogs.reduce((acc, l) => acc + l.intensity, 0) / condLogs.length).toFixed(1);
         return {
           key: cid,
-          title: cid === UNASSIGNED_CONDITION_ID ? '원인 미상 증상' : cond?.label || '미지정',
+          title:
+            cid === UNASSIGNED_CONDITION_ID
+              ? isEn
+                ? 'Unassigned Symptom'
+                : '원인 미상 증상'
+              : cond?.label || (isEn ? 'Unspecified' : '미지정'),
           subtitle: cond?.bodyPart,
           conditionId: cid !== UNASSIGNED_CONDITION_ID && cond ? cid : undefined,
           avgIntensity: avg,
@@ -613,15 +671,17 @@ export const HistoryPage: React.FC<{ initialTab?: 'list' | 'calendar' | 'diagnos
       let key = '';
 
       if (listViewMode === 'day') {
-        if (isToday(date)) key = '오늘';
-        else if (isYesterday(date)) key = '어제';
-        else key = format(date, 'yyyy년 M월 d일 (EEEE)');
+        if (isToday(date)) key = isEn ? 'Today' : '오늘';
+        else if (isYesterday(date)) key = isEn ? 'Yesterday' : '어제';
+        else key = format(date, isEn ? 'MMM d, yyyy (EEE)' : 'yyyy년 M월 d일 (EEEE)');
       } else if (listViewMode === 'week') {
         const start = startOfWeek(date);
         const end = endOfWeek(date);
-        key = `${format(start, 'M월 d일')} ~ ${format(end, 'M월 d일')}`;
+        key = isEn
+          ? `${format(start, 'MMM d')} – ${format(end, 'MMM d')}`
+          : `${format(start, 'M월 d일')} ~ ${format(end, 'M월 d일')}`;
       } else {
-        key = format(date, 'yyyy년 M월');
+        key = format(date, isEn ? 'MMMM yyyy' : 'yyyy년 M월');
       }
 
       if (!groups[key]) groups[key] = [];
@@ -632,7 +692,7 @@ export const HistoryPage: React.FC<{ initialTab?: 'list' | 'calendar' | 'diagnos
       title,
       logs: items,
     }));
-  }, [visibleLogs, listViewMode, conditions]);
+  }, [visibleLogs, listViewMode, conditions, isEn]);
 
   const toggleSelectLog = (id: string) => {
     setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
@@ -693,20 +753,24 @@ export const HistoryPage: React.FC<{ initialTab?: 'list' | 'calendar' | 'diagnos
   const handleConfirmAssign = async (e: React.FormEvent) => {
     e.preventDefault();
     if (selectedIds.length === 0) {
-      setAssignError('묶을 기록을 1개 이상 선택하세요.');
+      setAssignError(isEn ? 'Select at least 1 log to group.' : '묶을 기록을 1개 이상 선택하세요.');
       return;
     }
     if (targetMode === 'new' && (!newLabel.trim() || !newBodyPart.trim())) {
-      setAssignError('확정된 질병명과 부위를 입력하세요.');
+      setAssignError(
+        isEn ? 'Enter the condition name and body part.' : '확정된 질병명과 부위를 입력하세요.'
+      );
       return;
     }
     if (targetMode === 'existing' && !targetCondId) {
-      setAssignError('연결할 질병을 선택하세요.');
+      setAssignError(isEn ? 'Select a target condition.' : '연결할 질병을 선택하세요.');
       return;
     }
     if (overwriteTargets.length > 0 && !overwriteConfirmed) {
       setAssignError(
-        `이미 다른 질병에 연결된 기록 ${overwriteTargets.length}건을 덮어쓸지 먼저 체크해 주세요.`
+        isEn
+          ? `Please confirm overwriting ${overwriteTargets.length} already-assigned log(s).`
+          : `이미 다른 질병에 연결된 기록 ${overwriteTargets.length}건을 덮어쓸지 먼저 체크해 주세요.`
       );
       return;
     }
@@ -724,7 +788,9 @@ export const HistoryPage: React.FC<{ initialTab?: 'list' | 'calendar' | 'diagnos
       setSelectionMode(false);
       setSelectedIds([]);
       setSearchParams({}, { replace: true });
-      setToastMsg(`${count}건의 기록을 질병으로 묶었습니다.`);
+      setToastMsg(
+        isEn ? `Grouped ${count} logs under condition.` : `${count}건의 기록을 질병으로 묶었습니다.`
+      );
       window.setTimeout(() => setToastMsg(''), 3000);
     }
   };
@@ -739,13 +805,19 @@ export const HistoryPage: React.FC<{ initialTab?: 'list' | 'calendar' | 'diagnos
         <h1 className="text-xl font-bold">
           {activeTab === 'list'
             ? selectionMode
-              ? '질병으로 묶을 기록 선택'
+              ? isEn
+                ? 'Select Logs to Group'
+                : '질병으로 묶을 기록 선택'
               : t('historyTitle')
             : activeTab === 'calendar'
             ? t('calendarTitle')
             : activeTab === 'stats'
-            ? '사용 · 치료 통계'
-            : /* activeTab === 'briefing' ? t('briefingTitle') : */ '진단·실손'}
+            ? isEn
+              ? 'Usage & Treatment Stats'
+              : '사용 · 치료 통계'
+            : isEn
+            ? 'Claims & Vault'
+            : '진단·실손'}
         </h1>
 
         {!selectionMode && (
@@ -757,7 +829,7 @@ export const HistoryPage: React.FC<{ initialTab?: 'list' | 'calendar' | 'diagnos
                 activeTab === 'list' ? 'bg-teal-700 text-white' : 'text-slate-500'
               }`}
             >
-              <ListIcon size={13} /> 목록
+              <ListIcon size={13} /> {isEn ? 'List' : '목록'}
             </button>
             <button
               type="button"
@@ -766,7 +838,7 @@ export const HistoryPage: React.FC<{ initialTab?: 'list' | 'calendar' | 'diagnos
                 activeTab === 'calendar' ? 'bg-teal-700 text-white' : 'text-slate-500'
               }`}
             >
-              <CalendarIcon size={13} /> 캘린더
+              <CalendarIcon size={13} /> {isEn ? 'Calendar' : '캘린더'}
             </button>
             <button
               type="button"
@@ -775,7 +847,7 @@ export const HistoryPage: React.FC<{ initialTab?: 'list' | 'calendar' | 'diagnos
                 activeTab === 'stats' ? 'bg-teal-700 text-white' : 'text-slate-500'
               }`}
             >
-              <BarChart3 size={13} /> 통계
+              <BarChart3 size={13} /> {isEn ? 'Stats' : '통계'}
             </button>
             <button
               type="button"
@@ -784,7 +856,7 @@ export const HistoryPage: React.FC<{ initialTab?: 'list' | 'calendar' | 'diagnos
                 activeTab === 'diagnostics' ? 'bg-teal-700 text-white' : 'text-slate-500'
               }`}
             >
-              <FileCheck2 size={13} /> 진단·실손
+              <FileCheck2 size={13} /> {isEn ? 'Vault' : '진단·실손'}
             </button>
             {/* 진료 브리핑은 질병별 상세 화면의 '의료진 요약'으로 이동하고, 일시 주석 처리함
             <button
@@ -824,10 +896,14 @@ export const HistoryPage: React.FC<{ initialTab?: 'list' | 'calendar' | 'diagnos
               <div className="flex items-start justify-between gap-2">
                 <div>
                   <p className="text-xs font-extrabold text-teal-900 dark:text-teal-200">
-                    기록 상세를 확인하며 질병으로 묶을 항목을 고르세요
+                    {isEn
+                      ? 'Review log details and choose entries to group'
+                      : '기록 상세를 확인하며 질병으로 묶을 항목을 고르세요'}
                   </p>
                   <p className="text-[11px] text-teal-700 dark:text-teal-400">
-                    카드를 누르면 선택/해제되고, 오른쪽 화살표(›)로 전체 메모와 증상을 펼쳐 볼 수 있습니다
+                    {isEn
+                      ? 'Tap a card to select, or tap › to expand full symptoms & notes'
+                      : '카드를 누르면 선택/해제되고, 오른쪽 화살표(›)로 전체 메모와 증상을 펼쳐 볼 수 있습니다'}
                   </p>
                 </div>
                 <button
@@ -835,7 +911,7 @@ export const HistoryPage: React.FC<{ initialTab?: 'list' | 'calendar' | 'diagnos
                   onClick={exitGroupingMode}
                   className="shrink-0 px-2.5 py-1 rounded-lg border border-teal-200 dark:border-teal-800 bg-white dark:bg-slate-900 text-[11px] font-bold text-slate-600 dark:text-slate-300"
                 >
-                  취소
+                  {t('cancel')}
                 </button>
               </div>
 
@@ -853,7 +929,7 @@ export const HistoryPage: React.FC<{ initialTab?: 'list' | 'calendar' | 'diagnos
                         : 'text-slate-500 dark:text-slate-400'
                     }`}
                   >
-                    원인 미상 ({unassignedLogs.length})
+                    {isEn ? `Unassigned (${unassignedLogs.length})` : `원인 미상 (${unassignedLogs.length})`}
                   </button>
                   <button
                     type="button"
@@ -867,7 +943,7 @@ export const HistoryPage: React.FC<{ initialTab?: 'list' | 'calendar' | 'diagnos
                         : 'text-slate-500 dark:text-slate-400'
                     }`}
                   >
-                    전체 기록 ({logs.length})
+                    {isEn ? `All Logs (${logs.length})` : `전체 기록 (${logs.length})`}
                   </button>
                 </div>
 
@@ -877,7 +953,13 @@ export const HistoryPage: React.FC<{ initialTab?: 'list' | 'calendar' | 'diagnos
                     onClick={toggleSelectAllVisible}
                     className="px-2.5 py-1 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-[11px] font-bold text-slate-700 dark:text-slate-200"
                   >
-                    {allVisibleSelected ? '전체 해제' : '현재 목록 전체 선택'}
+                    {allVisibleSelected
+                      ? isEn
+                        ? 'Deselect All'
+                        : '전체 해제'
+                      : isEn
+                      ? 'Select All Visible'
+                      : '현재 목록 전체 선택'}
                   </button>
                 )}
               </div>
@@ -887,10 +969,14 @@ export const HistoryPage: React.FC<{ initialTab?: 'list' | 'calendar' | 'diagnos
               <div className="rounded-2xl border border-amber-200 dark:border-amber-900/70 bg-amber-50/70 dark:bg-amber-950/25 p-3.5 flex items-center justify-between gap-2">
                 <div>
                   <p className="text-xs font-bold text-amber-900 dark:text-amber-200">
-                    원인 미상 증상 {unassignedLogs.length}건
+                    {isEn
+                      ? `${unassignedLogs.length} unassigned logs`
+                      : `원인 미상 증상 ${unassignedLogs.length}건`}
                   </p>
                   <p className="text-[11px] text-amber-700 dark:text-amber-400">
-                    기록 내역을 보며 체크해서 하나의 질병으로 묶을 수 있습니다
+                    {isEn
+                      ? 'Select logs to group them under a diagnosed condition'
+                      : '기록 내역을 보며 체크해서 하나의 질병으로 묶을 수 있습니다'}
                   </p>
                 </div>
                 <button
@@ -898,7 +984,7 @@ export const HistoryPage: React.FC<{ initialTab?: 'list' | 'calendar' | 'diagnos
                   onClick={() => startGroupingMode('unassigned')}
                   className="shrink-0 px-3 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold flex items-center gap-1"
                 >
-                  <FolderPlus size={14} /> 질병으로 묶기
+                  <FolderPlus size={14} /> {isEn ? 'Group' : '질병으로 묶기'}
                 </button>
               </div>
             )
@@ -913,7 +999,7 @@ export const HistoryPage: React.FC<{ initialTab?: 'list' | 'calendar' | 'diagnos
                   onClick={() => startGroupingMode(unassignedLogs.length > 0 ? 'unassigned' : 'all')}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-bold text-teal-700 dark:text-teal-400 shadow-sm hover:bg-slate-50 dark:hover:bg-slate-800"
                 >
-                  <FolderPlus size={14} /> 선택해서 질병 묶기
+                  <FolderPlus size={14} /> {isEn ? 'Select & Group' : '선택해서 질병 묶기'}
                 </button>
               ) : (
                 <div />
@@ -922,10 +1008,10 @@ export const HistoryPage: React.FC<{ initialTab?: 'list' | 'calendar' | 'diagnos
               <div className="flex bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-1 text-xs shadow-sm">
                 {(
                   [
-                    { id: 'day', label: '일별' },
-                    { id: 'week', label: '주별' },
-                    { id: 'month', label: '월별' },
-                    { id: 'condition', label: '질병별' },
+                    { id: 'day', label: isEn ? 'Day' : '일별' },
+                    { id: 'week', label: isEn ? 'Week' : '주별' },
+                    { id: 'month', label: isEn ? 'Month' : '월별' },
+                    { id: 'condition', label: isEn ? 'Issue' : '질병별' },
                   ] as const
                 ).map((mode) => (
                   <button
@@ -954,7 +1040,11 @@ export const HistoryPage: React.FC<{ initialTab?: 'list' | 'calendar' | 'diagnos
               <div className="rounded-2xl border border-dashed border-slate-300 dark:border-slate-800 bg-white dark:bg-slate-900 p-8 text-center space-y-2 text-xs text-slate-400">
                 <p>
                   {selectionMode && groupFilter === 'unassigned'
-                    ? '묶을 원인 미상 증상 기록이 없습니다.'
+                    ? isEn
+                      ? 'No unassigned symptom logs to group.'
+                      : '묶을 원인 미상 증상 기록이 없습니다.'
+                    : isEn
+                    ? 'No pain logs recorded yet.'
                     : '기록된 통증 내역이 없습니다.'}
                 </p>
                 {selectionMode && groupFilter === 'unassigned' && logs.length > 0 && (
@@ -963,7 +1053,7 @@ export const HistoryPage: React.FC<{ initialTab?: 'list' | 'calendar' | 'diagnos
                     onClick={() => setGroupFilter('all')}
                     className="px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold"
                   >
-                    전체 기록에서 고르기
+                    {isEn ? 'Choose from All Logs' : '전체 기록에서 고르기'}
                   </button>
                 )}
               </div>
@@ -984,11 +1074,11 @@ export const HistoryPage: React.FC<{ initialTab?: 'list' | 'calendar' | 'diagnos
                     <div className="flex items-center gap-1.5 shrink-0">
                       {section.avgIntensity && (
                         <span className="text-[10px] font-bold text-teal-700 dark:text-teal-300 bg-teal-50 dark:bg-teal-950/60 px-2 py-0.5 rounded-full">
-                          평균 {section.avgIntensity}
+                          {isEn ? `Avg ${section.avgIntensity}` : `평균 ${section.avgIntensity}`}
                         </span>
                       )}
                       <span className="text-[10px] font-bold text-slate-400 bg-slate-200 dark:bg-slate-800 px-2 py-0.5 rounded-full">
-                        {section.logs.length}건
+                        {isEn ? `${section.logs.length}` : `${section.logs.length}건`}
                       </span>
                       {section.conditionId && !selectionMode && (
                         <button
@@ -999,7 +1089,7 @@ export const HistoryPage: React.FC<{ initialTab?: 'list' | 'calendar' | 'diagnos
                           }}
                           className="inline-flex items-center gap-0.5 text-[10px] font-bold text-teal-700 dark:text-teal-400 hover:underline"
                         >
-                          추이 <ArrowRight size={10} />
+                          {isEn ? 'Trend' : '추이'} <ArrowRight size={10} />
                         </button>
                       )}
                     </div>
@@ -1036,10 +1126,10 @@ export const HistoryPage: React.FC<{ initialTab?: 'list' | 'calendar' | 'diagnos
           <div className="rounded-2xl border border-teal-500/30 bg-slate-900/95 dark:bg-slate-900/95 text-white px-4 py-3 shadow-2xl backdrop-blur-md flex items-center justify-between gap-3">
             <div>
               <p className="text-xs font-extrabold text-emerald-300">
-                {selectedIds.length}건 선택됨
+                {isEn ? `${selectedIds.length} selected` : `${selectedIds.length}건 선택됨`}
               </p>
               <p className="text-[10px] text-slate-300">
-                같은 질병 경과로 묶어 추적합니다
+                {isEn ? 'Group into a shared condition timeline' : '같은 질병 경과로 묶어 추적합니다'}
               </p>
             </div>
             <button
@@ -1048,7 +1138,8 @@ export const HistoryPage: React.FC<{ initialTab?: 'list' | 'calendar' | 'diagnos
               onClick={openAssignDialog}
               className="shrink-0 px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-500 disabled:bg-slate-700 disabled:text-slate-400 text-xs font-extrabold flex items-center gap-1.5 transition-colors"
             >
-              <FolderPlus size={14} /> 질병으로 묶기 ({selectedIds.length})
+              <FolderPlus size={14} />{' '}
+              {isEn ? `Group (${selectedIds.length})` : `질병으로 묶기 (${selectedIds.length})`}
             </button>
           </div>
         </div>
@@ -1069,7 +1160,9 @@ export const HistoryPage: React.FC<{ initialTab?: 'list' | 'calendar' | 'diagnos
             >
               <div className="flex items-center justify-between">
                 <h3 className="font-bold text-sm">
-                  선택한 {selectedIds.length}건의 기록을 질병으로 묶기
+                  {isEn
+                    ? `Group ${selectedIds.length} Selected Logs`
+                    : `선택한 ${selectedIds.length}건의 기록을 질병으로 묶기`}
                 </h3>
                 <button
                   type="button"
@@ -1091,7 +1184,7 @@ export const HistoryPage: React.FC<{ initialTab?: 'list' | 'calendar' | 'diagnos
                       : 'text-slate-500 disabled:opacity-40'
                   }`}
                 >
-                  기존 질병에 연결
+                  {isEn ? 'Existing Condition' : '기존 질병에 연결'}
                 </button>
                 <button
                   type="button"
@@ -1100,7 +1193,7 @@ export const HistoryPage: React.FC<{ initialTab?: 'list' | 'calendar' | 'diagnos
                     targetMode === 'new' ? 'bg-white dark:bg-slate-900 shadow-sm' : 'text-slate-500'
                   }`}
                 >
-                  새 확정 질병 생성
+                  {isEn ? 'New Condition' : '새 확정 질병 생성'}
                 </button>
               </div>
 
@@ -1120,14 +1213,14 @@ export const HistoryPage: React.FC<{ initialTab?: 'list' | 'calendar' | 'diagnos
                 <div className="space-y-2">
                   <input
                     type="text"
-                    placeholder="확정된 질병명 (예: 요추 추간판 탈출증)"
+                    placeholder={isEn ? 'Condition name (e.g., Lumbar Disc)' : '확정된 질병명 (예: 요추 추간판 탈출증)'}
                     value={newLabel}
                     onChange={(e) => setNewLabel(e.target.value)}
                     className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs"
                   />
                   <input
                     type="text"
-                    placeholder="부위 (예: 허리/요통)"
+                    placeholder={isEn ? 'Body part (e.g., Lower Back)' : '부위 (예: 허리/요통)'}
                     value={newBodyPart}
                     onChange={(e) => setNewBodyPart(e.target.value)}
                     className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs"
@@ -1142,8 +1235,9 @@ export const HistoryPage: React.FC<{ initialTab?: 'list' | 'calendar' | 'diagnos
                   <div className="flex items-start gap-2 text-amber-900 dark:text-amber-200 font-bold">
                     <AlertCircle size={15} className="shrink-0 mt-0.5 text-amber-600 dark:text-amber-400" />
                     <span>
-                      기존 질병({overwriteConditionNames.join(', ')})에 이미 기록된{' '}
-                      {overwriteTargets.length}건이 포함되어 있습니다.
+                      {isEn
+                        ? `${overwriteTargets.length} selected logs already belong to: ${overwriteConditionNames.join(', ')}.`
+                        : `기존 질병(${overwriteConditionNames.join(', ')})에 이미 기록된 ${overwriteTargets.length}건이 포함되어 있습니다.`}
                     </span>
                   </div>
                   <label className="flex items-start gap-2 cursor-pointer select-none text-[11px] font-semibold text-amber-800 dark:text-amber-300">
@@ -1157,7 +1251,11 @@ export const HistoryPage: React.FC<{ initialTab?: 'list' | 'calendar' | 'diagnos
                       }}
                       className="mt-0.5 h-4 w-4 accent-amber-600 shrink-0"
                     />
-                    <span>기존 질병 연결을 덮어쓰고 선택한 질병으로 이동하는 데 동의합니다.</span>
+                    <span>
+                      {isEn
+                        ? 'I confirm moving these logs and overwriting their existing condition link.'
+                        : '기존 질병 연결을 덮어쓰고 선택한 질병으로 이동하는 데 동의합니다.'}
+                    </span>
                   </label>
                 </div>
               )}
@@ -1167,7 +1265,9 @@ export const HistoryPage: React.FC<{ initialTab?: 'list' | 'calendar' | 'diagnos
                 disabled={overwriteTargets.length > 0 && !overwriteConfirmed}
                 className="w-full py-2.5 rounded-xl bg-teal-700 hover:bg-teal-600 disabled:bg-slate-300 dark:disabled:bg-slate-800 disabled:text-slate-500 text-white font-bold text-xs transition-colors"
               >
-                질병으로 묶기 완료 ({selectedIds.length}건)
+                {isEn
+                  ? `Confirm Grouping (${selectedIds.length})`
+                  : `질병으로 묶기 완료 (${selectedIds.length}건)`}
               </button>
             </form>
           </div>,

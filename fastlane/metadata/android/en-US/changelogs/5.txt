@@ -1,0 +1,6 @@
+v2.0.0
+- Mandatory 6-digit PIN setup on first launch with non-extractable session encryption key and 3-minute idle auto-lock
+- Native Android root, hook (Frida/Xposed/LSPosed), and debugger blocking at startup and resume
+- Encrypted user settings at rest, hardened PIN-encrypted TOTP 2FA (replay guard + lockout backoff), and atomic AndroidKeyStore rotation
+- Restricted AI briefing strictly to on-device loopback endpoints (localhost/127.0.0.1/[::1]) with strict Content Security Policy
+- Added CSV plaintext export warning modal + formula injection neutralization, Zod backup schema validation, and R8 release hardening

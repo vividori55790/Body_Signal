@@ -2,16 +2,35 @@
  * RFC 6238 Offline TOTP (2FA) Engine using Web Crypto API (HMAC-SHA1).
  * 100% on-device, compatible with FOSS authenticator apps (e.g. Aegis, FreeOTP).
  */
-import { computeSha256Checksum, encryptWithDeviceKey, decryptWithDeviceKey, EncryptedPackage } from './crypto';
+import {
+  computeSha256Checksum,
+  constantTimeEqual,
+  SESSION_KEY_TOKEN,
+  encryptWithPin,
+  decryptWithPin,
+  encryptWithActiveSessionKey,
+  decryptWithActiveSessionKey,
+  hasActiveSessionCryptoKey,
+  encryptWithDeviceKey,
+  decryptWithDeviceKey,
+  EncryptedPackage,
+} from './crypto';
 import { getDB, getOrCreateDeviceMasterKey } from './storage';
 
 const BASE32_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+const TOTP_MAX_ATTEMPTS = 5;
+const TOTP_BASE_LOCKOUT_MS = 30 * 1000;
+const TOTP_MAX_LOCKOUT_MS = 5 * 60 * 1000;
 
 export interface TotpMeta {
   enabled: boolean;
   encryptedSecret: EncryptedPackage;
   recoveryHashes: string[];
   enrolledAt: string;
+  failedAttempts?: number;
+  lockoutUntil?: number;
+  consecutiveLockouts?: number;
+  lastUsedStep?: number;
 }
 
 export function encodeBase32(bytes: Uint8Array): string {
@@ -96,11 +115,30 @@ export async function verifyTotpCode(secret: string, code: string, timeMs: numbe
 
   for (const offsetSteps of [-1, 0, 1]) {
     const candidate = await generateTotpCode(secret, timeMs + offsetSteps * 30_000);
-    if (candidate === normalized) {
+    if (constantTimeEqual(candidate, normalized)) {
       return true;
     }
   }
   return false;
+}
+
+async function verifyTotpCodeWithStep(
+  secret: string,
+  code: string,
+  timeMs: number = Date.now()
+): Promise<{ matched: boolean; matchedStep: number | null }> {
+  const normalized = (code || '').replace(/\s+/g, '');
+  if (!/^\d{6}$/.test(normalized)) return { matched: false, matchedStep: null };
+
+  const baseStep = Math.floor(timeMs / 1000 / 30);
+  for (const offsetSteps of [-1, 0, 1]) {
+    const stepTimeMs = timeMs + offsetSteps * 30_000;
+    const candidate = await generateTotpCode(secret, stepTimeMs);
+    if (constantTimeEqual(candidate, normalized)) {
+      return { matched: true, matchedStep: baseStep + offsetSteps };
+    }
+  }
+  return { matched: false, matchedStep: null };
 }
 
 export function generateRecoveryCodes(count = 8): string[] {
@@ -129,9 +167,42 @@ export async function getTotpMeta(): Promise<TotpMeta | null> {
   return null;
 }
 
-export async function enableTotp2FA(secret: string, recoveryCodes: string[]): Promise<void> {
-  const deviceKey = await getOrCreateDeviceMasterKey();
-  const encryptedSecret = await encryptWithDeviceKey(secret, deviceKey);
+async function decryptTotpSecret(pkg: EncryptedPackage, pin?: string): Promise<string> {
+  if (pkg.mode === 'pin') {
+    if (pin === SESSION_KEY_TOKEN || hasActiveSessionCryptoKey()) {
+      try {
+        return await decryptWithActiveSessionKey(pkg);
+      } catch {}
+    }
+    if (pin && pin !== SESSION_KEY_TOKEN) {
+      return decryptWithPin(pkg, pin);
+    }
+  }
+  try {
+    const deviceKey = await getOrCreateDeviceMasterKey();
+    return await decryptWithDeviceKey(pkg, deviceKey);
+  } catch (err) {
+    if (pin && pin !== SESSION_KEY_TOKEN) {
+      return decryptWithPin(pkg, pin);
+    }
+    throw err;
+  }
+}
+
+export async function enableTotp2FA(
+  secret: string,
+  recoveryCodes: string[],
+  pin?: string
+): Promise<void> {
+  let encryptedSecret: EncryptedPackage;
+  if (pin === SESSION_KEY_TOKEN || (!pin && hasActiveSessionCryptoKey())) {
+    encryptedSecret = await encryptWithActiveSessionKey(secret);
+  } else if (pin) {
+    encryptedSecret = await encryptWithPin(secret, pin);
+  } else {
+    const deviceKey = await getOrCreateDeviceMasterKey();
+    encryptedSecret = await encryptWithDeviceKey(secret, deviceKey);
+  }
   const recoveryHashes = await Promise.all(
     recoveryCodes.map((c) => computeSha256Checksum(c.trim().toUpperCase()))
   );
@@ -141,10 +212,51 @@ export async function enableTotp2FA(secret: string, recoveryCodes: string[]): Pr
     encryptedSecret,
     recoveryHashes,
     enrolledAt: new Date().toISOString(),
+    failedAttempts: 0,
+    lockoutUntil: 0,
+    consecutiveLockouts: 0,
   };
 
   const db = await getDB();
   await db.put('app_state', meta, 'totp_meta');
+}
+
+export async function migrateTotpToSessionKey(rawPin: string): Promise<void> {
+  if (!hasActiveSessionCryptoKey()) return;
+  const meta = await getTotpMeta();
+  if (!meta || !meta.enabled || !meta.encryptedSecret) return;
+  try {
+    await decryptWithActiveSessionKey(meta.encryptedSecret);
+  } catch {
+    try {
+      const secret = await decryptTotpSecret(meta.encryptedSecret, rawPin);
+      const nextEncrypted = await encryptWithActiveSessionKey(secret);
+      const db = await getDB();
+      await db.put('app_state', { ...meta, encryptedSecret: nextEncrypted }, 'totp_meta');
+    } catch {}
+  }
+}
+
+export async function reEncryptTotpSecret(newPin?: string, oldPin?: string): Promise<void> {
+  const meta = await getTotpMeta();
+  if (!meta || !meta.enabled || !meta.encryptedSecret) return;
+
+  try {
+    const secret = await decryptTotpSecret(meta.encryptedSecret, oldPin);
+    let nextEncrypted: EncryptedPackage;
+    if (newPin === SESSION_KEY_TOKEN) {
+      nextEncrypted = await encryptWithActiveSessionKey(secret);
+    } else if (newPin) {
+      nextEncrypted = await encryptWithPin(secret, newPin);
+    } else {
+      const deviceKey = await getOrCreateDeviceMasterKey();
+      nextEncrypted = await encryptWithDeviceKey(secret, deviceKey);
+    }
+    const db = await getDB();
+    await db.put('app_state', { ...meta, encryptedSecret: nextEncrypted }, 'totp_meta');
+  } catch (err) {
+    console.warn('TOTP secret re-encryption skipped:', err);
+  }
 }
 
 export async function disableTotp2FA(): Promise<void> {
@@ -154,28 +266,93 @@ export async function disableTotp2FA(): Promise<void> {
   } catch {}
 }
 
-export async function verifyStoredTotpOrRecovery(input: string): Promise<{ valid: boolean; usedRecovery: boolean }> {
+export async function verifyStoredTotpOrRecovery(
+  input: string,
+  pin?: string
+): Promise<{ valid: boolean; usedRecovery: boolean; lockoutMs?: number; remainingAttempts?: number }> {
   const meta = await getTotpMeta();
   if (!meta || !meta.enabled) return { valid: true, usedRecovery: false };
 
-  const cleaned = (input || '').trim();
-  if (/^\d{6}$/.test(cleaned.replace(/\s+/g, ''))) {
-    const deviceKey = await getOrCreateDeviceMasterKey();
-    const secret = await decryptWithDeviceKey(meta.encryptedSecret, deviceKey);
-    const ok = await verifyTotpCode(secret, cleaned);
-    return { valid: ok, usedRecovery: false };
+  const now = Date.now();
+  if (meta.lockoutUntil && now < meta.lockoutUntil) {
+    return { valid: false, usedRecovery: false, lockoutMs: meta.lockoutUntil - now };
   }
 
-  // Check one-time recovery code
+  const db = await getDB();
+  const recordFailure = async (): Promise<{ valid: false; usedRecovery: false; lockoutMs?: number; remainingAttempts?: number }> => {
+    const failed = (meta.failedAttempts || 0) + 1;
+    if (failed >= TOTP_MAX_ATTEMPTS) {
+      const consecutive = (meta.consecutiveLockouts || 0) + 1;
+      const durationMs = Math.min(TOTP_BASE_LOCKOUT_MS * Math.pow(2, consecutive - 1), TOTP_MAX_LOCKOUT_MS);
+      await db.put(
+        'app_state',
+        {
+          ...meta,
+          failedAttempts: 0,
+          consecutiveLockouts: consecutive,
+          lockoutUntil: Date.now() + durationMs,
+        },
+        'totp_meta'
+      );
+      return { valid: false, usedRecovery: false, lockoutMs: durationMs };
+    }
+    await db.put('app_state', { ...meta, failedAttempts: failed }, 'totp_meta');
+    return {
+      valid: false,
+      usedRecovery: false,
+      remainingAttempts: TOTP_MAX_ATTEMPTS - failed,
+    };
+  };
+
+  const cleaned = (input || '').trim();
+  if (/^\d{6}$/.test(cleaned.replace(/\s+/g, ''))) {
+    const secret = await decryptTotpSecret(meta.encryptedSecret, pin);
+    const { matched, matchedStep } = await verifyTotpCodeWithStep(secret, cleaned, now);
+    if (matched && matchedStep !== null) {
+      // Prevent TOTP token replay within the same or earlier 30s time step
+      if (typeof meta.lastUsedStep === 'number' && matchedStep <= meta.lastUsedStep) {
+        return recordFailure();
+      }
+      await db.put(
+        'app_state',
+        {
+          ...meta,
+          failedAttempts: 0,
+          lockoutUntil: 0,
+          consecutiveLockouts: 0,
+          lastUsedStep: matchedStep,
+        },
+        'totp_meta'
+      );
+      return { valid: true, usedRecovery: false };
+    }
+    return recordFailure();
+  }
+
+  // Check one-time recovery code (constant-time comparison across all entries)
   const normalizedRecovery = cleaned.toUpperCase();
   const inputHash = await computeSha256Checksum(normalizedRecovery);
-  const idx = meta.recoveryHashes.indexOf(inputHash);
-  if (idx >= 0) {
-    const remaining = meta.recoveryHashes.filter((_, i) => i !== idx);
-    const db = await getDB();
-    await db.put('app_state', { ...meta, recoveryHashes: remaining }, 'totp_meta');
+  let matchedIdx = -1;
+  for (let i = 0; i < meta.recoveryHashes.length; i++) {
+    if (constantTimeEqual(meta.recoveryHashes[i], inputHash)) {
+      matchedIdx = i;
+    }
+  }
+  if (matchedIdx >= 0) {
+    const remaining = meta.recoveryHashes.filter((_, i) => i !== matchedIdx);
+    await db.put(
+      'app_state',
+      {
+        ...meta,
+        recoveryHashes: remaining,
+        failedAttempts: 0,
+        lockoutUntil: 0,
+        consecutiveLockouts: 0,
+      },
+      'totp_meta'
+    );
     return { valid: true, usedRecovery: true };
   }
 
-  return { valid: false, usedRecovery: false };
+  return recordFailure();
 }

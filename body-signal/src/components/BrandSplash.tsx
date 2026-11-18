@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useContext } from 'react';
 import BrandLogo from './BrandLogo';
+import { SettingsContext } from '../context/SettingsContext';
 
 interface BrandSplashProps {
   statusText?: string;
@@ -9,6 +10,8 @@ interface BrandSplashProps {
  * Full-screen launch splash shown on app startup before LockScreen mounts.
  */
 export const BrandSplash: React.FC<BrandSplashProps> = ({ statusText }) => {
+  const settingsCtx = useContext(SettingsContext);
+  const isEn = settingsCtx?.settings.language === 'en';
   return (
     <div
       data-testid="brand-splash"
@@ -37,7 +40,9 @@ export const BrandSplash: React.FC<BrandSplashProps> = ({ statusText }) => {
           BIGNAL
         </h1>
         <p className="mt-1.5 text-xs font-medium tracking-wide text-emerald-300/90">
-          BODY SIGNAL · 온디바이스 암호화 건강 기록
+          {isEn
+            ? 'BODY SIGNAL · On-Device Encrypted Health Vault'
+            : 'BODY SIGNAL · 온디바이스 암호화 건강 기록'}
         </p>
 
         {/* Subtle ECG pulse accent bar */}

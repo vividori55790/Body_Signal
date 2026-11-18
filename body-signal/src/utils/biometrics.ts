@@ -255,18 +255,19 @@ export async function enrollBiometrics(pin: string): Promise<boolean> {
 }
 
 /**
- * Re-wraps existing biometric PIN when user changes their PIN
+ * Re-wraps existing biometric PIN when user changes their PIN.
+ * Returns true if biometric token was successfully updated (or wasn't enabled),
+ * or false if the user cancelled / failed re-enrollment.
  */
-export async function updateBiometricPinToken(newPin: string): Promise<void> {
+export async function updateBiometricPinToken(newPin: string): Promise<boolean> {
   if (mockModeOverride === null && isNativeAndroidSecureAuth()) {
     const res = await SecureAuth.isBiometricEnrolled();
-    if (!res.enrolled) return;
-    await enrollBiometrics(newPin);
-    return;
+    if (!res.enrolled) return true;
+    return await enrollBiometrics(newPin);
   }
 
   const meta = await getBiometricMeta();
-  if (!meta || !meta.enabled) return;
+  if (!meta || !meta.enabled) return true;
 
   const deviceKey = await getOrCreateDeviceMasterKey();
   const wrappedPin = await encryptWithDeviceKey(newPin, deviceKey);
@@ -274,6 +275,7 @@ export async function updateBiometricPinToken(newPin: string): Promise<void> {
     ...meta,
     wrappedPin,
   });
+  return true;
 }
 
 /**

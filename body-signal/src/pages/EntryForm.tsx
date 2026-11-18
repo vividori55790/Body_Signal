@@ -33,11 +33,42 @@ const RED_FLAGS = [
   '대소변 장애',
 ];
 
+const EN_CHIP_MAP: Record<string, string> = {
+  욱신거림: 'Throbbing',
+  '찌르는 듯함': 'Sharp / Stabbing',
+  '타는 듯함': 'Burning',
+  '뻐근/묵직함': 'Aching / Heavy',
+  '조이는 느낌': 'Tight / Squeezing',
+  '저림/전기': 'Tingling / Electric',
+  '쥐남/경련': 'Cramping / Spasm',
+  '하지(다리) 방사': 'To Leg(s)',
+  '상지(팔) 방사': 'To Arm(s)',
+  '등/견갑골 방사': 'To Back / Scapula',
+  '골반으로 뻗침': 'To Pelvis',
+  '보행 시': 'Walking',
+  '오래 앉을 때': 'Prolonged Sitting',
+  '아침 기상 시': 'Morning Stiffness',
+  '기침/재채기': 'Cough / Sneeze',
+  스트레스: 'Stress',
+  '날씨/추위': 'Cold / Weather',
+  '누워서 휴식': 'Lying Rest',
+  온찜질: 'Heat Pack',
+  냉찜질: 'Ice Pack',
+  스트레칭: 'Stretching',
+  '약 복용 후': 'After Meds',
+  '마비/감각 저하': 'Numbness / Sensory Loss',
+  '다리/팔 근력 약화': 'Limb Weakness',
+  '38도 이상 고열 동반': 'High Fever (>=38°C)',
+  '대소변 장애': 'Bowel / Bladder Loss',
+};
+
 export const EntryFormPage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { conditions, saveEntry } = useHealth();
   const { settings, t, setDefaultBodyMapOpen, recordCollapsibleDismissal } = useSettings();
+  const isEn = settings.language === 'en';
+  const labelOf = (val: string) => (isEn ? EN_CHIP_MAP[val] || val : val);
 
   const activeConditions = conditions.filter((c) => !c.isArchived);
 
@@ -175,14 +206,14 @@ export const EntryFormPage: React.FC = () => {
     e.preventDefault();
     if (mode === 'new') {
       if (!newLabel.trim() || !newBodyPart.trim()) {
-        setError('질환명과 신체 부위를 입력해 주세요.');
+        setError(isEn ? 'Enter both condition name and body part.' : '질환명과 신체 부위를 입력해 주세요.');
         return;
       }
     } else if (mode === 'existing' && !selectedConditionId) {
-      setError('추적할 질환을 선택해 주세요.');
+      setError(isEn ? 'Please select a condition to track.' : '추적할 질환을 선택해 주세요.');
       return;
     } else if (mode === 'unassigned' && !unassignedBodyPart.trim()) {
-      setError('아픈 부위를 선택하거나 입력해 주세요.');
+      setError(isEn ? 'Select or enter the affected body part.' : '아픈 부위를 선택하거나 입력해 주세요.');
       return;
     }
 
@@ -218,7 +249,9 @@ export const EntryFormPage: React.FC = () => {
       triggerHaptic();
       navigate('/');
     } else {
-      setError('기록 저장에 실패했습니다. 입력값을 확인해 주세요.');
+      setError(
+        isEn ? 'Failed to save record. Please check your inputs.' : '기록 저장에 실패했습니다. 입력값을 확인해 주세요.'
+      );
     }
   };
 
@@ -296,7 +329,7 @@ export const EntryFormPage: React.FC = () => {
                   : 'text-slate-500'
               }`}
             >
-              원인 미상
+              {isEn ? 'Unassigned' : '원인 미상'}
             </button>
             <button
               type="button"
@@ -334,19 +367,27 @@ export const EntryFormPage: React.FC = () => {
           ) : mode === 'unassigned' ? (
             <div className="space-y-3 animate-in fade-in">
               <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                병명이 아직 확정되지 않았다면 부위와 증상만 먼저 기록하고, 나중에 진단된 질병으로 묶을 수 있습니다.
+                {isEn
+                  ? 'Not sure of the diagnosis yet? Log the area & symptoms first, then group under a condition later.'
+                  : '병명이 아직 확정되지 않았다면 부위와 증상만 먼저 기록하고, 나중에 진단된 질병으로 묶을 수 있습니다.'}
               </p>
               <div>
                 <div className="flex items-center justify-between mb-1">
                   <label className="text-xs font-bold text-slate-600 dark:text-slate-300">
-                    아픈 부위
+                    {isEn ? 'Affected Area' : '아픈 부위'}
                   </label>
                   <button
                     type="button"
                     onClick={handleToggleBodyMap}
                     className="text-[11px] font-bold text-teal-600 dark:text-teal-400 underline"
                   >
-                    {showBodyMap ? '바디맵 닫기' : '바디맵에서 칠하기'}
+                    {showBodyMap
+                      ? isEn
+                        ? 'Hide BodyMap'
+                        : '바디맵 닫기'
+                      : isEn
+                      ? 'Pick on BodyMap'
+                      : '바디맵에서 칠하기'}
                   </button>
                 </div>
                 <input
@@ -360,7 +401,7 @@ export const EntryFormPage: React.FC = () => {
               </div>
               {showBodyMapPrompt && (
                 <DefaultClosedSuggestion
-                  featureName="인체 바디맵"
+                  featureName={isEn ? 'BodyMap' : '인체 바디맵'}
                   onConfirmDefaultClosed={async () => {
                     triggerHaptic();
                     await setDefaultBodyMapOpen(false);
@@ -413,7 +454,13 @@ export const EntryFormPage: React.FC = () => {
                     onClick={handleToggleBodyMap}
                     className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 underline"
                   >
-                    {showBodyMap ? '바디맵 닫기' : '인체 바디맵 열기'}
+                    {showBodyMap
+                      ? isEn
+                        ? 'Hide BodyMap'
+                        : '바디맵 닫기'
+                      : isEn
+                      ? 'Open BodyMap'
+                      : '인체 바디맵 열기'}
                   </button>
                 </div>
                 <input
@@ -428,7 +475,7 @@ export const EntryFormPage: React.FC = () => {
 
               {showBodyMapPrompt && (
                 <DefaultClosedSuggestion
-                  featureName="인체 바디맵"
+                  featureName={isEn ? 'BodyMap' : '인체 바디맵'}
                   onConfirmDefaultClosed={async () => {
                     triggerHaptic();
                     await setDefaultBodyMapOpen(false);
@@ -501,21 +548,21 @@ export const EntryFormPage: React.FC = () => {
                   onClick={() => setQuickTime('now')}
                   className="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-[10px] font-bold text-slate-600 dark:text-slate-400 hover:text-emerald-500"
                 >
-                  지금
+                  {isEn ? 'Now' : '지금'}
                 </button>
                 <button
                   type="button"
                   onClick={() => setQuickTime('1h')}
                   className="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-[10px] font-bold text-slate-600 dark:text-slate-400 hover:text-emerald-500"
                 >
-                  1시간 전
+                  {isEn ? '1h ago' : '1시간 전'}
                 </button>
                 <button
                   type="button"
                   onClick={() => setQuickTime('yesterday')}
                   className="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-[10px] font-bold text-slate-600 dark:text-slate-400 hover:text-emerald-500"
                 >
-                  어제
+                  {isEn ? 'Yesterday' : '어제'}
                 </button>
               </div>
             </div>
@@ -533,17 +580,17 @@ export const EntryFormPage: React.FC = () => {
         <section className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-sm space-y-3.5">
           <div className="flex items-center justify-between">
             <h2 className="text-xs font-bold uppercase tracking-wider text-slate-400">
-              통증 양상 및 방사통 (PQRST 의학 척도)
+              {isEn ? 'Pain Quality & Radiation (PQRST)' : '통증 양상 및 방사통 (PQRST 의학 척도)'}
             </h2>
             <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
-              의사 문진 필수 항목
+              {isEn ? 'Key Clinical Context' : '의사 문진 필수 항목'}
             </span>
           </div>
 
           {/* Quality Chips */}
           <div className="space-y-1.5">
             <span className="text-xs font-bold text-slate-600 dark:text-slate-300 block">
-              어떤 느낌으로 아픈가요? (다중 선택 가능)
+              {isEn ? 'How does it feel? (Multi-select)' : '어떤 느낌으로 아픈가요? (다중 선택 가능)'}
             </span>
             <div className="flex flex-wrap gap-1.5">
               {PAIN_QUALITIES.map((q) => {
@@ -559,7 +606,7 @@ export const EntryFormPage: React.FC = () => {
                         : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700/80 active:scale-95'
                     }`}
                   >
-                    {q} {isSelected && '✓'}
+                    {labelOf(q)} {isSelected && '✓'}
                   </button>
                 );
               })}
@@ -569,7 +616,7 @@ export const EntryFormPage: React.FC = () => {
           {/* Radiation Chips */}
           <div className="space-y-1.5 pt-2 border-t border-slate-100 dark:border-slate-800">
             <span className="text-xs font-bold text-slate-600 dark:text-slate-300 block">
-              다른 부위로 뻗치는 방사통이 있나요?
+              {isEn ? 'Does the pain radiate elsewhere?' : '다른 부위로 뻗치는 방사통이 있나요?'}
             </span>
             <div className="flex flex-wrap gap-1.5">
               {RADIATIONS.map((rad) => {
@@ -585,7 +632,7 @@ export const EntryFormPage: React.FC = () => {
                         : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700/80 active:scale-95'
                     }`}
                   >
-                    {rad} {isSelected && '✓'}
+                    {labelOf(rad)} {isSelected && '✓'}
                   </button>
                 );
               })}
@@ -595,7 +642,7 @@ export const EntryFormPage: React.FC = () => {
           {/* Triggers & Relief Factors */}
           <div className="space-y-1.5 pt-2 border-t border-slate-100 dark:border-slate-800">
             <span className="text-xs font-bold text-slate-600 dark:text-slate-300 block">
-              통증 악화 요인:
+              {isEn ? 'Aggravating Triggers:' : '통증 악화 요인:'}
             </span>
             <div className="flex flex-wrap gap-1.5">
               {TRIGGERS.map((tr) => {
@@ -611,7 +658,7 @@ export const EntryFormPage: React.FC = () => {
                         : 'bg-slate-100 dark:bg-slate-800 text-slate-500'
                     }`}
                   >
-                    {tr}
+                    {labelOf(tr)}
                   </button>
                 );
               })}
@@ -620,7 +667,7 @@ export const EntryFormPage: React.FC = () => {
 
           <div className="space-y-1.5">
             <span className="text-xs font-bold text-slate-600 dark:text-slate-300 block">
-              통증 완화 요인:
+              {isEn ? 'Relieving Factors:' : '통증 완화 요인:'}
             </span>
             <div className="flex flex-wrap gap-1.5">
               {RELIEF_FACTORS.map((rel) => {
@@ -636,7 +683,7 @@ export const EntryFormPage: React.FC = () => {
                         : 'bg-slate-100 dark:bg-slate-800 text-slate-500'
                     }`}
                   >
-                    {rel}
+                    {labelOf(rel)}
                   </button>
                 );
               })}
@@ -649,11 +696,13 @@ export const EntryFormPage: React.FC = () => {
           <div className="flex items-center gap-1.5 text-rose-600 dark:text-rose-400">
             <ShieldAlert size={16} />
             <h2 className="text-xs font-bold uppercase tracking-wider">
-              위험 징후 (Red Flags) 확인
+              {isEn ? 'Red Flags Safety Check' : '위험 징후 (Red Flags) 확인'}
             </h2>
           </div>
           <p className="text-[11px] text-rose-800/80 dark:text-rose-300/80">
-            해당되는 응급 증상이 있다면 체크하세요 (의료진에게 최우선 경고 전달):
+            {isEn
+              ? 'Check any urgent warning signs (flagged in clinical summaries):'
+              : '해당되는 응급 증상이 있다면 체크하세요 (의료진에게 최우선 경고 전달):'}
           </p>
 
           <div className="grid grid-cols-2 gap-2 pt-1">
@@ -670,7 +719,7 @@ export const EntryFormPage: React.FC = () => {
                       : 'bg-white dark:bg-slate-800 border-rose-200 dark:border-rose-900/60 text-rose-800 dark:text-rose-300'
                   }`}
                 >
-                  {rf} {isSelected && '⚠️'}
+                  {labelOf(rf)} {isSelected && '⚠️'}
                 </button>
               );
             })}
@@ -680,7 +729,9 @@ export const EntryFormPage: React.FC = () => {
             <div className="p-2.5 rounded-xl bg-rose-100 dark:bg-rose-900/60 text-[11px] font-bold text-rose-900 dark:text-rose-100 flex items-start gap-1.5 animate-in fade-in">
               <AlertTriangle size={15} className="text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
               <span>
-                위험 징후가 체크되었습니다. 의무기록에 응급 상태로 표기되며, 진단 전이라도 상태 악화 시 즉시 응급실을 내원하시기 바랍니다.
+                {isEn
+                  ? 'Red flags selected. These will be highlighted in clinical summaries. Seek emergency care immediately if symptoms worsen.'
+                  : '위험 징후가 체크되었습니다. 의무기록에 응급 상태로 표기되며, 진단 전이라도 상태 악화 시 즉시 응급실을 내원하시기 바랍니다.'}
               </span>
             </div>
           )}
@@ -719,7 +770,7 @@ export const EntryFormPage: React.FC = () => {
                 }}
                 className="rounded-full bg-emerald-50 dark:bg-emerald-950/60 border border-dashed border-emerald-300 dark:border-emerald-700 px-2.5 py-1 text-xs font-bold text-emerald-700 dark:text-emerald-300 active:scale-95 transition-all flex items-center gap-1"
               >
-                + 약 추가
+                {isEn ? '+ Add Med' : '+ 약 추가'}
               </button>
             </div>
           </div>

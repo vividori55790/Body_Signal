@@ -1,115 +1,39 @@
-# � Build Android App (.apk) with Capacitor
+# Build & Deployment Guide (Capacitor + Android)
 
-Since you want to build the app directly without deploying to a website first, we use **Capacitor**. This bundles your web code directly into the Android app.
+Body Signal builds as a 100% self-contained Android APK via **Capacitor** and **Gradle** (or as an offline-capable PWA via Vite).
 
-### Prerequisite: Upload Code to GitHub
+## 1. Build Web Assets & Sync Android
 
-To build the APK automatically, you need to push your code to GitHub.
-
-#### 1. Create a Repository
-
-Go to **[GitHub New Repository](https://github.com/new)** and create a repository named `body-signal`.
-_Note: Do not add README, .gitignore, or license during creation._
-
-#### 2. Push Your Code
-
-Run the following commands in your terminal (one by one):
+Run from `body-signal/`:
 
 ```bash
-# 1. Stage all changes
-git add .
-
-# 2. Commit your changes
-git commit -m "Initial commit for Android build"
-
-# 3. Rename branch to main
-git branch -M main
-
-# 4. Connect to GitHub (Replace URL with your own!)
-git remote add origin https://github.com/<YOUR-USERNAME>/body-signal.git
-
-# 5. Push code
-git push -u origin main
-```
-
-Once pushed, go to the **Actions** tab in your GitHub repository to see the build progress. After about 3-5 minutes, you can download the `body-signal-apk` artifact.
-
----
-
-## 🚀 Steps to Generate APK
-
-### 1. Update Web Code
-
-Whenever you make changes to your React app, run these commands to update the Android project:
-
-```bash
+npm ci
 npm run build
-npx cap sync
+npx cap sync android
 ```
 
-_This updates the `dist` folder and copies it into the `android` folder._
+## 2. Build Android APKs via Gradle
 
-### 2. Open in Android Studio
-
-Run this command to open the project in Android Studio:
+Run from `body-signal/android/`:
 
 ```bash
-npx cap open android
+# Debug APK (outputs to android/app/build/outputs/apk/debug/)
+./gradlew assembleDebug
+
+# Release APK with R8 shrinking (outputs to android/app/build/outputs/apk/release/)
+./gradlew assembleRelease
 ```
 
-### 3. Build the APK
+On Windows PowerShell:
 
-1. In Android Studio, wait for Gradle sync to finish (bottom bar).
-2. Go to the menu: **Build > Build Bundle(s) / APK(s) > Build APK(s)**.
-3. Once finished, a popup will appear. Click **locate** to find your `.apk` file.
-   - Typically located at: `android/app/build/outputs/apk/debug/app-debug.apk`
+```powershell
+.\gradlew.bat assembleDebug
+.\gradlew.bat assembleRelease
+```
 
----
+## 3. Reproducible Release & F-Droid Alignment
 
-## 🤖 Install on Phone
-
-1. Transfer the `.apk` file to your Android phone (via USB, Drive, etc.).
-2. Open the file on your phone and tap **Install**.
-   - _Note: You may need to allow installation from unknown sources._
-
----
-
-## 🌐 F-Droid source build
-
-F-Droid does not accept a developer-signed APK as the release artifact. It
-checks out a tagged source revision and builds an unsigned APK that F-Droid
-signs itself.
-
-This repository includes:
-
-- `fdroid/metadata/com.bodysignal.app.yml` — submission metadata (`GPL-3.0-only`)
-- `fdroid/README.md` — release and submission checklist
-- `LICENSE` — the GNU GPL v3 license declared by the metadata
-
-Before submitting:
-
-1. Create a public `v1.2.1` Git tag.
-2. Build from a clean checkout (`npm ci && npm run build && npx cap sync android`) with the pinned Gradle wrapper.
-3. Confirm `android/app/build/outputs/apk/release/app-release-unsigned.apk`
-   is generated without a signing key or private service configuration.
-4. Submit the metadata to the
-   [F-Droid data repository](https://gitlab.com/fdroid/fdroiddata).
-
-The local build requires an Android SDK. CI uses Node 22, Java 17, and the
-Gradle wrapper; do not commit a keystore or a signed APK.
-## Installing a phone test build
-
-The `Android APK Build` GitHub Actions workflow publishes two different
-artifacts:
-
-- `body-signal-debug-apk`: installable debug build for local testing.
-- `body-signal-release-apk-signed`: installable release-mode build signed by
-  an ephemeral CI key for local testing.
-
-Download an artifact from a successful workflow run, extract the APK, and
-install it on an Android device after enabling installation from the app used
-to open the file. The CI signing key is intentionally not retained, so this
-build must be uninstalled before switching to a different CI-signed build.
-
-`body-signal-fdroid-release-unsigned` is only a source-build verification
-artifact. It is unsigned by design and is not a direct-install package.
+- App ID: `com.bodysignal.app`
+- Current version: `2.0.1` (`versionCode 6`) across `body-signal/package.json`, `body-signal/android/app/build.gradle`, and `body-signal/fdroid/metadata/com.bodysignal.app.yml`.
+- Fastlane store metadata & changelogs live in `fastlane/metadata/android/{en-US,ko-KR}`.
+- Automated GitHub release workflow: `.github/workflows/fdroid-release.yml`.

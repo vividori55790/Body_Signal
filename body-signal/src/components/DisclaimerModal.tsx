@@ -144,7 +144,7 @@ const FirstLaunchWelcome: React.FC<FirstLaunchWelcomeProps> = ({
               </span>
             </div>
 
-            <div className="grid grid-cols-3 gap-2.5">
+            <div className="grid grid-cols-2 gap-2.5">
               {LOGO_VARIANT_OPTIONS.map((opt) => {
                 const selected = settings.logoVariant === opt.id;
                 return (

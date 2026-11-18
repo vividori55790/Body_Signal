@@ -5,8 +5,12 @@
  */
 import {
   EncryptedPackage,
+  SESSION_KEY_TOKEN,
   encryptWithPin,
   decryptWithPin,
+  encryptWithActiveSessionKey,
+  decryptWithActiveSessionKey,
+  hasActiveSessionCryptoKey,
   encryptWithDeviceKey,
   decryptWithDeviceKey,
 } from './crypto';
@@ -57,7 +61,10 @@ export async function saveEncryptedPhoto(
   pin?: string
 ): Promise<void> {
   const db = await getDB();
-  if (pin) {
+  if (pin === SESSION_KEY_TOKEN) {
+    const pkg = await encryptWithActiveSessionKey(dataUrl);
+    await db.put('encrypted_media', { ...pkg, mode: 'pin' }, photoId);
+  } else if (pin) {
     const pkg = await encryptWithPin(dataUrl, pin);
     await db.put('encrypted_media', { ...pkg, mode: 'pin' }, photoId);
   } else {
@@ -76,6 +83,18 @@ export async function loadEncryptedPhoto(
 
   const pkg = (await db.get('encrypted_media', photoId)) as EncryptedPackage | undefined;
   if (!pkg || pkg.v !== 1 || !pkg.ct) return null;
+
+  if (pin === SESSION_KEY_TOKEN) {
+    try {
+      return await decryptWithActiveSessionKey(pkg);
+    } catch {
+      if (pkg.mode === 'device') {
+        const deviceKey = await getOrCreateDeviceMasterKey();
+        return await decryptWithDeviceKey(pkg, deviceKey);
+      }
+      throw new Error('사진 복호화에 실패했습니다.');
+    }
+  }
 
   if (pin) {
     try {
@@ -99,6 +118,31 @@ export async function deleteEncryptedPhoto(photoId: string): Promise<void> {
   await db.delete('encrypted_media', photoId);
 }
 
+export async function migrateMediaToSessionKey(rawPin: string): Promise<void> {
+  if (!hasActiveSessionCryptoKey()) return;
+  const db = await getDB();
+  if (!db.objectStoreNames.contains('encrypted_media')) return;
+
+  const keys = await db.getAllKeys('encrypted_media');
+  for (const key of keys) {
+    const photoId = String(key);
+    const pkg = (await db.get('encrypted_media', photoId)) as EncryptedPackage | undefined;
+    if (!pkg || pkg.v !== 1 || !pkg.ct) continue;
+    try {
+      await decryptWithActiveSessionKey(pkg);
+    } catch {
+      try {
+        const plain =
+          pkg.mode === 'device'
+            ? await decryptWithDeviceKey(pkg, await getOrCreateDeviceMasterKey())
+            : await decryptWithPin(pkg, rawPin);
+        const reWrapped = await encryptWithActiveSessionKey(plain);
+        await db.put('encrypted_media', { ...reWrapped, mode: 'pin' }, photoId);
+      } catch {}
+    }
+  }
+}
+
 export async function reEncryptAllMedia(newPin?: string, oldPin?: string): Promise<void> {
   const db = await getDB();
   if (!db.objectStoreNames.contains('encrypted_media')) return;
@@ -110,9 +154,18 @@ export async function reEncryptAllMedia(newPin?: string, oldPin?: string): Promi
     if (!pkg || pkg.v !== 1 || !pkg.ct) continue;
 
     let plain: string | null = null;
-    if (oldPin) {
+    if (oldPin === SESSION_KEY_TOKEN) {
+      try {
+        plain = await decryptWithActiveSessionKey(pkg);
+      } catch {}
+    } else if (oldPin) {
       try {
         plain = await decryptWithPin(pkg, oldPin);
+      } catch {}
+    }
+    if (!plain && hasActiveSessionCryptoKey()) {
+      try {
+        plain = await decryptWithActiveSessionKey(pkg);
       } catch {}
     }
     if (!plain) {

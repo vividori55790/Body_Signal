@@ -1,6 +1,7 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useContext } from 'react';
 import { Eraser } from 'lucide-react';
 import { triggerHaptic } from '../utils/native';
+import { SettingsContext } from '../context/SettingsContext';
 
 /**
  * Deserializes a comma-separated bodyPart string into a cleaned string array.
@@ -112,6 +113,37 @@ interface SprayStroke {
   side: 'front' | 'back';
 }
 
+const EN_PART_NAMES: Record<string, string> = {
+  '머리/안면': 'Head / Face',
+  '목/경추': 'Neck',
+  '왼쪽 어깨': 'Left Shoulder',
+  '오른쪽 어깨': 'Right Shoulder',
+  '가슴/흉부': 'Chest',
+  '복부/위장': 'Abdomen',
+  '골반/하복부': 'Pelvis / Lower Abdomen',
+  '왼쪽 팔': 'Left Arm',
+  '오른쪽 팔': 'Right Arm',
+  '왼쪽 손목/손': 'Left Wrist / Hand',
+  '오른쪽 손목/손': 'Right Wrist / Hand',
+  '왼쪽 허벅지': 'Left Thigh',
+  '오른쪽 허벅지': 'Right Thigh',
+  '왼쪽 무릎': 'Left Knee',
+  '오른쪽 무릎': 'Right Knee',
+  '왼쪽 종아리/발': 'Left Calf / Foot',
+  '오른쪽 종아리/발': 'Right Calf / Foot',
+  '후두부/머리뒤': 'Back of Head',
+  '목덜미/경추': 'Back of Neck',
+  '등/견갑골': 'Upper Back',
+  '허리/요통': 'Lower Back',
+  '골반/둔부': 'Glutes / Pelvis',
+  '왼쪽 팔(뒤)': 'Left Arm (Back)',
+  '오른쪽 팔(뒤)': 'Right Arm (Back)',
+  '왼쪽 햄스트링': 'Left Hamstring',
+  '오른쪽 햄스트링': 'Right Hamstring',
+  '왼쪽 종아리/발목': 'Left Calf / Ankle',
+  '오른쪽 종아리/발목': 'Right Calf / Ankle',
+};
+
 export const BodyMap: React.FC<BodyMapProps> = ({
   selectedParts,
   onTogglePart,
@@ -120,6 +152,8 @@ export const BodyMap: React.FC<BodyMapProps> = ({
   intensityMap = {},
   readOnly = false,
 }) => {
+  const settingsCtx = useContext(SettingsContext);
+  const isEn = settingsCtx?.settings.language === 'en';
   const [viewSide, setViewSide] = useState<'front' | 'back'>('front');
   const [sprayStrokes, setSprayStrokes] = useState<SprayStroke[]>([]);
   const [isPainting, setIsPainting] = useState(false);
@@ -265,7 +299,7 @@ export const BodyMap: React.FC<BodyMapProps> = ({
                 : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-300'
             }`}
           >
-            앞면
+            {isEn ? 'Front' : '앞면'}
           </button>
           <button
             type="button"
@@ -279,7 +313,7 @@ export const BodyMap: React.FC<BodyMapProps> = ({
                 : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-300'
             }`}
           >
-            뒷면
+            {isEn ? 'Back' : '뒷면'}
           </button>
         </div>
 
@@ -289,7 +323,7 @@ export const BodyMap: React.FC<BodyMapProps> = ({
             onClick={handleClearAll}
             className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-bold text-slate-500 hover:text-rose-600 bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800"
           >
-            <Eraser size={13} /> 지우기
+            <Eraser size={13} /> {isEn ? 'Clear' : '지우기'}
           </button>
         )}
       </div>
@@ -424,7 +458,7 @@ export const BodyMap: React.FC<BodyMapProps> = ({
                   key={part}
                   className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-teal-50 dark:bg-teal-950/70 border border-teal-200 dark:border-teal-800 text-xs font-bold text-teal-800 dark:text-teal-200"
                 >
-                  {part}
+                  {isEn ? EN_PART_NAMES[part] || part : part}
                   {onTogglePart && (
                     <button
                       type="button"
@@ -434,7 +468,7 @@ export const BodyMap: React.FC<BodyMapProps> = ({
                         onTogglePart(part);
                       }}
                       className="hover:text-rose-500 ml-0.5 font-bold"
-                      aria-label={`${part} 선택 해제`}
+                      aria-label={isEn ? `Deselect ${EN_PART_NAMES[part] || part}` : `${part} 선택 해제`}
                     >
                       ×
                     </button>
@@ -444,7 +478,9 @@ export const BodyMap: React.FC<BodyMapProps> = ({
             </div>
           ) : (
             <p className="text-[11px] font-medium text-slate-400">
-              실루엣 위 아픈 부위를 문질러 칠하면 부위가 자동 인식됩니다
+              {isEn
+                ? 'Tap or drag on the body diagram to select painful areas'
+                : '실루엣 위 아픈 부위를 문질러 칠하면 부위가 자동 인식됩니다'}
             </p>
           )}
         </div>

@@ -1,0 +1,4 @@
+v2.0.1
+- Complete English and Korean bilingual localization across UI, PQRST/clinical views, department triage, and security prompts with automatic first-launch locale detection
+- Refined the app logo selector to two official cube icon styles (3D Glass and 2D Mint)
+- Overhauled project documentation and release metadata for open-source distribution

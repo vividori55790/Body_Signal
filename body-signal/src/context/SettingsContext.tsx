@@ -70,6 +70,13 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
   };
 
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    const lang = settings.language || 'ko';
+    document.documentElement.lang = lang;
+    document.documentElement.dataset.lang = lang;
+  }, [settings.language]);
+
   // Real-time dynamic theme sync with OS preference changes (F4)
   useEffect(() => {
     if (typeof window === 'undefined' || !window.matchMedia) return;

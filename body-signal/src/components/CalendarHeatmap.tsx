@@ -1,6 +1,7 @@
-import React, { useMemo } from 'react';
+import React, { useContext, useMemo } from 'react';
 import { format, subDays, startOfWeek, addDays } from 'date-fns';
 import { PainLog } from '../types/health';
+import { SettingsContext } from '../context/SettingsContext';
 
 interface CalendarHeatmapProps {
   logs?: PainLog[];
@@ -8,6 +9,8 @@ interface CalendarHeatmapProps {
 }
 
 export const CalendarHeatmap: React.FC<CalendarHeatmapProps> = ({ logs = [], onDateClick }) => {
+  const settingsCtx = useContext(SettingsContext);
+  const isEn = settingsCtx?.settings.language === 'en';
   const getColor = (intensity: number) => {
     if (!intensity) return 'bg-slate-100 dark:bg-slate-800/80 border border-slate-200/60 dark:border-slate-800';
     if (intensity <= 3) return 'bg-emerald-300 dark:bg-emerald-600 border border-emerald-400';
@@ -66,7 +69,11 @@ export const CalendarHeatmap: React.FC<CalendarHeatmapProps> = ({ logs = [], onD
                 <div
                   key={dayData.date.toISOString()}
                   onClick={() => onDateClick && onDateClick(dayData)}
-                  title={`${format(dayData.date, 'yyyy-MM-dd')}: 최고 통증 NRS ${dayData.intensity}`}
+                  title={
+                    isEn
+                      ? `${format(dayData.date, 'yyyy-MM-dd')}: Peak NRS ${dayData.intensity}`
+                      : `${format(dayData.date, 'yyyy-MM-dd')}: 최고 통증 NRS ${dayData.intensity}`
+                  }
                   className={`w-full aspect-square rounded-[2px] transition-transform hover:scale-110 cursor-pointer ${getColor(
                     dayData.intensity
                   )}`}
@@ -78,15 +85,15 @@ export const CalendarHeatmap: React.FC<CalendarHeatmapProps> = ({ logs = [], onD
       </div>
 
       <div className="flex justify-between items-center text-[10px] text-slate-400 mt-2.5 px-0.5">
-        <span>5개월 전</span>
+        <span>{isEn ? '5 mo ago' : '5개월 전'}</span>
         <div className="flex items-center gap-1.5">
-          <span>경미함</span>
+          <span>{isEn ? 'Mild' : '경미함'}</span>
           <div className="w-2.5 h-2.5 rounded-sm bg-emerald-400" />
           <div className="w-2.5 h-2.5 rounded-sm bg-amber-400" />
           <div className="w-2.5 h-2.5 rounded-sm bg-rose-500" />
-          <span>극심함</span>
+          <span>{isEn ? 'Severe' : '극심함'}</span>
         </div>
-        <span>오늘</span>
+        <span>{isEn ? 'Today' : '오늘'}</span>
       </div>
     </div>
   );

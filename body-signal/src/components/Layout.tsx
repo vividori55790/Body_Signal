@@ -41,7 +41,7 @@ export const Layout: React.FC = () => {
             aria-label="지금 너무 아파요 1초 급성 통증 기록"
             className="flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-rose-700 hover:bg-rose-600 text-white font-bold text-xs shadow-lg ring-1 ring-rose-400/50 active:scale-95 transition-all"
           >
-            <span>1초 긴급 기록</span>
+            <span>{settings.language === 'en' ? '1-Sec SOS' : '1초 긴급 기록'}</span>
           </button>
         </aside>
       )}
@@ -68,7 +68,11 @@ export const Layout: React.FC = () => {
                 <Icon size={20} strokeWidth={2.1} />
                 {path === '/history' && unassignedCount > 0 && (
                   <span
-                    title={`미분류 증상 ${unassignedCount}건`}
+                    title={
+                      settings.language === 'en'
+                        ? `${unassignedCount} unassigned symptoms`
+                        : `미분류 증상 ${unassignedCount}건`
+                    }
                     className="absolute -top-1.5 -right-2.5 min-w-[16px] h-4 px-1 rounded-full bg-amber-500 text-white text-[9px] font-black flex items-center justify-center shadow-sm"
                   >
                     {unassignedCount > 9 ? '9+' : unassignedCount}

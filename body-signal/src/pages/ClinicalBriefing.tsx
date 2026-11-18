@@ -43,12 +43,14 @@ import {
   ChatMessage,
   LocalLlmOfflineError,
   testLocalLlmConnection,
+  isOnDeviceLlmEndpoint,
 } from '../utils/localLlm';
 
 export const ClinicalBriefingPage: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
   const navigate = useNavigate();
   const { conditions, logs, getClinicalBriefing, generateEMRSummaryText } = useHealth();
   const { settings, t } = useSettings();
+  const isEn = settings.language === 'en';
 
   // Selected Department Filter ('all' or specific DepartmentType)
   const [selectedDeptFilter, setSelectedDeptFilter] = useState<string>('all');
@@ -131,7 +133,9 @@ export const ClinicalBriefingPage: React.FC<{ embedded?: boolean }> = ({ embedde
       setAiAnalysis(null);
       const message =
         err?.message ||
-        '⚠️ 로컬 AI 미연결 상태입니다. Ollama 서버를 실행해 주세요.';
+        (isEn
+          ? '⚠️ Local AI is offline. Please start your on-device Ollama server.'
+          : '⚠️ 로컬 AI 미연결 상태입니다. Ollama 서버를 실행해 주세요.');
       setAiOfflineError(message);
     } finally {
       setIsGeneratingAi(false);
@@ -147,12 +151,20 @@ export const ClinicalBriefingPage: React.FC<{ embedded?: boolean }> = ({ embedde
       const res = await testLocalLlmConnection(settings.localLlm);
       if (res.success) {
         setAiOfflineError(null);
-        setConnectionStatus('✓ 로컬 AI 서버 연결 성공! 이제 AI 소견 생성이 가능합니다.');
+        setConnectionStatus(
+          isEn
+            ? '✓ Connected to Local AI server! Ready to generate summaries.'
+            : '✓ 로컬 AI 서버 연결 성공! 이제 AI 소견 생성이 가능합니다.'
+        );
       } else {
-        setConnectionStatus(`⚠️ 연결 불가: ${res.message}`);
+        setConnectionStatus(
+          isEn ? `⚠️ Unable to connect: ${res.message}` : `⚠️ 연결 불가: ${res.message}`
+        );
       }
     } catch (e: any) {
-      setConnectionStatus(`⚠️ 연결 테스트 오류: ${e.message}`);
+      setConnectionStatus(
+        isEn ? `⚠️ Connection error: ${e.message}` : `⚠️ 연결 테스트 오류: ${e.message}`
+      );
     } finally {
       setIsTestingConnection(false);
     }
@@ -168,7 +180,9 @@ export const ClinicalBriefingPage: React.FC<{ embedded?: boolean }> = ({ embedde
       const userMessage: ChatMessage = { role: 'user', content: trimmed };
       const offlineMsg: ChatMessage = {
         role: 'assistant',
-        content: '⚠️ [로컬 AI 미연결 상태] 로컬 AI 기능이 비활성화되어 있습니다. 설정에서 로컬 LLM을 활성화해 주세요.',
+        content: isEn
+          ? '⚠️ [Local AI Disabled] Enable Local LLM in Settings → Labs first.'
+          : '⚠️ [로컬 AI 미연결 상태] 로컬 AI 기능이 비활성화되어 있습니다. 설정에서 로컬 LLM을 활성화해 주세요.',
       };
       setQaMessages((prev) => [...prev, userMessage, offlineMsg]);
       return;
@@ -262,11 +276,11 @@ export const ClinicalBriefingPage: React.FC<{ embedded?: boolean }> = ({ embedde
               <h1 className="text-xl font-black tracking-tight">{t('briefingTitle')}</h1>
             )}
             <span className="text-[10px] font-extrabold uppercase bg-emerald-600 text-white px-2 py-0.5 rounded-full shadow-sm">
-              30초 요약
+              {isEn ? '30s Brief' : '30초 요약'}
             </span>
           </div>
           <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 font-medium">
-            진료과별 고대비 임상 요약
+            {isEn ? 'High-Contrast Specialty Clinical Summary' : '진료과별 고대비 임상 요약'}
           </p>
         </div>
 
@@ -276,16 +290,16 @@ export const ClinicalBriefingPage: React.FC<{ embedded?: boolean }> = ({ embedde
             type="button"
             onClick={() => setShowEmrExportModal(true)}
             className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200 text-xs font-bold shadow-sm active:scale-95 transition-all"
-            title="병원 EMR 차팅 텍스트 내보내기"
+            title={isEn ? 'Export EMR Charting Text' : '병원 EMR 차팅 텍스트 내보내기'}
           >
             <FileText size={15} className="text-teal-600" />
-            <span className="hidden sm:inline">EMR 복사</span>
+            <span className="hidden sm:inline">{isEn ? 'EMR Copy' : 'EMR 복사'}</span>
           </button>
           <button
             type="button"
             onClick={handlePrint}
             className="p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200 shadow-sm active:scale-95 transition-all"
-            title="진료 리포트 인쇄"
+            title={isEn ? 'Print Clinical Report' : '진료 리포트 인쇄'}
           >
             <Printer size={16} />
           </button>
@@ -297,16 +311,20 @@ export const ClinicalBriefingPage: React.FC<{ embedded?: boolean }> = ({ embedde
         <div className="rounded-2xl border-2 border-rose-500 bg-rose-50 dark:bg-rose-950/60 p-4 shadow-md text-rose-900 dark:text-rose-100 space-y-1.5 animate-in fade-in">
           <div className="flex items-center gap-2 font-black text-sm text-rose-600 dark:text-rose-400">
             <AlertTriangle size={20} className="fill-rose-500 text-white shrink-0" />
-            <span>🚨 [주의: 응급 위험 징후(Red Flags) 감지]</span>
+            <span>
+              {isEn ? '🚨 [Alert: Clinical Red Flags Detected]' : '🚨 [주의: 응급 위험 징후(Red Flags) 감지]'}
+            </span>
           </div>
           <p className="text-xs font-semibold leading-relaxed">
-            환자 기록 중 다음 위험 징후가 감지되었습니다:{' '}
+            {isEn ? 'Detected urgent flags in patient logs: ' : '환자 기록 중 다음 위험 징후가 감지되었습니다: '}
             <strong className="underline text-rose-700 dark:text-rose-200">
               {briefing.redFlagsDetected.join(', ')}
             </strong>
           </p>
           <p className="text-[11px] text-rose-700 dark:text-rose-400">
-            단순 통증 외 신경근 압박, 척수병증, 급성 감염 여부의 우선 문진 및 감별 진단을 권고합니다.
+            {isEn
+              ? 'Prioritize neurologic, infectious, or acute differential evaluation during consultation.'
+              : '단순 통증 외 신경근 압박, 척수병증, 급성 감염 여부의 우선 문진 및 감별 진단을 권고합니다.'}
           </p>
         </div>
       )}
@@ -316,26 +334,31 @@ export const ClinicalBriefingPage: React.FC<{ embedded?: boolean }> = ({ embedde
         <div className="p-4 rounded-2xl bg-amber-50/90 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 text-xs text-amber-900 dark:text-amber-200 space-y-2.5 animate-in fade-in">
           <div className="flex items-center gap-2 font-bold text-amber-800 dark:text-amber-300">
             <AlertTriangle size={16} className="text-amber-600 dark:text-amber-400 shrink-0" />
-            <span>⚠️ 로컬 AI 미연결 상태입니다. Ollama 서버를 실행해 주세요.</span>
+            <span>
+              {isEn
+                ? '⚠️ Local AI Offline. Please start your local Ollama server.'
+                : '⚠️ 로컬 AI 미연결 상태입니다. Ollama 서버를 실행해 주세요.'}
+            </span>
           </div>
 
           <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-relaxed">
-            Bignal은 의료 데이터를 외부 클라우드로 전송하지 않고, 로컬 네트워크의 LLM 서버가 연결된 경우에만 분석을 생성합니다.
+            {isEn
+              ? 'Body Signal never sends health data to external clouds. AI summaries only run when an on-device loopback server is available.'
+              : 'Bignal은 의료 데이터를 외부 클라우드로 전송하지 않고, 로컬 네트워크의 LLM 서버가 연결된 경우에만 분석을 생성합니다.'}
           </p>
 
           {/* Troubleshooting Recovery Guide */}
           <div className="p-2.5 rounded-xl bg-white/70 dark:bg-slate-900/60 border border-amber-200/60 dark:border-amber-900/60 text-[11px] space-y-1 font-mono">
             <div className="font-sans font-bold text-[10px] text-amber-900 dark:text-amber-300 uppercase">
-              🛠️ 연결 복구 가이드:
+              {isEn ? '🛠️ Connection Guide:' : '🛠️ 연결 복구 가이드:'}
             </div>
             <div className="text-slate-700 dark:text-slate-300">
-              1. 터미널에서 로컬 서버 실행: <code className="bg-amber-100 dark:bg-amber-900/50 px-1 py-0.5 rounded font-bold">ollama run llama3.2</code>
+              1. {isEn ? 'Start local server:' : '터미널에서 로컬 서버 실행:'}{' '}
+              <code className="bg-amber-100 dark:bg-amber-900/50 px-1 py-0.5 rounded font-bold">ollama run llama3.2</code>
             </div>
             <div className="text-slate-700 dark:text-slate-300">
-              2. 설정 엔드포인트 확인: 기본값 <code className="bg-amber-100 dark:bg-amber-900/50 px-1 py-0.5 rounded">http://localhost:11434/v1</code>
-            </div>
-            <div className="text-slate-700 dark:text-slate-300">
-              3. 안드로이드 기기/에뮬레이터: <code className="bg-amber-100 dark:bg-amber-900/50 px-1 py-0.5 rounded">http://10.0.2.2:11434/v1</code>
+              2. {isEn ? 'Check endpoint:' : '설정 엔드포인트 확인:'}{' '}
+              <code className="bg-amber-100 dark:bg-amber-900/50 px-1 py-0.5 rounded">http://localhost:11434/v1</code>
             </div>
           </div>
 
@@ -348,7 +371,13 @@ export const ClinicalBriefingPage: React.FC<{ embedded?: boolean }> = ({ embedde
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs shadow-sm active:scale-95 transition-all disabled:opacity-50"
             >
               <RefreshCw size={12} className={isTestingConnection ? 'animate-spin' : ''} />
-              {isTestingConnection ? '연결 확인 중...' : '서버 재연결 확인'}
+              {isTestingConnection
+                ? isEn
+                  ? 'Checking...'
+                  : '연결 확인 중...'
+                : isEn
+                ? 'Retry Connection'
+                : '서버 재연결 확인'}
             </button>
 
             <button
@@ -359,7 +388,7 @@ export const ClinicalBriefingPage: React.FC<{ embedded?: boolean }> = ({ embedde
               }}
               className="px-3 py-1.5 rounded-xl bg-white dark:bg-slate-800 border border-amber-300 dark:border-amber-800 font-bold text-xs text-amber-900 dark:text-amber-200 hover:bg-amber-50 active:scale-95 transition-all"
             >
-              실험실 설정
+              {isEn ? 'Lab Settings' : '실험실 설정'}
             </button>
           </div>
 
@@ -374,21 +403,30 @@ export const ClinicalBriefingPage: React.FC<{ embedded?: boolean }> = ({ embedde
       {/* 4. Patient High-level Triage Metrics */}
       <div className="grid grid-cols-3 gap-2">
         <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-2.5 text-center shadow-sm">
-          <span className="text-[10px] font-bold uppercase text-slate-400">관리 질환</span>
+          <span className="text-[10px] font-bold uppercase text-slate-400">
+            {isEn ? 'Conditions' : '관리 질환'}
+          </span>
           <div className="mt-0.5 text-lg font-black text-slate-800 dark:text-slate-100">
-            {briefing.patientSummary.activeConditionsCount}개
+            {briefing.patientSummary.activeConditionsCount}
+            {isEn ? '' : '개'}
           </div>
         </div>
         <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-2.5 text-center shadow-sm">
-          <span className="text-[10px] font-bold uppercase text-slate-400">총 기록 건수</span>
+          <span className="text-[10px] font-bold uppercase text-slate-400">
+            {isEn ? 'Total Logs' : '총 기록 건수'}
+          </span>
           <div className="mt-0.5 text-lg font-black text-emerald-600 dark:text-emerald-400">
-            {briefing.patientSummary.totalLogsRecorded}건
+            {briefing.patientSummary.totalLogsRecorded}
+            {isEn ? '' : '건'}
           </div>
         </div>
         <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-2.5 text-center shadow-sm">
-          <span className="text-[10px] font-bold uppercase text-slate-400">추적 일수</span>
+          <span className="text-[10px] font-bold uppercase text-slate-400">
+            {isEn ? 'Days Tracked' : '추적 일수'}
+          </span>
           <div className="mt-0.5 text-lg font-black text-blue-600 dark:text-blue-400">
-            {briefing.patientSummary.daysTracked}일
+            {briefing.patientSummary.daysTracked}
+            {isEn ? 'd' : '일'}
           </div>
         </div>
       </div>
@@ -396,7 +434,7 @@ export const ClinicalBriefingPage: React.FC<{ embedded?: boolean }> = ({ embedde
       {/* 5. Medical Department Filter Tabs (Specialty Filter) */}
       <div className="space-y-1.5 print:hidden">
         <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-          진료과별 즉시 포커스 (Specialty Filter):
+          {isEn ? 'Specialty Filter:' : '진료과별 즉시 포커스 (Specialty Filter):'}
         </span>
         <div className="flex flex-wrap gap-1.5">
           <button
@@ -411,7 +449,7 @@ export const ClinicalBriefingPage: React.FC<{ embedded?: boolean }> = ({ embedde
                 : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50'
             }`}
           >
-            전체 보기 ({activeDeptGroups.length})
+            {isEn ? `All (${activeDeptGroups.length})` : `전체 보기 (${activeDeptGroups.length})`}
           </button>
           {activeDeptGroups.map((g) => (
             <button
@@ -427,7 +465,7 @@ export const ClinicalBriefingPage: React.FC<{ embedded?: boolean }> = ({ embedde
                   : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50'
               }`}
             >
-              <span>{g.meta.shortName}</span>
+              <span>{isEn ? g.meta.shortNameEn : g.meta.shortName}</span>
               <span className="text-[10px] opacity-75">({g.logCount})</span>
             </button>
           ))}
@@ -438,7 +476,7 @@ export const ClinicalBriefingPage: React.FC<{ embedded?: boolean }> = ({ embedde
       <section className="space-y-4">
         {displayedGroups.length === 0 ? (
           <div className="p-6 text-center rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-400 text-xs">
-            해당 진료과에 기록된 증상이 없습니다.
+            {isEn ? 'No symptoms recorded for this specialty.' : '해당 진료과에 기록된 증상이 없습니다.'}
           </div>
         ) : (
           displayedGroups.map((group) => {
@@ -452,10 +490,10 @@ export const ClinicalBriefingPage: React.FC<{ embedded?: boolean }> = ({ embedde
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
                       <span className={`px-2 py-0.5 rounded-md text-[10px] font-black border ${group.meta.badgeColor}`}>
-                        {group.departmentName}
+                        {isEn ? group.meta.nameEn : group.departmentName}
                       </span>
                       <span className="text-xs font-semibold text-slate-400">
-                        {group.meta.description}
+                        {isEn ? group.meta.descriptionEn : group.meta.description}
                       </span>
                     </div>
                     {/* Active Conditions Badges */}
@@ -476,17 +514,19 @@ export const ClinicalBriefingPage: React.FC<{ embedded?: boolean }> = ({ embedde
                     type="button"
                     onClick={() => handleCopyDeptSummary(group)}
                     className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 active:scale-95 transition-all print:hidden"
-                    title="해당 진료과 요약 클립보드 복사"
+                    title={isEn ? 'Copy department summary' : '해당 진료과 요약 클립보드 복사'}
                   >
                     {copiedFormat === group.departmentName ? <Check size={12} /> : <Copy size={12} />}
-                    {copiedFormat === group.departmentName ? '복사됨' : '과별 복사'}
+                    {copiedFormat === group.departmentName ? (isEn ? 'Copied' : '복사됨') : isEn ? 'Copy' : '과별 복사'}
                   </button>
                 </div>
 
                 {/* High-Contrast 4-Column Clinical Metrics Grid */}
                 <div className="grid grid-cols-4 gap-2 text-center">
                   <div className="rounded-xl bg-slate-50 dark:bg-slate-800/60 p-2">
-                    <span className="block text-[9px] font-bold text-slate-400 uppercase">최고 통증</span>
+                    <span className="block text-[9px] font-bold text-slate-400 uppercase">
+                      {isEn ? 'Peak' : '최고 통증'}
+                    </span>
                     <span className="mt-0.5 block text-lg font-black text-rose-600 dark:text-rose-400">
                       {group.peakIntensity !== null ? `${group.peakIntensity}` : '-'}
                       <span className="text-[10px] font-normal text-slate-400">/10</span>
@@ -494,23 +534,30 @@ export const ClinicalBriefingPage: React.FC<{ embedded?: boolean }> = ({ embedde
                   </div>
 
                   <div className="rounded-xl bg-slate-50 dark:bg-slate-800/60 p-2">
-                    <span className="block text-[9px] font-bold text-slate-400 uppercase">7일 평균</span>
+                    <span className="block text-[9px] font-bold text-slate-400 uppercase">
+                      {isEn ? '7d Avg' : '7일 평균'}
+                    </span>
                     <span className="mt-0.5 block text-lg font-black text-slate-800 dark:text-slate-100">
                       {group.avgIntensity7Days !== null ? `${group.avgIntensity7Days}` : '-'}
                     </span>
                   </div>
 
                   <div className="rounded-xl bg-slate-50 dark:bg-slate-800/60 p-2">
-                    <span className="block text-[9px] font-bold text-slate-400 uppercase">전체 평균</span>
+                    <span className="block text-[9px] font-bold text-slate-400 uppercase">
+                      {isEn ? 'All Avg' : '전체 평균'}
+                    </span>
                     <span className="mt-0.5 block text-lg font-black text-slate-800 dark:text-slate-100">
                       {group.avgIntensity !== null ? `${group.avgIntensity}` : '-'}
                     </span>
                   </div>
 
                   <div className="rounded-xl bg-slate-50 dark:bg-slate-800/60 p-2">
-                    <span className="block text-[9px] font-bold text-slate-400 uppercase">기록 건수</span>
+                    <span className="block text-[9px] font-bold text-slate-400 uppercase">
+                      {isEn ? 'Logs' : '기록 건수'}
+                    </span>
                     <span className="mt-0.5 block text-lg font-black text-emerald-600 dark:text-emerald-400">
-                      {group.logCount}건
+                      {group.logCount}
+                      {isEn ? '' : '건'}
                     </span>
                   </div>
                 </div>
@@ -522,12 +569,14 @@ export const ClinicalBriefingPage: React.FC<{ embedded?: boolean }> = ({ embedde
                   group.redFlags.length > 0) && (
                   <div className="rounded-xl bg-slate-50 dark:bg-slate-800/40 p-3 text-xs space-y-1.5 border border-slate-100 dark:border-slate-800">
                     <span className="block text-[10px] font-bold text-slate-400 uppercase">
-                      임상 특징 (PQRST & 약물 반응)
+                      {isEn ? 'Clinical Notes (PQRST & Meds)' : '임상 특징 (PQRST & 약물 반응)'}
                     </span>
 
                     {group.frequentTriggers.length > 0 && (
                       <div className="flex items-center gap-1.5 text-slate-700 dark:text-slate-300">
-                        <strong className="text-slate-500 shrink-0">악화 요인:</strong>
+                        <strong className="text-slate-500 shrink-0">
+                          {isEn ? 'Triggers:' : '악화 요인:'}
+                        </strong>
                         <span className="text-rose-600 dark:text-rose-400 font-medium">
                           {group.frequentTriggers.join(', ')}
                         </span>
@@ -536,14 +585,18 @@ export const ClinicalBriefingPage: React.FC<{ embedded?: boolean }> = ({ embedde
 
                     {group.painQualities.length > 0 && (
                       <div className="flex items-center gap-1.5 text-slate-700 dark:text-slate-300">
-                        <strong className="text-slate-500 shrink-0">통증 양상:</strong>
+                        <strong className="text-slate-500 shrink-0">
+                          {isEn ? 'Quality:' : '통증 양상:'}
+                        </strong>
                         <span>{group.painQualities.join(', ')}</span>
                       </div>
                     )}
 
                     {group.medications.length > 0 && (
                       <div className="flex items-center gap-1.5 text-slate-700 dark:text-slate-300">
-                        <strong className="text-slate-500 shrink-0">복용 약제:</strong>
+                        <strong className="text-slate-500 shrink-0">
+                          {isEn ? 'Medications:' : '복용 약제:'}
+                        </strong>
                         <span className="text-blue-600 dark:text-blue-400 font-medium">
                           {group.medications.join(', ')}
                         </span>
@@ -553,7 +606,9 @@ export const ClinicalBriefingPage: React.FC<{ embedded?: boolean }> = ({ embedde
                     {/* Department Specific Red Flags */}
                     {group.redFlags.length > 0 && (
                       <div className="flex items-center gap-1.5 text-rose-700 dark:text-rose-300 pt-0.5">
-                        <strong className="shrink-0 font-bold">🚨 위험 징후:</strong>
+                        <strong className="shrink-0 font-bold">
+                          {isEn ? '🚨 Red Flags:' : '🚨 위험 징후:'}
+                        </strong>
                         <span className="font-bold underline">{group.redFlags.join(', ')}</span>
                       </div>
                     )}
@@ -564,7 +619,7 @@ export const ClinicalBriefingPage: React.FC<{ embedded?: boolean }> = ({ embedde
                 {group.logs.length > 0 && (
                   <div className="space-y-1 pt-1">
                     <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                      최근 관찰 타임라인
+                      {isEn ? 'Recent Timeline' : '최근 관찰 타임라인'}
                     </span>
                     {group.logs.slice(0, 2).map((log) => (
                       <div
@@ -603,9 +658,11 @@ export const ClinicalBriefingPage: React.FC<{ embedded?: boolean }> = ({ embedde
       <section className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-sm space-y-3">
         <div className="flex items-center justify-between">
           <h2 className="text-xs font-bold uppercase tracking-wider text-slate-400">
-            환부 집중 분포 (바디맵 기반 NRS 히트맵)
+            {isEn ? 'BodyMap NRS Heatmap' : '환부 집중 분포 (바디맵 기반 NRS 히트맵)'}
           </h2>
-          <span className="text-[10px] text-slate-400">다중 선택 환부 통합 표시</span>
+          <span className="text-[10px] text-slate-400">
+            {isEn ? 'Multi-region summary' : '다중 선택 환부 통합 표시'}
+          </span>
         </div>
         <BodyMap readOnly intensityMap={bodyPartIntensityMap} />
       </section>
@@ -625,7 +682,7 @@ export const ClinicalBriefingPage: React.FC<{ embedded?: boolean }> = ({ embedde
               <Bot size={15} />
             </span>
             <span className="font-bold text-xs text-slate-800 dark:text-slate-100">
-              로컬 AI 종합 임상 소견 (SOAP)
+              {isEn ? 'Local AI Clinical Summary (SOAP)' : '로컬 AI 종합 임상 소견 (SOAP)'}
             </span>
           </div>
           {showAiPanel ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
@@ -649,7 +706,7 @@ export const ClinicalBriefingPage: React.FC<{ embedded?: boolean }> = ({ embedde
                 }`}
               >
                 <Stethoscope size={13} className={activePersona === 'doctor' ? 'text-purple-600 dark:text-purple-400' : 'text-slate-400'} />
-                의사용 전문 임상 요약 (SOAP)
+                {isEn ? 'Clinician SOAP View' : '의사용 전문 임상 요약 (SOAP)'}
               </button>
               <button
                 type="button"
@@ -665,7 +722,7 @@ export const ClinicalBriefingPage: React.FC<{ embedded?: boolean }> = ({ embedde
                 }`}
               >
                 <User size={13} className={activePersona === 'patient' ? 'text-purple-600 dark:text-purple-400' : 'text-slate-400'} />
-                환자용 쉬운 소견 요약
+                {isEn ? 'Patient Summary' : '환자용 쉬운 소견 요약'}
               </button>
             </div>
 
@@ -678,11 +735,11 @@ export const ClinicalBriefingPage: React.FC<{ embedded?: boolean }> = ({ embedde
               >
                 {isGeneratingAi ? (
                   <>
-                    <RefreshCw size={13} className="animate-spin" /> 분석 중...
+                    <RefreshCw size={13} className="animate-spin" /> {isEn ? 'Analyzing...' : '분석 중...'}
                   </>
                 ) : (
                   <>
-                    <Sparkles size={13} /> AI 소견 생성
+                    <Sparkles size={13} /> {isEn ? 'Generate AI Summary' : 'AI 소견 생성'}
                   </>
                 )}
               </button>
@@ -694,7 +751,11 @@ export const ClinicalBriefingPage: React.FC<{ embedded?: boolean }> = ({ embedde
                   <span className="font-bold text-purple-900 dark:text-purple-300 flex items-center gap-1">
                     <Sparkles size={13} />
                     {activePersona === 'doctor'
-                      ? '로컬 AI 의사용 전문 임상 요약 (SOAP):'
+                      ? isEn
+                        ? 'Local AI Clinician Summary (SOAP):'
+                        : '로컬 AI 의사용 전문 임상 요약 (SOAP):'
+                      : isEn
+                      ? 'Local AI Patient Summary:'
                       : '로컬 AI 환자용 쉬운 소견 요약:'}
                   </span>
                   <button
@@ -705,7 +766,7 @@ export const ClinicalBriefingPage: React.FC<{ embedded?: boolean }> = ({ embedde
                     }}
                     className="text-[10px] font-bold text-purple-700 dark:text-purple-300 underline"
                   >
-                    소견 복사
+                    {isEn ? 'Copy' : '소견 복사'}
                   </button>
                 </div>
                 <p className="whitespace-pre-line text-xs">{aiAnalysis}</p>
@@ -728,12 +789,30 @@ export const ClinicalBriefingPage: React.FC<{ embedded?: boolean }> = ({ embedde
             </span>
             <div>
               <h3 className="font-bold text-xs text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
-                로컬 AI에게 내 증상 물어보기
-                <span className="text-[9px] bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 font-bold px-1.5 py-0.5 rounded-full">
-                  100% 프라이빗 Q&A
+                {isEn ? 'Ask Local AI About My Symptoms' : '로컬 AI에게 내 증상 물어보기'}
+                <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${
+                  isOnDeviceLlmEndpoint(settings.localLlm)
+                    ? 'bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300'
+                    : 'bg-rose-100 dark:bg-rose-950 text-rose-700 dark:text-rose-300'
+                }`}>
+                  {isOnDeviceLlmEndpoint(settings.localLlm)
+                    ? isEn
+                      ? '100% Private Q&A'
+                      : '100% 프라이빗 Q&A'
+                    : isEn
+                    ? 'External Host Blocked'
+                    : '외부 엔드포인트 차단됨'}
                 </span>
               </h3>
-              <p className="text-[10px] text-slate-400">내 통증 기록 기반 실시간 맞춤 상담 (외부 유출 0%)</p>
+              <p className="text-[10px] text-slate-400">
+                {isOnDeviceLlmEndpoint(settings.localLlm)
+                  ? isEn
+                    ? 'Private Q&A from your logs (0% external upload)'
+                    : '내 통증 기록 기반 실시간 맞춤 상담 (외부 유출 0%)'
+                  : isEn
+                  ? 'Security policy allows on-device (built-in / localhost) AI only'
+                  : '보안 정책상 온디바이스(built-in / localhost) AI만 허용됩니다'}
+              </p>
             </div>
           </div>
           {showQaPanel ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
@@ -744,15 +823,23 @@ export const ClinicalBriefingPage: React.FC<{ embedded?: boolean }> = ({ embedde
             {/* Suggested Quick Questions */}
             <div className="space-y-1.5">
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
-                💡 자주 묻는 질문 (원터치 선택):
+                {isEn ? '💡 Suggested Questions:' : '💡 자주 묻는 질문 (원터치 선택):'}
               </span>
               <div className="flex flex-wrap gap-1.5">
-                {[
-                  '💊 복용 중인 약 효과가 떨어질 때 어떻게 하나요?',
-                  '🩺 의사 진료 시 꼭 전해야 할 핵심 포인트는?',
-                  '⚠️ 감지된 위험 징후(Red Flags) 대처법은?',
-                  '🏃‍♂️ 통증 부위에 좋은 스트레칭과 주의할 자세는?',
-                ].map((suggested) => (
+                {(isEn
+                  ? [
+                      '💊 What should I do if my medication feels less effective?',
+                      '🩺 Key points to mention at my next doctor visit?',
+                      '⚠️ How should I respond to detected red flags?',
+                      '🏃‍♂️ Safe stretches and postures for this pain area?',
+                    ]
+                  : [
+                      '💊 복용 중인 약 효과가 떨어질 때 어떻게 하나요?',
+                      '🩺 의사 진료 시 꼭 전해야 할 핵심 포인트는?',
+                      '⚠️ 감지된 위험 징후(Red Flags) 대처법은?',
+                      '🏃‍♂️ 통증 부위에 좋은 스트레칭과 주의할 자세는?',
+                    ]
+                ).map((suggested) => (
                   <button
                     key={suggested}
                     type="button"
@@ -777,7 +864,7 @@ export const ClinicalBriefingPage: React.FC<{ embedded?: boolean }> = ({ embedde
                     }`}
                   >
                     <span className="text-[9px] font-bold text-slate-400 mb-0.5 px-1">
-                      {msg.role === 'user' ? '내 질문' : '🤖 로컬 AI 비서'}
+                      {msg.role === 'user' ? (isEn ? 'You' : '내 질문') : isEn ? '🤖 Local AI' : '🤖 로컬 AI 비서'}
                     </span>
                     <div
                       className={`p-3 rounded-2xl max-w-[90%] whitespace-pre-line leading-relaxed shadow-sm ${
@@ -788,7 +875,7 @@ export const ClinicalBriefingPage: React.FC<{ embedded?: boolean }> = ({ embedde
                     >
                       {msg.content || (
                         <span className="flex items-center gap-1.5 text-slate-400">
-                          <RefreshCw size={12} className="animate-spin" /> 생각 중...
+                          <RefreshCw size={12} className="animate-spin" /> {isEn ? 'Thinking...' : '생각 중...'}
                         </span>
                       )}
                     </div>
@@ -810,7 +897,11 @@ export const ClinicalBriefingPage: React.FC<{ embedded?: boolean }> = ({ embedde
                 value={qaInput}
                 onChange={(e) => setQaInput(e.target.value)}
                 disabled={isQaStreaming}
-                placeholder="증상, 투약, 진료에 관해 궁금한 점을 물어보세요..."
+                placeholder={
+                  isEn
+                    ? 'Ask about your symptoms, meds, or visit prep...'
+                    : '증상, 투약, 진료에 관해 궁금한 점을 물어보세요...'
+                }
                 className="flex-1 px-3 py-2.5 text-xs bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50"
               />
               <button
@@ -823,7 +914,7 @@ export const ClinicalBriefingPage: React.FC<{ embedded?: boolean }> = ({ embedde
                 ) : (
                   <Send size={14} />
                 )}
-                전송
+                {isEn ? 'Send' : '전송'}
               </button>
             </form>
           </div>
@@ -838,9 +929,11 @@ export const ClinicalBriefingPage: React.FC<{ embedded?: boolean }> = ({ embedde
         >
           <span className="flex items-center gap-2 font-medium">
             <Bot size={14} className="text-purple-500" />
-            로컬 AI 임상 소견 · Q&A (실험실)
+            {isEn ? 'Local AI Clinical Summary & Q&A (Labs)' : '로컬 AI 임상 소견 · Q&A (실험실)'}
           </span>
-          <span className="text-[11px] text-teal-600 dark:text-teal-400 font-semibold">켜기 →</span>
+          <span className="text-[11px] text-teal-600 dark:text-teal-400 font-semibold">
+            {isEn ? 'Enable →' : '켜기 →'}
+          </span>
         </button>
       )}
 
@@ -850,7 +943,7 @@ export const ClinicalBriefingPage: React.FC<{ embedded?: boolean }> = ({ embedde
           <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-md w-full p-5 space-y-4 shadow-xl border border-slate-200 dark:border-slate-800">
             <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
               <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100">
-                병원 EMR 차팅 텍스트 내보내기
+                {isEn ? 'Export Clinical EMR Text' : '병원 EMR 차팅 텍스트 내보내기'}
               </h3>
               <button
                 type="button"
@@ -861,7 +954,9 @@ export const ClinicalBriefingPage: React.FC<{ embedded?: boolean }> = ({ embedde
               </button>
             </div>
             <p className="text-xs text-slate-500">
-              병원 진료실 차팅 프로그램에 붙여넣을 양식을 선택하여 클립보드로 복사합니다.
+              {isEn
+                ? 'Choose a format to copy to clipboard for clinical charting.'
+                : '병원 진료실 차팅 프로그램에 붙여넣을 양식을 선택하여 클립보드로 복사합니다.'}
             </p>
 
             <div className="grid grid-cols-2 gap-2">
@@ -871,7 +966,13 @@ export const ClinicalBriefingPage: React.FC<{ embedded?: boolean }> = ({ embedde
                 className="flex items-center justify-center gap-1.5 py-3 px-3 rounded-xl text-xs font-bold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-800 dark:text-slate-100 active:scale-95 transition-all"
               >
                 {copiedFormat === 'modal-standard' ? <Check size={14} className="text-emerald-500" /> : <Copy size={14} />}
-                {copiedFormat === 'modal-standard' ? '복사완료!' : '일반 EMR 양식'}
+                {copiedFormat === 'modal-standard'
+                  ? isEn
+                    ? 'Copied!'
+                    : '복사완료!'
+                  : isEn
+                  ? 'Standard EMR'
+                  : '일반 EMR 양식'}
               </button>
 
               <button
@@ -880,7 +981,13 @@ export const ClinicalBriefingPage: React.FC<{ embedded?: boolean }> = ({ embedde
                 className="flex items-center justify-center gap-1.5 py-3 px-3 rounded-xl text-xs font-bold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-800 dark:text-slate-100 active:scale-95 transition-all"
               >
                 {copiedFormat === 'modal-soap' ? <Check size={14} className="text-emerald-500" /> : <FileText size={14} />}
-                {copiedFormat === 'modal-soap' ? 'SOAP 복사완료!' : 'SOAP Note 양식'}
+                {copiedFormat === 'modal-soap'
+                  ? isEn
+                    ? 'SOAP Copied!'
+                    : 'SOAP 복사완료!'
+                  : isEn
+                  ? 'SOAP Note'
+                  : 'SOAP Note 양식'}
               </button>
             </div>
 
@@ -890,7 +997,7 @@ export const ClinicalBriefingPage: React.FC<{ embedded?: boolean }> = ({ embedde
                 onClick={() => setShowEmrExportModal(false)}
                 className="w-full py-2.5 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-xs font-bold active:scale-95 transition-all"
               >
-                닫기
+                {t('close')}
               </button>
             </div>
           </div>
