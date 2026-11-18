@@ -1,7 +1,9 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import {
   Camera,
+  ChevronLeft,
+  ChevronRight,
   Image as ImageIcon,
   LayoutGrid,
   List as ListIcon,
@@ -15,12 +17,14 @@ import {
   Building2,
   AlertTriangle,
 } from 'lucide-react';
+import PhotoAttachmentField from '../components/PhotoAttachmentField';
+import { useAuthorizedDelete } from '../components/DeleteAuthModal';
 import { useHealth } from '../context/HealthContext';
 import { useAuth } from '../context/AuthContext';
 import { useSettings } from '../context/SettingsContext';
 import { DiagnosticRecord } from '../types/health';
 import { calculateInsuranceClaimStatus } from '../utils/insurance';
-import { compressAndStripExif, saveEncryptedPhoto, loadEncryptedPhoto } from '../utils/mediaStorage';
+import { compressAndStripExif, encryptDraftPhotos, saveEncryptedPhoto, loadEncryptedPhoto } from '../utils/mediaStorage';
 import { triggerHaptic } from '../utils/native';
 
 export const DiagnosticsPage: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
@@ -28,6 +32,7 @@ export const DiagnosticsPage: React.FC<{ embedded?: boolean }> = ({ embedded = f
   const { conditions, diagnosticRecords, addDiagnosticRecord, updateDiagnosticRecord, deleteDiagnosticRecord } = useHealth();
   const { activeSessionPin, isUnlocked } = useAuth();
   const { settings } = useSettings();
+  const { requestAuthorizedDelete, authModal: deleteAuthModal } = useAuthorizedDelete();
   const isEn = settings.language === 'en';
 
   const [viewMode, setViewMode] = useState<'feed' | 'grid'>('feed');
@@ -51,45 +56,86 @@ export const DiagnosticsPage: React.FC<{ embedded?: boolean }> = ({ embedded = f
 
   // Decrypted photos cache in memory (automatically purged on lock/unmount)
   const [decryptedPhotos, setDecryptedPhotos] = useState<Record<string, string>>({});
-  const [lightboxPhoto, setLightboxPhoto] = useState<{ src: string; title: string } | null>(null);
+  const decryptedPhotosRef = useRef(decryptedPhotos);
+  decryptedPhotosRef.current = decryptedPhotos;
+  const inFlightDecryptRef = useRef<Set<string>>(new Set());
+  const [expandedPhotoRecords, setExpandedPhotoRecords] = useState<Record<string, boolean>>({});
+  const [lightboxState, setLightboxState] = useState<{
+    photoIds: string[];
+    index: number;
+    title: string;
+  } | null>(null);
+
+  const INITIAL_PREVIEW_PHOTOS = 4;
+  const DECRYPT_BATCH_SIZE = 4;
+
+  const ensurePhotosDecrypted = useCallback(
+    async (ids: string[]) => {
+      if (!isUnlocked || ids.length === 0) return;
+      const missingIds = ids.filter(
+        (id) => !decryptedPhotosRef.current[id] && !inFlightDecryptRef.current.has(id)
+      );
+      if (missingIds.length === 0) return;
+
+      missingIds.forEach((id) => inFlightDecryptRef.current.add(id));
+      try {
+        for (let i = 0; i < missingIds.length; i += DECRYPT_BATCH_SIZE) {
+          const chunk = missingIds.slice(i, i + DECRYPT_BATCH_SIZE);
+          const results = await Promise.all(
+            chunk.map(async (id) => {
+              try {
+                const url = await loadEncryptedPhoto(id, activeSessionPin || undefined);
+                return [id, url] as const;
+              } catch {
+                return [id, null] as const;
+              }
+            })
+          );
+          setDecryptedPhotos((prev) => {
+            const next = { ...prev };
+            let changed = false;
+            for (const [id, url] of results) {
+              if (url && !next[id]) {
+                next[id] = url;
+                changed = true;
+              }
+            }
+            return changed ? next : prev;
+          });
+        }
+      } finally {
+        missingIds.forEach((id) => inFlightDecryptRef.current.delete(id));
+      }
+    },
+    [activeSessionPin, isUnlocked]
+  );
 
   useEffect(() => {
     if (!isUnlocked) {
       setDecryptedPhotos({});
-      setLightboxPhoto(null);
+      setLightboxState(null);
+      inFlightDecryptRef.current.clear();
       return;
     }
 
-    let active = true;
-    const allPhotoIds = diagnosticRecords.flatMap((r) => r.photoIds || []);
-    const missingIds = allPhotoIds.filter((id) => !decryptedPhotos[id]);
-
-    if (missingIds.length === 0) return;
-
-    Promise.all(
-      missingIds.map(async (id) => {
-        try {
-          const url = await loadEncryptedPhoto(id, activeSessionPin || undefined);
-          return [id, url] as const;
-        } catch {
-          return [id, null] as const;
-        }
-      })
-    ).then((results) => {
-      if (!active) return;
-      setDecryptedPhotos((prev) => {
-        const next = { ...prev };
-        for (const [id, url] of results) {
-          if (url) next[id] = url;
-        }
-        return next;
-      });
+    const prioritizedIds = diagnosticRecords.flatMap((rec) => {
+      const pids = rec.photoIds || [];
+      if (expandedPhotoRecords[rec.id]) return pids;
+      return pids.slice(0, viewMode === 'grid' ? 1 : INITIAL_PREVIEW_PHOTOS);
     });
 
-    return () => {
-      active = false;
-    };
-  }, [diagnosticRecords, activeSessionPin, isUnlocked]);
+    void ensurePhotosDecrypted(prioritizedIds);
+  }, [diagnosticRecords, expandedPhotoRecords, viewMode, isUnlocked, ensurePhotosDecrypted]);
+
+  // Also ensure active lightbox slide and adjacent neighbors are decrypted immediately
+  useEffect(() => {
+    if (!lightboxState || !isUnlocked) return;
+    const { photoIds, index } = lightboxState;
+    const neighborIds = [photoIds[index], photoIds[index - 1], photoIds[index + 1]].filter(
+      (id): id is string => Boolean(id)
+    );
+    void ensurePhotosDecrypted(neighborIds);
+  }, [lightboxState, isUnlocked, ensurePhotosDecrypted]);
 
   const enrichedRecords = useMemo(() => {
     const items = diagnosticRecords.map((rec) => ({
@@ -128,20 +174,6 @@ export const DiagnosticsPage: React.FC<{ embedded?: boolean }> = ({ embedded = f
     };
   }, [enrichedRecords]);
 
-  const handlePhotoFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
-    if (files.length === 0) return;
-    setFormError('');
-    try {
-      const processed = await Promise.all(files.map((f) => compressAndStripExif(f)));
-      setDraftPhotos((prev) => [...prev, ...processed].slice(0, 6));
-    } catch (err: any) {
-      setFormError(err?.message || (isEn ? 'Failed to process photos.' : '사진을 처리할 수 없습니다.'));
-    } finally {
-      e.target.value = '';
-    }
-  };
-
   const resetForm = () => {
     setDiagnosisDate(new Date().toISOString().slice(0, 10));
     setDiagnosisName('');
@@ -167,13 +199,18 @@ export const DiagnosticsPage: React.FC<{ embedded?: boolean }> = ({ embedded = f
     setFormError('');
     try {
       triggerHaptic();
-      const photoIds: string[] = [];
-      for (const dataUrl of draftPhotos) {
-        const pid = `diag_photo_${crypto.randomUUID()}`;
-        await saveEncryptedPhoto(pid, dataUrl, activeSessionPin || undefined);
-        photoIds.push(pid);
-        setDecryptedPhotos((prev) => ({ ...prev, [pid]: dataUrl }));
-      }
+      const photoIds = await encryptDraftPhotos(
+        draftPhotos,
+        activeSessionPin || undefined,
+        saveEncryptedPhoto
+      );
+      setDecryptedPhotos((prev) => {
+        const next = { ...prev };
+        photoIds.forEach((pid, idx) => {
+          if (draftPhotos[idx]) next[pid] = draftPhotos[idx];
+        });
+        return next;
+      });
 
       const parsedAmount = amountKrw.trim() ? Number(amountKrw.replace(/,/g, '')) : undefined;
       await addDiagnosticRecord({
@@ -206,23 +243,23 @@ export const DiagnosticsPage: React.FC<{ embedded?: boolean }> = ({ embedded = f
     });
   };
 
-  const handleDelete = async (rec: DiagnosticRecord) => {
-    if (
-      !window.confirm(
-        isEn
-          ? 'Permanently delete this diagnostic record and its encrypted photos?'
-          : '이 진단 기록과 첨부된 암호화 사진을 영구 삭제하시겠습니까?'
-      )
-    )
-      return;
-    triggerHaptic();
-    await deleteDiagnosticRecord(rec.id);
-    setDecryptedPhotos((prev) => {
-      const next = { ...prev };
-      for (const pid of rec.photoIds || []) {
-        delete next[pid];
-      }
-      return next;
+  const handleDelete = (rec: DiagnosticRecord) => {
+    requestAuthorizedDelete({
+      title: isEn ? 'Delete Diagnostic Record' : '진단·실손 기록 삭제',
+      description: isEn
+        ? 'Permanently delete this diagnostic record and its encrypted photos?'
+        : '이 진단 기록과 첨부된 암호화 사진을 영구 삭제하시겠습니까?',
+      onAuthorized: async () => {
+        triggerHaptic();
+        await deleteDiagnosticRecord(rec.id);
+        setDecryptedPhotos((prev) => {
+          const next = { ...prev };
+          for (const pid of rec.photoIds || []) {
+            delete next[pid];
+          }
+          return next;
+        });
+      },
     });
   };
 
@@ -385,8 +422,12 @@ export const DiagnosticsPage: React.FC<{ embedded?: boolean }> = ({ embedded = f
               >
                 <div
                   onClick={() => {
-                    if (thumbSrc) {
-                      setLightboxPhoto({ src: thumbSrc, title: `${record.diagnosisName} (${record.diagnosisDate})` });
+                    if (record.photoIds && record.photoIds.length > 0) {
+                      setLightboxState({
+                        photoIds: record.photoIds,
+                        index: 0,
+                        title: `${record.diagnosisName} (${record.diagnosisDate})`,
+                      });
                     }
                   }}
                   className="h-32 bg-slate-100 dark:bg-slate-800 relative flex items-center justify-center cursor-pointer"
@@ -536,32 +577,76 @@ export const DiagnosticsPage: React.FC<{ embedded?: boolean }> = ({ embedded = f
                 </button>
               </div>
 
-              {/* Encrypted Photos Strip */}
-              {record.photoIds && record.photoIds.length > 0 && (
-                <div className="flex gap-2 overflow-x-auto pb-1">
-                  {record.photoIds.map((pid) => {
-                    const src = decryptedPhotos[pid];
-                    return (
+              {/* Encrypted Photos Strip (Batched / On-Demand for up to 50 photos) */}
+              {record.photoIds && record.photoIds.length > 0 && (() => {
+                const isExpanded = Boolean(expandedPhotoRecords[record.id]);
+                const visiblePhotoIds = isExpanded
+                  ? record.photoIds
+                  : record.photoIds.slice(0, INITIAL_PREVIEW_PHOTOS);
+                const hiddenCount = Math.max(0, record.photoIds.length - visiblePhotoIds.length);
+                return (
+                  <div className="space-y-1.5">
+                    <div
+                      className={
+                        isExpanded && record.photoIds.length > 4
+                          ? 'grid grid-cols-4 gap-2 max-h-60 overflow-y-auto pr-0.5'
+                          : 'flex gap-2 overflow-x-auto pb-1'
+                      }
+                    >
+                      {visiblePhotoIds.map((pid, idx) => {
+                        const src = decryptedPhotos[pid];
+                        return (
+                          <button
+                            key={pid}
+                            type="button"
+                            onClick={() => {
+                              setLightboxState({
+                                photoIds: record.photoIds,
+                                index: idx,
+                                title: `${record.diagnosisName} (${record.diagnosisDate})`,
+                              });
+                            }}
+                            className={`relative rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 flex items-center justify-center ${
+                              isExpanded && record.photoIds.length > 4 ? 'aspect-square w-full' : 'h-24 w-24 shrink-0'
+                            }`}
+                          >
+                            {src ? (
+                              <img src={src} alt={isEn ? 'Encrypted document' : '암호화 진단서'} className="w-full h-full object-cover" />
+                            ) : (
+                              <Shield size={18} className="text-slate-400 animate-pulse" />
+                            )}
+                            {record.photoIds.length > 4 && (
+                              <span className="absolute bottom-1 left-1 px-1 rounded bg-slate-900/70 text-white text-[9px] font-bold tabular-nums">
+                                {idx + 1}
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {record.photoIds.length > INITIAL_PREVIEW_PHOTOS && (
                       <button
-                        key={pid}
                         type="button"
-                        onClick={() => {
-                          if (src) {
-                            setLightboxPhoto({ src, title: `${record.diagnosisName} (${record.diagnosisDate})` });
-                          }
-                        }}
-                        className="h-24 w-24 shrink-0 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 flex items-center justify-center"
+                        onClick={() =>
+                          setExpandedPhotoRecords((prev) => ({
+                            ...prev,
+                            [record.id]: !prev[record.id],
+                          }))
+                        }
+                        className="text-[11px] font-bold text-teal-600 dark:text-teal-400 hover:underline"
                       >
-                        {src ? (
-                          <img src={src} alt={isEn ? 'Encrypted document' : '암호화 진단서'} className="w-full h-full object-cover" />
-                        ) : (
-                          <Shield size={18} className="text-slate-400 animate-pulse" />
-                        )}
+                        {isExpanded
+                          ? isEn
+                            ? 'Show fewer photos'
+                            : '사진 접기'
+                          : isEn
+                          ? `Show all ${record.photoIds.length} photos (+${hiddenCount})`
+                          : `사진 ${record.photoIds.length}장 모두 보기 (+${hiddenCount}장)`}
                       </button>
-                    );
-                  })}
-                </div>
-              )}
+                    )}
+                  </div>
+                );
+              })()}
 
               {record.notes && (
                 <p className="text-xs text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-800/40 p-2.5 rounded-xl">
@@ -680,51 +765,12 @@ export const DiagnosticsPage: React.FC<{ embedded?: boolean }> = ({ embedded = f
               </div>
             </div>
 
-            <div>
-              <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">
-                {isEn
-                  ? 'Attach Photos (EXIF Stripped, AES-256 Encrypted, max 6)'
-                  : '진단서·영수증 사진 첨부 (EXIF 제거 후 AES-256 암호화, 최대 6장)'}
-              </label>
-              <div className="flex gap-2">
-                <label className="flex-1 py-2.5 px-3 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer">
-                  <Camera size={15} /> {isEn ? 'Camera' : '카메라 촬영'}
-                  <input
-                    type="file"
-                    accept="image/*"
-                    capture="environment"
-                    onChange={handlePhotoFiles}
-                    className="hidden"
-                  />
-                </label>
-                <label className="flex-1 py-2.5 px-3 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer">
-                  <ImageIcon size={15} /> {isEn ? 'Gallery' : '앨범 선택'}
-                  <input
-                    type="file"
-                    accept="image/*"
-                    multiple
-                    onChange={handlePhotoFiles}
-                    className="hidden"
-                  />
-                </label>
-              </div>
-              {draftPhotos.length > 0 && (
-                <div className="flex gap-2 mt-2 overflow-x-auto">
-                  {draftPhotos.map((src, idx) => (
-                    <div key={idx} className="relative h-16 w-16 shrink-0 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700">
-                      <img src={src} alt={isEn ? 'Preview' : '미리보기'} className="w-full h-full object-cover" />
-                      <button
-                        type="button"
-                        onClick={() => setDraftPhotos((prev) => prev.filter((_, i) => i !== idx))}
-                        className="absolute top-0.5 right-0.5 rounded-full bg-slate-900/80 text-white p-0.5"
-                      >
-                        <X size={11} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+            <PhotoAttachmentField
+              photos={draftPhotos}
+              onChange={setDraftPhotos}
+              onError={setFormError}
+              processFile={compressAndStripExif}
+            />
 
             <div>
               <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">
@@ -758,25 +804,87 @@ export const DiagnosticsPage: React.FC<{ embedded?: boolean }> = ({ embedded = f
         </div>
       )}
 
-      {/* Lightbox Photo Viewer */}
-      {lightboxPhoto && (
-        <div
-          onClick={() => setLightboxPhoto(null)}
-          className="fixed inset-0 z-[100] bg-slate-950/95 flex flex-col items-center justify-center p-4"
-        >
-          <div className="w-full max-w-md flex items-center justify-between text-white mb-3">
-            <span className="text-xs font-bold truncate">{lightboxPhoto.title}</span>
-            <button type="button" onClick={() => setLightboxPhoto(null)} className="p-1">
-              <X size={20} />
-            </button>
+      {/* Lightbox Photo Viewer with Multi-Photo Navigation */}
+      {lightboxState && (() => {
+        const activePhotoId = lightboxState.photoIds[lightboxState.index];
+        const activeSrc = activePhotoId ? decryptedPhotos[activePhotoId] : undefined;
+        const total = lightboxState.photoIds.length;
+        return (
+          <div
+            onClick={() => setLightboxState(null)}
+            className="fixed inset-0 z-[100] bg-slate-950/95 flex flex-col items-center justify-center p-4"
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              className="w-full max-w-md flex items-center justify-between text-white mb-3 gap-2"
+            >
+              <span className="text-xs font-bold truncate">
+                {lightboxState.title}
+                {total > 1 ? ` (${lightboxState.index + 1}/${total})` : ''}
+              </span>
+              <button
+                type="button"
+                aria-label={isEn ? 'Close lightbox' : '사진 뷰어 닫기'}
+                onClick={() => setLightboxState(null)}
+                className="p-1.5 rounded-lg hover:bg-white/10"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <div
+              onClick={(e) => e.stopPropagation()}
+              className="relative w-full max-w-md flex items-center justify-center min-h-[240px]"
+            >
+              {activeSrc ? (
+                <img
+                  src={activeSrc}
+                  alt={lightboxState.title}
+                  className="max-h-[75vh] max-w-full rounded-xl object-contain"
+                />
+              ) : (
+                <div className="flex flex-col items-center gap-2 text-slate-300 py-12">
+                  <Shield size={28} className="animate-pulse text-teal-400" />
+                  <span className="text-xs font-semibold">
+                    {isEn ? 'Decrypting photo...' : '사진 복호화 중...'}
+                  </span>
+                </div>
+              )}
+              {total > 1 && (
+                <>
+                  <button
+                    type="button"
+                    aria-label={isEn ? 'Previous photo' : '이전 사진'}
+                    disabled={lightboxState.index === 0}
+                    onClick={() =>
+                      setLightboxState((prev) =>
+                        prev && prev.index > 0 ? { ...prev, index: prev.index - 1 } : prev
+                      )
+                    }
+                    className="absolute left-1 p-2 rounded-full bg-slate-900/80 text-white disabled:opacity-30"
+                  >
+                    <ChevronLeft size={20} />
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={isEn ? 'Next photo' : '다음 사진'}
+                    disabled={lightboxState.index >= total - 1}
+                    onClick={() =>
+                      setLightboxState((prev) =>
+                        prev && prev.index < total - 1 ? { ...prev, index: prev.index + 1 } : prev
+                      )
+                    }
+                    className="absolute right-1 p-2 rounded-full bg-slate-900/80 text-white disabled:opacity-30"
+                  >
+                    <ChevronRight size={20} />
+                  </button>
+                </>
+              )}
+            </div>
           </div>
-          <img
-            src={lightboxPhoto.src}
-            alt={lightboxPhoto.title}
-            className="max-h-[80vh] max-w-full rounded-xl object-contain"
-          />
-        </div>
-      )}
+        );
+      })()}
+
+      {deleteAuthModal}
     </div>
   );
 };

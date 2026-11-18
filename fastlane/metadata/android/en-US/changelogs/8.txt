@@ -1,0 +1,7 @@
+v2.1.0
+- Restored persistent floating 1-sec SOS pain widget and Settings toggle
+- Refined long-press PainLevelSelector into a full-height (44px) unified color gauge bar that reverts smoothly to discrete buttons on release
+- Raised diagnostic photo attachment limit to 50 with batched processing, on-demand decryption, and multi-photo lightbox navigation
+- Fixed Recharts SVG focus rectangle on chart tap and localized pain chart tooltips
+- Visualized linked diagnosis dates across Condition Detail charts, Dashboard cards, Stats, and Calendar
+- Added Calendar Month/Week toggle and diagonal shader overlay for clinical/diagnostic dates in Pain Heatmap

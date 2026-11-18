@@ -33,6 +33,7 @@ import { triggerHaptic } from '../utils/native';
 import CalendarPage from './CalendarPage';
 import DiagnosticsPage from './DiagnosticsPage';
 import StatsPage from './StatsPage';
+import { useAuthorizedDelete } from '../components/DeleteAuthModal';
 // import ClinicalBriefingPage from './ClinicalBriefing'; // 일시 주석 처리
 
 interface HistoryItemProps {
@@ -43,7 +44,7 @@ interface HistoryItemProps {
   selectable?: boolean;
   selected?: boolean;
   onToggleSelect?: (id: string) => void;
-  onDelete: (id: string) => Promise<boolean>;
+  onDelete: (id: string) => Promise<boolean> | Promise<void> | void;
   onUpdate: (id: string, updates: Partial<PainLog>) => Promise<boolean>;
 }
 
@@ -108,14 +109,8 @@ const HistoryItem: React.FC<HistoryItemProps> = ({
 
   const handleDelete = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (
-      window.confirm(
-        isEn ? 'Delete this health record?' : '이 건강 기록을 삭제하시겠습니까?'
-      )
-    ) {
-      triggerHaptic();
-      await onDelete(log.id);
-    }
+    triggerHaptic();
+    await onDelete(log.id);
   };
 
   const beginEdit = (e: React.MouseEvent) => {
@@ -500,6 +495,7 @@ export const HistoryPage: React.FC<{ initialTab?: 'list' | 'calendar' | 'diagnos
   const navigate = useNavigate();
   const { logs, conditions, deleteLog, updateLog, assignLogsToCondition } = useHealth();
   const { settings, t } = useSettings();
+  const { requestAuthorizedDelete, authModal: deleteAuthModal } = useAuthorizedDelete();
   const isEn = settings.language === 'en';
   const [searchParams, setSearchParams] = useSearchParams();
   const paramTab = searchParams.get('tab');
@@ -801,7 +797,7 @@ export const HistoryPage: React.FC<{ initialTab?: 'list' | 'calendar' | 'diagnos
         selectionMode ? 'pb-40' : 'pb-28'
       }`}
     >
-      <header className="flex flex-wrap items-center justify-between gap-2">
+      <header className="flex flex-col gap-2.5">
         <h1 className="text-xl font-bold">
           {activeTab === 'list'
             ? selectionMode
@@ -821,11 +817,11 @@ export const HistoryPage: React.FC<{ initialTab?: 'list' | 'calendar' | 'diagnos
         </h1>
 
         {!selectionMode && (
-          <div className="flex bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-1 text-xs shadow-sm overflow-x-auto">
+          <div className="grid grid-cols-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-1 text-xs shadow-sm">
             <button
               type="button"
               onClick={() => handleTabSwitch('list')}
-              className={`flex items-center gap-1 px-2.5 py-1 rounded-lg font-bold whitespace-nowrap transition-all ${
+              className={`flex items-center justify-center gap-1 py-1.5 px-1 rounded-lg font-bold whitespace-nowrap transition-all ${
                 activeTab === 'list' ? 'bg-teal-700 text-white' : 'text-slate-500'
               }`}
             >
@@ -834,7 +830,7 @@ export const HistoryPage: React.FC<{ initialTab?: 'list' | 'calendar' | 'diagnos
             <button
               type="button"
               onClick={() => handleTabSwitch('calendar')}
-              className={`flex items-center gap-1 px-2.5 py-1 rounded-lg font-bold whitespace-nowrap transition-all ${
+              className={`flex items-center justify-center gap-1 py-1.5 px-1 rounded-lg font-bold whitespace-nowrap transition-all ${
                 activeTab === 'calendar' ? 'bg-teal-700 text-white' : 'text-slate-500'
               }`}
             >
@@ -843,7 +839,7 @@ export const HistoryPage: React.FC<{ initialTab?: 'list' | 'calendar' | 'diagnos
             <button
               type="button"
               onClick={() => handleTabSwitch('stats')}
-              className={`flex items-center gap-1 px-2.5 py-1 rounded-lg font-bold whitespace-nowrap transition-all ${
+              className={`flex items-center justify-center gap-1 py-1.5 px-1 rounded-lg font-bold whitespace-nowrap transition-all ${
                 activeTab === 'stats' ? 'bg-teal-700 text-white' : 'text-slate-500'
               }`}
             >
@@ -852,7 +848,7 @@ export const HistoryPage: React.FC<{ initialTab?: 'list' | 'calendar' | 'diagnos
             <button
               type="button"
               onClick={() => handleTabSwitch('diagnostics')}
-              className={`flex items-center gap-1 px-2.5 py-1 rounded-lg font-bold whitespace-nowrap transition-all ${
+              className={`flex items-center justify-center gap-1 py-1.5 px-1 rounded-lg font-bold whitespace-nowrap transition-all ${
                 activeTab === 'diagnostics' ? 'bg-teal-700 text-white' : 'text-slate-500'
               }`}
             >
@@ -1107,7 +1103,17 @@ export const HistoryPage: React.FC<{ initialTab?: 'list' | 'calendar' | 'diagnos
                           selectable={selectionMode}
                           selected={selectedIds.includes(log.id)}
                           onToggleSelect={toggleSelectLog}
-                          onDelete={deleteLog}
+                          onDelete={async (logId) => {
+                            requestAuthorizedDelete({
+                              title: isEn ? 'Delete Health Record' : '건강 기록 삭제',
+                              description: isEn
+                                ? 'Delete this health record? Once deleted, it cannot be recovered.'
+                                : '이 건강 기록을 삭제하시겠습니까? 삭제 후에는 복구할 수 없습니다.',
+                              onAuthorized: async () => {
+                                await deleteLog(logId);
+                              },
+                            });
+                          }}
                           onUpdate={updateLog}
                         />
                       );
@@ -1273,6 +1279,8 @@ export const HistoryPage: React.FC<{ initialTab?: 'list' | 'calendar' | 'diagnos
           </div>,
           document.body
         )}
+
+      {deleteAuthModal}
     </div>
   );
 };

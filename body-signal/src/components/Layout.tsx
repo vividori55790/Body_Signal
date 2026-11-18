@@ -29,7 +29,7 @@ export const Layout: React.FC = () => {
         <Outlet />
       </main>
 
-      {/* Optional Floating Quick SOS Widget (Opt-in via Settings, default OFF) */}
+      {/* 1초 급성 통증 입력 플로팅 SOS 위젯 */}
       {settings.quickSosEnabled === true && (
         <aside aria-label="1초 급성 통증 기록 위젯" className="fixed bottom-20 right-4 z-40 max-w-md mx-auto">
           <button

@@ -10,10 +10,12 @@ interface PinModalProps {
   onSuccess: (pin: string) => Promise<void> | void;
   onCancel: () => void;
   title?: string;
+  subtitle?: string;
   errorMessage?: string;
   lockoutRemainingMs?: number;
   expectedLength?: number;
   required?: boolean;
+  cancellable?: boolean;
 }
 
 export const PinModal: React.FC<PinModalProps> = ({
@@ -22,10 +24,12 @@ export const PinModal: React.FC<PinModalProps> = ({
   onSuccess,
   onCancel,
   title,
+  subtitle,
   errorMessage,
   lockoutRemainingMs = 0,
   expectedLength = 6,
   required = false,
+  cancellable = false,
 }) => {
   const settingsCtx = useContext(SettingsContext);
   const isEn = settingsCtx?.settings.language === 'en';
@@ -45,7 +49,7 @@ export const PinModal: React.FC<PinModalProps> = ({
     document.body.style.touchAction = 'none';
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && mode !== 'unlock' && !required) {
+      if (e.key === 'Escape' && (mode !== 'unlock' || cancellable) && !required) {
         handleClose();
       }
     };
@@ -56,7 +60,7 @@ export const PinModal: React.FC<PinModalProps> = ({
       document.body.style.touchAction = originalTouchAction;
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [isOpen, mode, required]);
+  }, [isOpen, mode, required, cancellable]);
 
   // Reset internal state when opened
   useEffect(() => {
@@ -150,7 +154,7 @@ export const PinModal: React.FC<PinModalProps> = ({
       aria-labelledby="pin-modal-title"
       className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-slate-950 w-screen h-screen min-h-[100dvh] overflow-hidden select-none px-4 pt-[max(1.5rem,env(safe-area-inset-top,0px))] pb-[max(1.5rem,env(safe-area-inset-bottom,0px))] pl-[max(1rem,env(safe-area-inset-left,0px))] pr-[max(1rem,env(safe-area-inset-right,0px))]"
     >
-      {mode !== 'unlock' && !required && (
+      {(mode !== 'unlock' || cancellable) && !required && (
         <button
           type="button"
           onClick={handleClose}
@@ -168,13 +172,14 @@ export const PinModal: React.FC<PinModalProps> = ({
         </div>
         <h2 id="pin-modal-title" className="text-xl font-bold tracking-wider">{displayTitle}</h2>
         <p className="mt-1 text-xs text-slate-400">
-          {mode === 'unlock'
-            ? isEn
-              ? 'Your records are encrypted and protected on-device'
-              : '데이터를 안전하게 암호화하여 보호합니다'
-            : isEn
-            ? 'A 6-digit PIN is required to protect your health records'
-            : '보안을 위해 6자리 숫자 PIN을 필수 적용합니다'}
+          {subtitle ||
+            (mode === 'unlock'
+              ? isEn
+                ? 'Your records are encrypted and protected on-device'
+                : '데이터를 안전하게 암호화하여 보호합니다'
+              : isEn
+              ? 'A 6-digit PIN is required to protect your health records'
+              : '보안을 위해 6자리 숫자 PIN을 필수 적용합니다')}
         </p>
       </div>
 

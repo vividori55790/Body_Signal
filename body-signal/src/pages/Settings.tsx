@@ -36,6 +36,7 @@ import {
 import BrandLogo, { LOGO_VARIANT_OPTIONS } from '../components/BrandLogo';
 import { PinModal } from '../components/PinModal';
 import DisclaimerModal from '../components/DisclaimerModal';
+import { useAuthorizedDelete } from '../components/DeleteAuthModal';
 import { triggerHaptic } from '../utils/native';
 import { testLocalLlmConnection, isOnDeviceLlmEndpoint } from '../utils/localLlm';
 import { encryptBackupWithPassphrase, decryptBackupWithPassphrase } from '../utils/crypto';
@@ -100,7 +101,9 @@ export const SettingsPage: React.FC = () => {
     enableTotp,
     disableTotp,
     unlockApp,
+    beginExternalPickerGrace,
   } = useAuth();
+  const { requestAuthorizedDelete, authModal: deleteAuthModal } = useAuthorizedDelete();
 
   // Modals state
   const [pinModalMode, setPinModalMode] = useState<'set' | 'change' | 'unlock' | null>(null);
@@ -417,11 +420,15 @@ export const SettingsPage: React.FC = () => {
     }
   };
 
-  const handleReset = async () => {
-    if (window.confirm(t('resetConfirmPrompt'))) {
-      await resetData();
-      window.location.reload();
-    }
+  const handleReset = () => {
+    requestAuthorizedDelete({
+      title: t('resetApp'),
+      description: t('resetConfirmPrompt'),
+      onAuthorized: async () => {
+        await resetData();
+        window.location.reload();
+      },
+    });
   };
 
   const sectionTitles: Record<SettingsSection, string> = {
@@ -778,7 +785,7 @@ export const SettingsPage: React.FC = () => {
             </button>
           </div>
 
-          {/* Optional Floating SOS Button */}
+          {/* 1초 급성 통증 플로팅 SOS 위젯 설정 */}
           <div className="p-3.5 flex items-center justify-between">
             <div className="pr-3">
               <span className="font-bold text-xs block">{t('quickSosSetting')}</span>
@@ -1083,7 +1090,13 @@ export const SettingsPage: React.FC = () => {
                 </span>
               </div>
             </div>
-            <input type="file" accept=".json,application/json" onChange={handleImportFile} className="hidden" />
+            <input
+              type="file"
+              accept=".json,application/json"
+              onClick={() => beginExternalPickerGrace()}
+              onChange={handleImportFile}
+              className="hidden"
+            />
             <ChevronRight size={16} className="text-slate-300" />
           </label>
 
@@ -1741,10 +1754,12 @@ export const SettingsPage: React.FC = () => {
         <div>
           <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-200/60 dark:bg-slate-800 text-[10px] font-bold text-slate-500">
             <Shield size={12} className="text-teal-600" />
-            Body Signal Mobile v2.0.2 (Encrypted)
+            Body Signal Mobile v2.1.0 (Encrypted)
           </span>
         </div>
       </div>
+
+      {deleteAuthModal}
     </div>
   );
 };

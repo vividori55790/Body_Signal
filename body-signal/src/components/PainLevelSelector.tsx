@@ -30,6 +30,7 @@ export const PainLevelSelector: React.FC<PainLevelSelectorProps> = ({
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pointerDownRef = useRef(false);
   const startXRef = useRef(0);
+  const startYRef = useRef(0);
   const sliderActivatedRef = useRef(false);
   const valueRef = useRef(value);
   valueRef.current = value;
@@ -80,7 +81,7 @@ export const PainLevelSelector: React.FC<PainLevelSelectorProps> = ({
     if (rect.width <= 0) return valueRef.current;
     const relativeX = Math.max(0, Math.min(clientX - rect.left, rect.width));
     const percentage = relativeX / rect.width;
-    const computed = Math.round(percentage * 9) + 1;
+    const computed = Math.floor(percentage * 10) + 1;
     return Math.max(1, Math.min(10, computed));
   }, []);
 
@@ -110,12 +111,21 @@ export const PainLevelSelector: React.FC<PainLevelSelectorProps> = ({
 
   // Global pointer tracking during press/hold/slide; auto-reverts to Button Mode on release
   useEffect(() => {
-    const handleMove = (clientX: number) => {
+    const handleMove = (clientX: number, clientY?: number) => {
       if (!pointerDownRef.current) return;
-      if (!sliderActivatedRef.current && Math.abs(clientX - startXRef.current) >= 10) {
-        clearLongPressTimer();
-        activateSliderAt(clientX);
-        return;
+      if (!sliderActivatedRef.current) {
+        const dx = Math.abs(clientX - startXRef.current);
+        const dy = clientY !== undefined ? Math.abs(clientY - startYRef.current) : 0;
+        if (dy >= 10 && dy > dx) {
+          clearLongPressTimer();
+          pointerDownRef.current = false;
+          return;
+        }
+        if (dx >= 8) {
+          clearLongPressTimer();
+          activateSliderAt(clientX);
+          return;
+        }
       }
       if (sliderActivatedRef.current) {
         const next = calculateIntensityFromPosition(clientX);
@@ -126,14 +136,17 @@ export const PainLevelSelector: React.FC<PainLevelSelectorProps> = ({
       }
     };
 
-    const onMouseMove = (e: MouseEvent) => handleMove(e.clientX);
+    const onMouseMove = (e: MouseEvent) => handleMove(e.clientX, e.clientY);
     const onTouchMove = (e: TouchEvent) => {
       if (!pointerDownRef.current) return;
+      const touch = e.touches[0];
+      if (!touch) return;
       if (sliderActivatedRef.current) {
         e.preventDefault();
       }
-      if (e.touches[0]) {
-        handleMove(e.touches[0].clientX);
+      handleMove(touch.clientX, touch.clientY);
+      if (sliderActivatedRef.current && e.cancelable) {
+        e.preventDefault();
       }
     };
 
@@ -163,9 +176,10 @@ export const PainLevelSelector: React.FC<PainLevelSelectorProps> = ({
     };
   }, [activateSliderAt, calculateIntensityFromPosition, onChange]);
 
-  const handleRowPointerDown = (clientX: number, initialNum?: number) => {
+  const handleRowPointerDown = (clientX: number, clientY: number, initialNum?: number) => {
     pointerDownRef.current = true;
     startXRef.current = clientX;
+    startYRef.current = clientY;
     sliderActivatedRef.current = false;
 
     clearLongPressTimer();
@@ -184,7 +198,7 @@ export const PainLevelSelector: React.FC<PainLevelSelectorProps> = ({
     onChange(num);
   };
 
-  const progressPercent = ((value - 1) / 9) * 100;
+  const fillPercent = value * 10;
 
   return (
     <div className={`space-y-2 w-full ${className}`}>
@@ -208,80 +222,94 @@ export const PainLevelSelector: React.FC<PainLevelSelectorProps> = ({
         </span>
       </div>
 
-      {/* Main Selector Track Container (Button Mode by default, merges into Slider while holding/sliding) */}
+      {/* Main Selector Track Container (Button Mode stays mounted so long-press -> drag never drops touch target) */}
       <div
         ref={containerRef}
-        className="w-full touch-pan-y select-none"
+        className={`relative w-full h-11 select-none ${isSliderMode ? 'touch-none' : 'touch-pan-y'}`}
       >
-        {isSliderMode ? (
-          <div className="py-1.5 px-1">
-            <div
-              role="slider"
-              aria-valuemin={1}
-              aria-valuemax={10}
-              aria-valuenow={value}
-              aria-label={isEn ? 'Pain intensity slider' : '통증 강도 슬라이더'}
-              className="relative h-11 w-full flex items-center touch-none select-none"
-            >
-              <div className="h-3 w-full rounded-full bg-slate-200 dark:bg-slate-800 overflow-hidden relative border border-slate-300 dark:border-slate-700">
-                <div
-                  className="h-full rounded-full transition-all duration-75 bg-gradient-to-r from-emerald-500 via-amber-500 to-rose-600"
-                  style={{ width: `${progressPercent}%` }}
-                />
-              </div>
-
-              <div className="absolute inset-x-0 flex justify-between px-1 pointer-events-none">
-                {Array.from({ length: 10 }, (_, i) => i + 1).map((num) => (
-                  <span
-                    key={num}
-                    className={`h-2 w-0.5 rounded-full ${
-                      num <= value ? 'bg-white/80' : 'bg-slate-400/50 dark:bg-slate-600'
-                    }`}
-                  />
-                ))}
-              </div>
-
-              <div
-                className={`absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-8 h-8 rounded-full border-2 border-white shadow-lg flex items-center justify-center font-black text-xs text-white transition-transform ${
-                  isDragging ? 'scale-120 ring-4 ring-teal-400/40' : 'scale-100'
-                } ${
-                  value >= 7
-                    ? 'bg-rose-600'
-                    : value >= 4
-                    ? 'bg-amber-500'
-                    : 'bg-emerald-600'
-                }`}
-                style={{ left: `${progressPercent}%` }}
+        <div
+          className={`grid grid-cols-10 gap-1 h-11 select-none transition-opacity duration-100 ${
+            isSliderMode ? 'opacity-0 pointer-events-none' : 'opacity-100'
+          }`}
+        >
+          {Array.from({ length: 10 }, (_, i) => i + 1).map((num) => {
+            const isSelected = value === num;
+            return (
+              <button
+                key={num}
+                type="button"
+                onClick={() => handleButtonClick(num)}
+                onMouseDown={(e) => handleRowPointerDown(e.clientX, e.clientY, num)}
+                onTouchStart={(e) => {
+                  if (e.touches[0]) {
+                    handleRowPointerDown(e.touches[0].clientX, e.touches[0].clientY, num);
+                  }
+                }}
+                aria-label={isEn ? `Pain level ${num}` : `통증 강도 ${num}점`}
+                className={`min-h-[44px] h-11 rounded-xl font-black text-sm flex items-center justify-center transition-all select-none ${getColorClass(
+                  num,
+                  isSelected
+                )}`}
               >
-                {value}
-              </div>
+                {num}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Same-height (h-11) unified bar morph when holding or sliding; cleanly reverts on finger release */}
+        {isSliderMode && (
+          <div
+            role="slider"
+            aria-valuemin={1}
+            aria-valuemax={10}
+            aria-valuenow={value}
+            aria-label={isEn ? 'Pain intensity slider' : '통증 강도 슬라이더'}
+            className={`absolute inset-0 h-11 w-full rounded-xl overflow-hidden border pointer-events-none select-none z-10 shadow-inner ${
+              isDarkVariant
+                ? 'bg-slate-900 border-slate-700'
+                : 'bg-slate-100 dark:bg-slate-800 border-slate-300 dark:border-slate-700'
+            }`}
+          >
+            {/* Positional gradient revealed smoothly up to current segment */}
+            <div
+              className="absolute inset-0 bg-gradient-to-r from-emerald-500 via-amber-500 to-rose-600 transition-[clip-path] duration-75"
+              style={{ clipPath: `inset(0 ${100 - fillPercent}% 0 0)` }}
+            />
+
+            {/* Crisp right boundary edge inside the bar */}
+            {value < 10 && (
+              <div
+                className="absolute top-0 bottom-0 w-0.5 bg-white/90 shadow-sm transition-[left] duration-75"
+                style={{ left: `calc(${fillPercent}% - 1px)` }}
+              />
+            )}
+
+            {/* Merged 10-segment numbers aligned 1:1 with the discrete buttons */}
+            <div className="relative h-full grid grid-cols-10 gap-0">
+              {Array.from({ length: 10 }, (_, i) => i + 1).map((num) => {
+                const isFilled = num <= value;
+                const isCurrent = num === value;
+                return (
+                  <div
+                    key={num}
+                    className={`h-full flex items-center justify-center border-r last:border-r-0 transition-transform duration-75 ${
+                      isDarkVariant ? 'border-white/10' : 'border-slate-300/40 dark:border-white/10'
+                    } ${
+                      isCurrent && isDragging
+                        ? 'text-white font-black text-base scale-110 bg-white/15'
+                        : isFilled
+                        ? 'text-white font-bold text-sm'
+                        : isDarkVariant
+                        ? 'text-slate-400 font-semibold text-sm'
+                        : 'text-slate-500 dark:text-slate-400 font-semibold text-sm'
+                    }`}
+                  >
+                    {num}
+                  </div>
+                );
+              })}
             </div>
-          </div>
-        ) : (
-          <div className="grid grid-cols-10 gap-1 select-none">
-            {Array.from({ length: 10 }, (_, i) => i + 1).map((num) => {
-              const isSelected = value === num;
-              return (
-                <button
-                  key={num}
-                  type="button"
-                  onClick={() => handleButtonClick(num)}
-                  onMouseDown={(e) => handleRowPointerDown(e.clientX, num)}
-                  onTouchStart={(e) => {
-                    if (e.touches[0]) {
-                      handleRowPointerDown(e.touches[0].clientX, num);
-                    }
-                  }}
-                  aria-label={isEn ? `Pain level ${num}` : `통증 강도 ${num}점`}
-                  className={`min-h-[44px] h-11 rounded-xl font-black text-sm flex items-center justify-center transition-all select-none ${getColorClass(
-                    num,
-                    isSelected
-                  )}`}
-                >
-                  {num}
-                </button>
-              );
-            })}
           </div>
         )}
       </div>

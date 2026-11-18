@@ -24,6 +24,7 @@ interface HealthContextValue {
   saveEntry: (payload: {
     isNewCondition: boolean;
     isUnassigned?: boolean;
+    skipPainLog?: boolean;
     conditionData: { id?: string; label?: string; bodyPart?: string; onsetDate?: string };
     logData: {
       date: string;
@@ -38,6 +39,16 @@ interface HealthContextValue {
       reliefFactors?: string[];
       redFlags?: string[];
       postMedIntensity?: number;
+    };
+    diagnosticData?: {
+      diagnosisDate: string;
+      diagnosisName: string;
+      hospitalName?: string;
+      department?: string;
+      amountKrw?: number;
+      notes?: string;
+      photoIds?: string[];
+      claimDeadlineYears?: number;
     };
   }) => Promise<boolean>;
   assignLogsToCondition: (
@@ -137,6 +148,7 @@ export const HealthProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const saveEntry = async (payload: {
     isNewCondition: boolean;
     isUnassigned?: boolean;
+    skipPainLog?: boolean;
     conditionData: { id?: string; label?: string; bodyPart?: string; onsetDate?: string };
     logData: {
       date: string;
@@ -151,6 +163,16 @@ export const HealthProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       reliefFactors?: string[];
       redFlags?: string[];
       postMedIntensity?: number;
+    };
+    diagnosticData?: {
+      diagnosisDate: string;
+      diagnosisName: string;
+      hospitalName?: string;
+      department?: string;
+      amountKrw?: number;
+      notes?: string;
+      photoIds?: string[];
+      claimDeadlineYears?: number;
     };
   }): Promise<boolean> => {
     let conditionId = payload.isUnassigned ? UNASSIGNED_CONDITION_ID : payload.conditionData.id;
@@ -174,31 +196,58 @@ export const HealthProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     if (!conditionId) return false;
 
-    const prevSignature = logs.length > 0 && logs[0].signature ? logs[0].signature : '';
-    const newLog: PainLog = {
-      id: crypto.randomUUID(),
-      conditionId,
-      date: payload.logData.date || new Date().toISOString(),
-      intensity: Number(payload.logData.intensity),
-      medication: payload.logData.medication?.trim() || '',
-      notes: payload.logData.notes?.trim() || '',
-      bodyPartOverride: payload.logData.bodyPartOverride,
-      painQuality: payload.logData.painQuality || [],
-      radiation: payload.logData.radiation?.trim() || '',
-      painTiming: payload.logData.painTiming,
-      triggers: payload.logData.triggers || [],
-      reliefFactors: payload.logData.reliefFactors || [],
-      redFlags: payload.logData.redFlags || [],
-      postMedIntensity: payload.logData.postMedIntensity,
-      prevSignature,
-      signedAt: new Date().toISOString(),
-    };
+    let nextLogs = logs;
+    if (!payload.skipPainLog) {
+      const prevSignature = logs.length > 0 && logs[0].signature ? logs[0].signature : '';
+      const newLog: PainLog = {
+        id: crypto.randomUUID(),
+        conditionId,
+        date: payload.logData.date || new Date().toISOString(),
+        intensity: Number(payload.logData.intensity),
+        medication: payload.logData.medication?.trim() || '',
+        notes: payload.logData.notes?.trim() || '',
+        bodyPartOverride: payload.logData.bodyPartOverride,
+        painQuality: payload.logData.painQuality || [],
+        radiation: payload.logData.radiation?.trim() || '',
+        painTiming: payload.logData.painTiming,
+        triggers: payload.logData.triggers || [],
+        reliefFactors: payload.logData.reliefFactors || [],
+        redFlags: payload.logData.redFlags || [],
+        postMedIntensity: payload.logData.postMedIntensity,
+        prevSignature,
+        signedAt: new Date().toISOString(),
+      };
 
-    newLog.signature = await computeRecordSignature(newLog, prevSignature);
+      newLog.signature = await computeRecordSignature(newLog, prevSignature);
+      nextLogs = [newLog, ...logs];
+      setLogs(nextLogs);
+    }
 
-    const nextLogs = [newLog, ...logs];
-    setLogs(nextLogs);
-    await persist(nextConditions, nextLogs, diaryEntries);
+    let nextDiagnostics = diagnosticRecords;
+    const diagName = payload.diagnosticData?.diagnosisName?.trim();
+    if (diagName) {
+      const nowIso = new Date().toISOString();
+      const newDiag: DiagnosticRecord = {
+        id: crypto.randomUUID(),
+        conditionId: payload.isUnassigned ? undefined : conditionId,
+        diagnosisDate:
+          payload.diagnosticData?.diagnosisDate || new Date().toISOString().slice(0, 10),
+        diagnosisName: diagName,
+        hospitalName: payload.diagnosticData?.hospitalName?.trim() || '',
+        department: payload.diagnosticData?.department?.trim() || '',
+        amountKrw: payload.diagnosticData?.amountKrw,
+        notes: payload.diagnosticData?.notes?.trim() || '',
+        photoIds: payload.diagnosticData?.photoIds || [],
+        claimStatus: 'pending',
+        claimDeadlineYears: payload.diagnosticData?.claimDeadlineYears || 3,
+        createdAt: nowIso,
+        updatedAt: nowIso,
+      };
+      nextDiagnostics = [newDiag, ...diagnosticRecords];
+      setDiagnosticRecords(nextDiagnostics);
+    }
+
+    await persist(nextConditions, nextLogs, diaryEntries, nextDiagnostics);
     return true;
   };
 

@@ -254,7 +254,11 @@ export const StatsPage: React.FC<{ embedded?: boolean }> = ({ embedded = false }
             {isEn ? 'Per-Condition Trend (First → Latest)' : '질병별 통증 변화 (최초 → 최근)'}
           </h2>
           <div className="space-y-2">
-            {metrics.conditionOutcomes.map((item) => (
+            {metrics.conditionOutcomes.map((item) => {
+              const latestDiag = diagnosticRecords
+                .filter((d) => d.conditionId === item.id)
+                .sort((a, b) => b.diagnosisDate.localeCompare(a.diagnosisDate))[0];
+              return (
               <div
                 key={item.id}
                 onClick={() => {
@@ -272,8 +276,13 @@ export const StatsPage: React.FC<{ embedded?: boolean }> = ({ embedded = false }
                       </span>
                     )}
                   </div>
-                  <span className="text-[10px] text-slate-400">
+                  <span className="text-[10px] text-slate-400 block truncate">
                     {item.bodyPart} · {isEn ? `${item.count} logs` : `${item.count}건`}
+                    {latestDiag
+                      ? isEn
+                        ? ` · Dx ${latestDiag.diagnosisDate}`
+                        : ` · 진단 ${latestDiag.diagnosisDate}`
+                      : ''}
                   </span>
                 </div>
                 <div className="text-right shrink-0">
@@ -303,7 +312,8 @@ export const StatsPage: React.FC<{ embedded?: boolean }> = ({ embedded = false }
                   </span>
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         </section>
       )}

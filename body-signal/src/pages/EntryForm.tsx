@@ -1,14 +1,29 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Clock, Save, Sparkles, Plus, AlertCircle, AlertTriangle, ShieldAlert } from 'lucide-react';
+import {
+  ArrowLeft,
+  Clock,
+  Save,
+  Sparkles,
+  Plus,
+  AlertCircle,
+  AlertTriangle,
+  ShieldAlert,
+  FileCheck2,
+  ChevronDown,
+  ChevronUp,
+} from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useHealth } from '../context/HealthContext';
+import { useAuth } from '../context/AuthContext';
 import { useSettings } from '../context/SettingsContext';
 import BodyMap, { parseMultiRegionParts, formatMultiRegionParts } from '../components/BodyMap';
 import DefaultClosedSuggestion from '../components/DefaultClosedSuggestion';
 import { triggerHaptic } from '../utils/native';
 import { formatMedicationPreset } from '../utils/medication';
+import { compressAndStripExif, encryptDraftPhotos } from '../utils/mediaStorage';
 import AddMedicationInline from '../components/AddMedicationInline';
 import PainLevelSelector from '../components/PainLevelSelector';
+import PhotoAttachmentField from '../components/PhotoAttachmentField';
 
 const PAIN_QUALITIES = [
   '욱신거림',
@@ -66,11 +81,13 @@ export const EntryFormPage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { conditions, saveEntry } = useHealth();
+  const { activeSessionPin } = useAuth();
   const { settings, t, setDefaultBodyMapOpen, recordCollapsibleDismissal } = useSettings();
   const isEn = settings.language === 'en';
   const labelOf = (val: string) => (isEn ? EN_CHIP_MAP[val] || val : val);
 
   const activeConditions = conditions.filter((c) => !c.isArchived);
+  const initialIncludeDiagnostic = Boolean(location.state?.includeDiagnostic);
 
   // Mode: existing vs unassigned (unknown cause) vs new
   const [mode, setMode] = useState<'existing' | 'unassigned' | 'new'>(
@@ -147,6 +164,18 @@ export const EntryFormPage: React.FC = () => {
   const [selectedReliefs, setSelectedReliefs] = useState<string[]>([]);
   const [selectedRedFlags, setSelectedRedFlags] = useState<string[]>([]);
 
+  // Integrated Diagnostic / Visit / Checkup Section (Optional, or standalone when diagnosticOnly is enabled)
+  const [includeDiagnostic, setIncludeDiagnostic] = useState(initialIncludeDiagnostic);
+  const [diagnosticOnly, setDiagnosticOnly] = useState(initialIncludeDiagnostic);
+  const [diagnosisDate, setDiagnosisDate] = useState(new Date().toISOString().slice(0, 10));
+  const [diagnosisName, setDiagnosisName] = useState('');
+  const [hospitalName, setHospitalName] = useState('');
+  const [department, setDepartment] = useState('');
+  const [amountKrw, setAmountKrw] = useState('');
+  const [claimDeadlineYears, setClaimDeadlineYears] = useState(3);
+  const [draftPhotos, setDraftPhotos] = useState<string[]>([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   // Quick Date Helpers
   const setQuickTime = (type: 'now' | '1h' | 'yesterday') => {
     triggerHaptic();
@@ -204,6 +233,8 @@ export const EntryFormPage: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError('');
+
     if (mode === 'new') {
       if (!newLabel.trim() || !newBodyPart.trim()) {
         setError(isEn ? 'Enter both condition name and body part.' : '질환명과 신체 부위를 입력해 주세요.');
@@ -212,46 +243,86 @@ export const EntryFormPage: React.FC = () => {
     } else if (mode === 'existing' && !selectedConditionId) {
       setError(isEn ? 'Please select a condition to track.' : '추적할 질환을 선택해 주세요.');
       return;
-    } else if (mode === 'unassigned' && !unassignedBodyPart.trim()) {
+    } else if (mode === 'unassigned' && !diagnosticOnly && !unassignedBodyPart.trim()) {
       setError(isEn ? 'Select or enter the affected body part.' : '아픈 부위를 선택하거나 입력해 주세요.');
       return;
     }
 
-    const payload = {
-      isNewCondition: mode === 'new',
-      isUnassigned: mode === 'unassigned',
-      conditionData:
-        mode === 'new'
-          ? {
-              label: newLabel,
-              bodyPart: newBodyPart,
-              onsetDate: newOnsetDate,
-            }
-          : mode === 'unassigned'
-          ? {}
-          : { id: selectedConditionId },
-      logData: {
-        date: new Date(date).toISOString(),
-        intensity,
-        medication,
-        notes,
-        bodyPartOverride: mode === 'unassigned' ? unassignedBodyPart.trim() : undefined,
-        painQuality: selectedQualities,
-        radiation: selectedRadiation,
-        triggers: selectedTriggers,
-        reliefFactors: selectedReliefs,
-        redFlags: selectedRedFlags,
-      },
-    };
+    const hasDiagnosticInput =
+      includeDiagnostic ||
+      diagnosticOnly ||
+      Boolean(diagnosisName.trim() || hospitalName.trim() || department.trim() || amountKrw.trim() || draftPhotos.length > 0);
 
-    const success = await saveEntry(payload);
-    if (success) {
-      triggerHaptic();
-      navigate('/');
-    } else {
+    if (hasDiagnosticInput && !diagnosisName.trim()) {
       setError(
-        isEn ? 'Failed to save record. Please check your inputs.' : '기록 저장에 실패했습니다. 입력값을 확인해 주세요.'
+        isEn
+          ? 'Please enter a diagnosis, visit, or checkup title.'
+          : '진단명 또는 진료·검사 내용을 입력해 주세요.'
       );
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const photoIds = await encryptDraftPhotos(draftPhotos, activeSessionPin || undefined);
+
+      const parsedAmount = amountKrw.trim() ? Number(amountKrw.replace(/,/g, '')) : undefined;
+
+      const payload = {
+        isNewCondition: mode === 'new',
+        isUnassigned: mode === 'unassigned',
+        skipPainLog: diagnosticOnly,
+        conditionData:
+          mode === 'new'
+            ? {
+                label: newLabel,
+                bodyPart: newBodyPart,
+                onsetDate: newOnsetDate,
+              }
+            : mode === 'unassigned'
+            ? {}
+            : { id: selectedConditionId },
+        logData: {
+          date: new Date(date).toISOString(),
+          intensity,
+          medication,
+          notes,
+          bodyPartOverride: mode === 'unassigned' ? unassignedBodyPart.trim() : undefined,
+          painQuality: selectedQualities,
+          radiation: selectedRadiation,
+          triggers: selectedTriggers,
+          reliefFactors: selectedReliefs,
+          redFlags: selectedRedFlags,
+        },
+        diagnosticData: hasDiagnosticInput
+          ? {
+              diagnosisDate,
+              diagnosisName: diagnosisName.trim(),
+              hospitalName: hospitalName.trim(),
+              department: department.trim(),
+              amountKrw: parsedAmount && !Number.isNaN(parsedAmount) ? parsedAmount : undefined,
+              notes: notes.trim(),
+              photoIds,
+              claimDeadlineYears,
+            }
+          : undefined,
+      };
+
+      const success = await saveEntry(payload);
+      if (success) {
+        triggerHaptic();
+        navigate('/');
+      } else {
+        setError(
+          isEn ? 'Failed to save record. Please check your inputs.' : '기록 저장에 실패했습니다. 입력값을 확인해 주세요.'
+        );
+      }
+    } catch (err: any) {
+      setError(
+        err?.message || (isEn ? 'Failed to save record. Please try again.' : '기록 저장 중 오류가 발생했습니다.')
+      );
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -391,7 +462,7 @@ export const EntryFormPage: React.FC = () => {
                   </button>
                 </div>
                 <input
-                  required
+                  required={!diagnosticOnly}
                   type="text"
                   placeholder={t('bodyPartPlaceholder')}
                   value={unassignedBodyPart}
@@ -521,60 +592,89 @@ export const EntryFormPage: React.FC = () => {
           )}
         </section>
 
-        {/* Section 2: Pain Intensity (Unified 1-Row Selector & Continuous Slider) */}
+        {/* Section 2: Toggle Diagnostic-Only OR Pain Intensity */}
         <section className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-sm space-y-4">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-2">
             <h2 className="text-xs font-bold uppercase tracking-wider text-slate-400">
               {t('painRating')}
             </h2>
+            <button
+              type="button"
+              onClick={() => {
+                triggerHaptic();
+                const next = !diagnosticOnly;
+                setDiagnosticOnly(next);
+                if (next) setIncludeDiagnostic(true);
+              }}
+              className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all border ${
+                diagnosticOnly
+                  ? 'bg-teal-700 border-teal-700 text-white'
+                  : 'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300'
+              }`}
+            >
+              {diagnosticOnly
+                ? isEn
+                  ? '✓ Visit / Checkup Only'
+                  : '✓ 진료·검사만 기록 중'
+                : isEn
+                ? 'Log Visit/Checkup Only'
+                : '진료·검사만 기록'}
+            </button>
           </div>
 
-          <PainLevelSelector
-            value={intensity}
-            onChange={setIntensity}
-            variant="auto"
-            showDescription={true}
-          />
+          {!diagnosticOnly && (
+            <>
+              <PainLevelSelector
+                value={intensity}
+                onChange={setIntensity}
+                variant="auto"
+                showDescription={true}
+              />
 
-          {/* Date & Time with Quick Buttons */}
-          <div className="pt-2 border-t border-slate-100 dark:border-slate-800 space-y-2">
-            <div className="flex items-center justify-between">
-              <label className="text-xs font-bold text-slate-600 dark:text-slate-300">
-                {t('timestamp')}
-              </label>
-              <div className="flex gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => setQuickTime('now')}
-                  className="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-[10px] font-bold text-slate-600 dark:text-slate-400 hover:text-emerald-500"
-                >
-                  {isEn ? 'Now' : '지금'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setQuickTime('1h')}
-                  className="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-[10px] font-bold text-slate-600 dark:text-slate-400 hover:text-emerald-500"
-                >
-                  {isEn ? '1h ago' : '1시간 전'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setQuickTime('yesterday')}
-                  className="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-[10px] font-bold text-slate-600 dark:text-slate-400 hover:text-emerald-500"
-                >
-                  {isEn ? 'Yesterday' : '어제'}
-                </button>
+              {/* Date & Time with Quick Buttons */}
+              <div className="pt-2 border-t border-slate-100 dark:border-slate-800 space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-600 dark:text-slate-300">
+                    {t('timestamp')}
+                  </label>
+                  <div className="flex gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setQuickTime('now')}
+                      className="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-[10px] font-bold text-slate-600 dark:text-slate-400 hover:text-emerald-500"
+                    >
+                      {isEn ? 'Now' : '지금'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setQuickTime('1h')}
+                      className="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-[10px] font-bold text-slate-600 dark:text-slate-400 hover:text-emerald-500"
+                    >
+                      {isEn ? '1h ago' : '1시간 전'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setQuickTime('yesterday')}
+                      className="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-[10px] font-bold text-slate-600 dark:text-slate-400 hover:text-emerald-500"
+                    >
+                      {isEn ? 'Yesterday' : '어제'}
+                    </button>
+                  </div>
+                </div>
+                <input
+                  required
+                  type="datetime-local"
+                  value={date}
+                  onChange={(e) => setDate(e.target.value)}
+                  className="w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 p-3 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                />
               </div>
-            </div>
-            <input
-              required
-              type="datetime-local"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              className="w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 p-3 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500"
-            />
-          </div>
+            </>
+          )}
         </section>
+
+        {!diagnosticOnly && (
+          <>
 
         {/* Section 3: Clinical PQRST (Pain Quality & Radiation) */}
         <section className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-sm space-y-3.5">
@@ -792,8 +892,140 @@ export const EntryFormPage: React.FC = () => {
             }}
           />
         </section>
+          </>
+        )}
 
-        {/* Section 6: Notes */}
+        {/* Section 6: Integrated Clinical Visit / Checkup / Diagnostic Vault Record */}
+        <section className="rounded-2xl border border-teal-200 dark:border-teal-900/60 bg-white dark:bg-slate-900 p-4 shadow-sm space-y-3">
+          <button
+            type="button"
+            onClick={() => {
+              triggerHaptic();
+              if (!diagnosticOnly) {
+                setIncludeDiagnostic((prev) => !prev);
+              }
+            }}
+            className="w-full flex items-center justify-between text-left"
+          >
+            <div className="flex items-center gap-2">
+              <span className="p-1.5 rounded-lg bg-teal-50 dark:bg-teal-950/70 text-teal-600 dark:text-teal-400">
+                <FileCheck2 size={16} />
+              </span>
+              <div>
+                <h2 className="text-xs font-bold text-slate-700 dark:text-slate-200">
+                  {isEn ? 'Hospital Visit, Checkup & Diagnostic Record' : '진료 · 검진 · 진단서 기록 통합 (선택)'}
+                </h2>
+                <p className="text-[10px] text-slate-400">
+                  {isEn
+                    ? 'Link clinic visit, receipt/X-ray photos (EXIF stripped) & claim tracking'
+                    : '병원명 · 진단/검사 내용 · 영수증/진단서 사진 · 실손 청구 시효 함께 저장'}
+                </p>
+              </div>
+            </div>
+            {!diagnosticOnly && (
+              <span className="text-slate-400">
+                {includeDiagnostic ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+              </span>
+            )}
+          </button>
+
+          {(includeDiagnostic || diagnosticOnly) && (
+            <div className="space-y-3 pt-2 border-t border-slate-100 dark:border-slate-800 animate-in fade-in">
+              <div className="grid grid-cols-2 gap-2.5">
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">
+                    {isEn ? 'Visit / Exam Date' : '진료·검사 일자'}
+                  </label>
+                  <input
+                    type="date"
+                    value={diagnosisDate}
+                    onChange={(e) => setDiagnosisDate(e.target.value)}
+                    className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-bold"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">
+                    {isEn ? 'Claim Window (Years)' : '실손 청구 시효'}
+                  </label>
+                  <select
+                    value={claimDeadlineYears}
+                    onChange={(e) => setClaimDeadlineYears(Number(e.target.value))}
+                    className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-bold"
+                  >
+                    <option value={3}>{isEn ? '3 Years (Standard)' : '3년 (실손 표준)'}</option>
+                    <option value={2}>{isEn ? '2 Years' : '2년'}</option>
+                    <option value={5}>{isEn ? '5 Years' : '5년'}</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">
+                  {isEn ? 'Diagnosis / Exam Details' : '진단명 / 진료·검사 내용'}
+                </label>
+                <input
+                  type="text"
+                  required={diagnosticOnly}
+                  value={diagnosisName}
+                  onChange={(e) => setDiagnosisName(e.target.value)}
+                  placeholder={
+                    isEn ? 'e.g., Lumbar X-ray, Outpatient orthopedic visit' : '예: 요추 X-ray 검사, 정형외과 외래 진료'
+                  }
+                  className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs"
+                />
+              </div>
+
+              <div className="grid grid-cols-3 gap-2">
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">
+                    {isEn ? 'Hospital' : '병원명'}
+                  </label>
+                  <input
+                    type="text"
+                    value={hospitalName}
+                    onChange={(e) => setHospitalName(e.target.value)}
+                    placeholder={isEn ? 'Clinic' : '예: OO병원'}
+                    className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">
+                    {isEn ? 'Dept.' : '진료과'}
+                  </label>
+                  <input
+                    type="text"
+                    value={department}
+                    onChange={(e) => setDepartment(e.target.value)}
+                    placeholder={isEn ? 'Ortho' : '예: 정형외과'}
+                    className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">
+                    {isEn ? 'Cost' : '진료비(원)'}
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={amountKrw}
+                    onChange={(e) => setAmountKrw(e.target.value)}
+                    placeholder="35000"
+                    className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs"
+                  />
+                </div>
+              </div>
+
+              <PhotoAttachmentField
+                photos={draftPhotos}
+                onChange={setDraftPhotos}
+                onError={setError}
+                processFile={compressAndStripExif}
+              />
+            </div>
+          )}
+        </section>
+
+        {/* Section 7: Notes */}
         <section className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-sm space-y-2">
           <label className="block text-xs font-bold text-slate-600 dark:text-slate-300">
             {t('notesLabel')}
@@ -810,10 +1042,11 @@ export const EntryFormPage: React.FC = () => {
         {/* Submit Button */}
         <button
           type="submit"
-          className="w-full py-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-base shadow-lg shadow-emerald-600/30 active:scale-98 transition-all flex items-center justify-center gap-2"
+          disabled={isSubmitting}
+          className="w-full py-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-base shadow-lg shadow-emerald-600/30 active:scale-98 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
         >
           <Save size={18} />
-          {t('saveRecordBtn')}
+          {isSubmitting ? (isEn ? 'Saving...' : '저장 중...') : t('saveRecordBtn')}
         </button>
       </form>
     </div>

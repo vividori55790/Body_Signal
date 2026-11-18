@@ -7,7 +7,8 @@ import {
   CheckCircle,
   Clock,
   Pill,
-  Zap,
+  Calendar,
+  // Zap,
   FolderPlus,
   BarChart3,
   TrendingDown,
@@ -16,21 +17,24 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { useHealth } from '../context/HealthContext';
 import { useSettings } from '../context/SettingsContext';
-import { Condition, PainLog, UNASSIGNED_CONDITION_ID } from '../types/health';
+import { Condition, DiagnosticRecord, PainLog, UNASSIGNED_CONDITION_ID } from '../types/health';
 import { triggerHaptic } from '../utils/native';
 import { computeTreatmentMetrics } from '../utils/treatmentMetrics';
+import { format } from 'date-fns';
 import { LineChart, Line, ResponsiveContainer, YAxis } from 'recharts';
 import CalendarHeatmap from '../components/CalendarHeatmap';
 import QuickPainLogger from '../components/QuickPainLogger';
 import DefaultClosedSuggestion from '../components/DefaultClosedSuggestion';
 import TrustBadge from '../components/TrustBadge';
-import { useAcutePain } from '../context/AcutePainContext';
+// 1초 급성 통증 입력은 사용자 요청으로 일시 주석 처리함
+// import { useAcutePain } from '../context/AcutePainContext';
 
 const DetailedConditionCard: React.FC<{
   condition: Condition;
   logs: PainLog[];
+  diagnostics?: DiagnosticRecord[];
   isArchived?: boolean;
-}> = ({ condition, logs, isArchived = false }) => {
+}> = ({ condition, logs, diagnostics = [], isArchived = false }) => {
   const navigate = useNavigate();
   const { updateCondition } = useHealth();
   const { settings, t } = useSettings();
@@ -40,6 +44,10 @@ const DetailedConditionCard: React.FC<{
   const conditionLogs = logs
     .filter((l) => l.conditionId === condition.id)
     .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+  const latestDiagnosis = [...diagnostics].sort((a, b) =>
+    b.diagnosisDate.localeCompare(a.diagnosisDate)
+  )[0];
 
   const lastLog = conditionLogs[conditionLogs.length - 1];
   const recentThreeLogs = [...conditionLogs].reverse().slice(0, 3);
@@ -91,6 +99,16 @@ const DetailedConditionCard: React.FC<{
               ? `${conditionLogs.length} logs · Avg ${avgIntensity}`
               : `${conditionLogs.length}건 · 평균 ${avgIntensity}`}
           </p>
+          {latestDiagnosis && (
+            <div className="mt-1 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-teal-50 dark:bg-teal-950/60 border border-teal-200/80 dark:border-teal-800/80 text-[10px] font-bold text-teal-700 dark:text-teal-300 max-w-full truncate">
+              <Calendar size={10} className="shrink-0" />
+              <span className="truncate">
+                {isEn
+                  ? `Dx ${latestDiagnosis.diagnosisDate} · ${latestDiagnosis.diagnosisName}`
+                  : `진단 ${latestDiagnosis.diagnosisDate} · ${latestDiagnosis.diagnosisName}`}
+              </span>
+            </div>
+          )}
         </div>
 
         <button
@@ -130,13 +148,21 @@ const DetailedConditionCard: React.FC<{
       </div>
 
       {chartData.length > 1 && (
-        <div className={`px-3.5 opacity-80 ${isExpanded ? 'h-14 py-1' : 'h-8'}`}>
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={chartData}>
-              <YAxis domain={[0, 10]} hide />
-              <Line type="monotone" dataKey="value" stroke="#0d9488" strokeWidth={2} dot={isExpanded} />
-            </LineChart>
-          </ResponsiveContainer>
+        <div
+          onClick={() => {
+            triggerHaptic();
+            navigate(`/condition/${condition.id}`);
+          }}
+          className={`px-3.5 opacity-80 cursor-pointer select-none ${isExpanded ? 'h-14 py-1' : 'h-8'}`}
+        >
+          <div className="w-full h-full pointer-events-none">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={chartData} accessibilityLayer={false}>
+                <YAxis domain={[0, 10]} hide />
+                <Line type="monotone" dataKey="value" stroke="#0d9488" strokeWidth={2} dot={isExpanded} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
         </div>
       )}
 
@@ -217,7 +243,7 @@ const DetailedConditionCard: React.FC<{
 export const DashboardPage: React.FC = () => {
   const navigate = useNavigate();
   const { conditions, logs, diaryEntries, diagnosticRecords, updateLog } = useHealth();
-  const { openAcute } = useAcutePain();
+  // const { openAcute } = useAcutePain();
   const {
     settings,
     t,
@@ -363,8 +389,9 @@ export const DashboardPage: React.FC = () => {
           <TrustBadge compact />
         </div>
 
-        {/* Unified Action Row (Calm Medical Styling) */}
-        <div className="grid grid-cols-2 gap-2">
+        {/* Primary Entry Row (1-Sec Acute Mode commented out per feedback; Full Entry + 3-Sec Quick Logger remain) */}
+        <div className="grid grid-cols-1 gap-2">
+          {/* 1초 급성 입력 일시 주석 처리
           <button
             type="button"
             onClick={() => {
@@ -376,6 +403,7 @@ export const DashboardPage: React.FC = () => {
           >
             <Zap size={14} /> {isEn ? '1-Sec Acute Log' : '1초 급성 기록'}
           </button>
+          */}
           <button
             type="button"
             onClick={() => {
@@ -616,7 +644,16 @@ export const DashboardPage: React.FC = () => {
       {/* 4. Overall Pain Heatmap */}
       <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3.5 shadow-sm space-y-2">
         <h3 className="text-[11px] font-bold text-slate-400 uppercase">{t('overallPainHeatmap')}</h3>
-        <CalendarHeatmap logs={logs} />
+        <CalendarHeatmap
+          logs={logs}
+          diagnosticRecords={diagnosticRecords}
+          onDateClick={({ date }) => {
+            triggerHaptic();
+            navigate('/history?tab=calendar', {
+              state: { selectedDate: format(date, 'yyyy-MM-dd') },
+            });
+          }}
+        />
       </div>
 
       {/* 5. Unassigned (Unknown Cause) Symptoms Grouping Signal Card */}
@@ -690,7 +727,12 @@ export const DashboardPage: React.FC = () => {
         )}
 
         {filteredConditions.map((c) => (
-          <DetailedConditionCard key={c.id} condition={c} logs={logs} />
+          <DetailedConditionCard
+            key={c.id}
+            condition={c}
+            logs={logs}
+            diagnostics={diagnosticRecords.filter((d) => d.conditionId === c.id)}
+          />
         ))}
 
         {archivedConditions.length > 0 && (
@@ -705,7 +747,13 @@ export const DashboardPage: React.FC = () => {
             {showArchived && (
               <div className="mt-2 space-y-2">
                 {archivedConditions.map((c) => (
-                  <DetailedConditionCard key={c.id} condition={c} logs={logs} isArchived />
+                  <DetailedConditionCard
+                    key={c.id}
+                    condition={c}
+                    logs={logs}
+                    diagnostics={diagnosticRecords.filter((d) => d.conditionId === c.id)}
+                    isArchived
+                  />
                 ))}
               </div>
             )}
