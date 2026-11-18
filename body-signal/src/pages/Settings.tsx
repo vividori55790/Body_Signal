@@ -1754,7 +1754,7 @@ export const SettingsPage: React.FC = () => {
         <div>
           <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-200/60 dark:bg-slate-800 text-[10px] font-bold text-slate-500">
             <Shield size={12} className="text-teal-600" />
-            Body Signal Mobile v2.0.2 (Encrypted)
+            Body Signal Mobile v2.1.0 (Encrypted)
           </span>
         </div>
       </div>
