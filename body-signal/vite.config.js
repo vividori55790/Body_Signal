@@ -8,6 +8,8 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
+      // Disable automatic SW registration script so Capacitor Android APK updates never serve stale cached chunks
+      injectRegister: false,
       registerType: 'autoUpdate',
       includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg'],
       manifest: {
@@ -27,7 +29,8 @@ export default defineConfig({
             type: 'image/svg+xml'
           }
         ],
-        start_url: "/",
+        start_url: "./",
+        scope: "./",
         display: "standalone",
         orientation: "portrait",
         background_color: "#ffffff",
@@ -36,21 +39,22 @@ export default defineConfig({
             name: "1초 급성 통증 기록",
             short_name: "긴급 통증",
             description: "아플 때 1초 만에 바로 기록합니다",
-            url: "/?mode=acute",
+            url: "./?mode=acute",
             icons: [{ src: "pwa-icon.svg", sizes: "192x192" }]
           },
-          {
-            name: "의료진 진료 브리핑",
-            short_name: "진료 브리핑",
-            description: "의사·간호사용 30초 진료 요약 및 EMR 복사",
-            url: "/briefing",
-            icons: [{ src: "pwa-icon.svg", sizes: "192x192" }]
-          },
+          // 개발중 (v4.0.0 재개 예정): 미연결 브리핑 바로가기 일시 비활성화
+          // {
+          //   name: "의료진 진료 브리핑",
+          //   short_name: "진료 브리핑",
+          //   description: "의사·간호사용 30초 진료 요약 및 EMR 복사",
+          //   url: "./briefing",
+          //   icons: [{ src: "pwa-icon.svg", sizes: "192x192" }]
+          // },
           {
             name: "빠른 복약 기록",
             short_name: "복약 기록",
             description: "약 복용 여부 및 효과 기록",
-            url: "/entry",
+            url: "./entry",
             icons: [{ src: "pwa-icon.svg", sizes: "192x192" }]
           }
         ]

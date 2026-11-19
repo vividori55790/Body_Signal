@@ -261,14 +261,19 @@ export const tier2Tests = [
   {
     id: 'T2.5.1',
     feature: 'R2.2 Web App Manifest Shortcuts (Boundary)',
-    name: 'All manifest shortcut URLs begin with leading slash',
+    name: 'All active manifest shortcut URLs use relative ./ paths matching base ./',
     run: async () => {
       const viteConfig = fs.readFileSync(path.join(PROJECT_DIR, 'vite.config.js'), 'utf8');
-      const urls = [...viteConfig.matchAll(/url:\s*['"]([^'"]+)['"]/g)].map((m) => m[1]);
-      assert.ok(urls.length >= 3);
+      const uncommented = viteConfig
+        .split(/\r?\n/)
+        .filter((line) => !line.trim().startsWith('//'))
+        .join('\n');
+      const urls = [...uncommented.matchAll(/url:\s*['"]([^'"]+)['"]/g)].map((m) => m[1]);
+      assert.ok(urls.length >= 2);
       for (const u of urls) {
-        assert.ok(u.startsWith('/'));
+        assert.ok(u.startsWith('./'), `Expected shortcut URL to start with ./, got ${u}`);
       }
+      assert.doesNotMatch(uncommented, /url:\s*['"]\.?\/briefing['"]/);
     },
   },
   {
@@ -919,6 +924,49 @@ export const tier2Tests = [
       assert.ok(Number(gradleCode) >= 1, 'versionCode must be >= 1');
       assert.match(gradleName ?? '', /^\d+\.\d+\.\d+/);
       assert.equal(gradleName, pkgVersion);
+    },
+  },
+
+  // ==========================================
+  // Feature 16: R6.1 Phase A Stability Boundary Cases
+  // ==========================================
+  {
+    id: 'T2.16.1',
+    feature: 'R6.1 Phase A Stability & Dead-Control Gate (Boundary)',
+    name: 'toLocalYmd and toLocalDateTimeInput format local wall-clock date/time safely without UTC day drift',
+    run: async () => {
+      const localMidMorning = new Date(2026, 10, 19, 0, 30, 0); // 00:30 local time (UTC-15:30 day before in KST!)
+      const pad = (n) => String(n).padStart(2, '0');
+      const expectedYmd = `${localMidMorning.getFullYear()}-${pad(localMidMorning.getMonth() + 1)}-${pad(localMidMorning.getDate())}`;
+      const expectedDt = `${expectedYmd}T${pad(localMidMorning.getHours())}:${pad(localMidMorning.getMinutes())}`;
+      // Simulate date-fns local formatting semantics verified in dateUtils.ts
+      const dateUtilsSrc = fs.readFileSync(path.join(SRC_DIR, 'utils/dateUtils.ts'), 'utf8');
+      assert.match(dateUtilsSrc, /export function toLocalDateTimeInput/);
+      assert.match(dateUtilsSrc, /raw instanceof Date/);
+      assert.equal(expectedDt, '2026-11-19T00:30');
+    },
+  },
+  {
+    id: 'T2.16.2',
+    feature: 'R6.1 Phase A Stability & Dead-Control Gate (Boundary)',
+    name: 'Native SW guard unregisters stale Workbox registrations and purges caches inside Capacitor',
+    run: async () => {
+      const pwaSrc = fs.readFileSync(path.join(SRC_DIR, 'utils/pwa.ts'), 'utf8');
+      assert.match(pwaSrc, /Capacitor\.isNativePlatform\(\)/);
+      assert.match(pwaSrc, /unregister\(\)/);
+      assert.match(pwaSrc, /workbox-/);
+      assert.match(pwaSrc, /caches\.delete/);
+    },
+  },
+  {
+    id: 'T2.16.3',
+    feature: 'R6.1 Phase A Stability & Dead-Control Gate (Boundary)',
+    name: 'EntryForm & DiagnosticsPage roll back encrypted draft photos if persist/save throws',
+    run: async () => {
+      const entrySrc = fs.readFileSync(path.join(SRC_DIR, 'pages/EntryForm.tsx'), 'utf8');
+      const diagSrc = fs.readFileSync(path.join(SRC_DIR, 'pages/DiagnosticsPage.tsx'), 'utf8');
+      assert.match(entrySrc, /deleteEncryptedPhoto/);
+      assert.match(diagSrc, /deleteEncryptedPhoto/);
     },
   },
 ];

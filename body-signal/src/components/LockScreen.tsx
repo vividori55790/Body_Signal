@@ -20,7 +20,7 @@ export const LockScreen: React.FC = () => {
   } = useAuth();
   const settingsCtx = useContext(SettingsContext);
   const isEn = settingsCtx?.settings.language === 'en';
-  const targetLength = Math.max(4, Math.min(16, pinLengthHint || 4));
+  const targetLength = Math.max(4, Math.min(16, pinLengthHint || 6));
   const [pin, setPin] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [totpInput, setTotpInput] = useState('');
@@ -145,7 +145,9 @@ export const LockScreen: React.FC = () => {
     triggerHaptic();
     const success = await unlockWithBiometric();
     if (!success) {
-      // Smooth continuation with PIN pad, no disruption
+      // Immediately clear stale digits and keep the app PIN keypad ready without blocking alerts
+      setPin('');
+      setErrorMsg('');
     }
   };
 

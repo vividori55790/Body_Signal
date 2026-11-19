@@ -12,9 +12,11 @@
             android:targetClass="com.bodysignal.app.MainActivity"
             android:data="https://localhost/?mode=acute" />
     </shortcut>
+    <!-- 개발중 (v4.0.0 재개 예정): 브리핑 탭 비활성화 기간 중 런처 바로가기 비노출 -->
     <shortcut
         android:shortcutId="clinical_briefing"
-        android:enabled="true"
+        android:enabled="false"
+        android:shortcutDisabledMessage="@string/shortcut_briefing_disabled"
         android:icon="@mipmap/ic_launcher"
         android:shortcutShortLabel="@string/shortcut_briefing_short"
         android:shortcutLongLabel="@string/shortcut_briefing_long">

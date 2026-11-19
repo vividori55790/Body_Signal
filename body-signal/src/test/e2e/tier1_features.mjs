@@ -269,10 +269,12 @@ export const tier1Tests = [
   {
     id: 'T1.4.3',
     feature: 'R2.1 Android App Shortcuts',
-    name: 'Shortcut clinical_briefing routes to https://localhost/briefing',
+    name: 'Shortcut clinical_briefing is disabled (개발중) while preserving future /briefing route target',
     run: async () => {
       const shortcutsXml = fs.readFileSync(path.join(ANDROID_DIR, 'app/src/main/res/xml/shortcuts.xml'), 'utf8');
       assert.match(shortcutsXml, /android:shortcutId="clinical_briefing"/);
+      assert.match(shortcutsXml, /android:enabled="false"/);
+      assert.match(shortcutsXml, /android:shortcutDisabledMessage="@string\/shortcut_briefing_disabled"/);
       assert.match(shortcutsXml, /android:data="https:\/\/localhost\/briefing"/);
     },
   },
@@ -313,31 +315,34 @@ export const tier1Tests = [
   {
     id: 'T1.5.2',
     feature: 'R2.2 Web App Manifest Shortcuts',
-    name: 'Web App Manifest includes 1초 급성 통증 기록 shortcut with /?mode=acute',
+    name: 'Web App Manifest includes 1초 급성 통증 기록 shortcut with ./?mode=acute and relative start_url',
     run: async () => {
       const viteConfig = fs.readFileSync(path.join(PROJECT_DIR, 'vite.config.js'), 'utf8');
+      assert.match(viteConfig, /start_url:\s*['"]\.\/['"]/);
       assert.match(viteConfig, /name:\s*['"]1초 급성 통증 기록['"]/);
-      assert.match(viteConfig, /url:\s*['"]\/\?mode=acute['"]/);
+      assert.match(viteConfig, /url:\s*['"]\.\/\?mode=acute['"]/);
     },
   },
   {
     id: 'T1.5.3',
     feature: 'R2.2 Web App Manifest Shortcuts',
-    name: 'Web App Manifest includes 의료진 진료 브리핑 shortcut with /briefing',
+    name: 'Web App Manifest disables /briefing shortcut as 개발중 and disables auto SW injection for Capacitor APKs',
     run: async () => {
       const viteConfig = fs.readFileSync(path.join(PROJECT_DIR, 'vite.config.js'), 'utf8');
-      assert.match(viteConfig, /name:\s*['"]의료진 진료 브리핑['"]/);
-      assert.match(viteConfig, /url:\s*['"]\/briefing['"]/);
+      const mainSrc = fs.readFileSync(path.join(SRC_DIR, 'main.tsx'), 'utf8');
+      assert.match(viteConfig, /injectRegister:\s*false/);
+      assert.match(viteConfig, /\/\/.*url:\s*["']\.\/briefing["']/);
+      assert.match(mainSrc, /setupServiceWorker/);
     },
   },
   {
     id: 'T1.5.4',
     feature: 'R2.2 Web App Manifest Shortcuts',
-    name: 'Web App Manifest includes 빠른 복약 기록 shortcut with /entry',
+    name: 'Web App Manifest includes 빠른 복약 기록 shortcut with ./entry',
     run: async () => {
       const viteConfig = fs.readFileSync(path.join(PROJECT_DIR, 'vite.config.js'), 'utf8');
       assert.match(viteConfig, /name:\s*['"]빠른 복약 기록['"]/);
-      assert.match(viteConfig, /url:\s*['"]\/entry['"]/);
+      assert.match(viteConfig, /url:\s*['"]\.\/entry['"]/);
     },
   },
   {
@@ -949,6 +954,91 @@ export const tier1Tests = [
       const entries = inspectApkEntries(buf);
       const dex = entries.find((e) => e.name === 'classes.dex');
       assert.ok(dex, 'APK must contain classes.dex');
+    },
+  },
+
+  // ==========================================
+  // Feature 16: R6.1 Phase A Stability & Dead-Control Gate
+  // ==========================================
+  {
+    id: 'T1.16.1',
+    feature: 'R6.1 Phase A Stability & Dead-Control Gate',
+    name: 'SecureAuthPlugin isolates BIOMETRIC_STRONG with app PIN button when allowDeviceCredential is false',
+    run: async () => {
+      const pluginSrc = fs.readFileSync(
+        path.join(ANDROID_DIR, 'app/src/main/java/com/bodysignal/app/SecureAuthPlugin.java'),
+        'utf8'
+      );
+      assert.match(pluginSrc, /PREF_BIO_ALLOW_DEVICE_CRED/);
+      assert.match(pluginSrc, /configurePromptAuthenticators/);
+      assert.match(pluginSrc, /if\s*\(allowDeviceCredential\s*&&\s*Build\.VERSION\.SDK_INT\s*>=\s*Build\.VERSION_CODES\.R\)/);
+      assert.match(pluginSrc, /\.setNegativeButtonText\(negativeButtonText\)/);
+    },
+  },
+  {
+    id: 'T1.16.2',
+    feature: 'R6.1 Phase A Stability & Dead-Control Gate',
+    name: 'AuthContext & biometrics pass allowDeviceCredential=false and localized app PIN fallback label for 6-digit PIN users',
+    run: async () => {
+      const bioSrc = fs.readFileSync(path.join(SRC_DIR, 'utils/biometrics.ts'), 'utf8');
+      const authSrc = fs.readFileSync(path.join(SRC_DIR, 'context/AuthContext.tsx'), 'utf8');
+      assert.match(bioSrc, /\$\{pinLen\}자리 PIN 입력/);
+      assert.match(bioSrc, /strongBiometric/);
+      assert.match(authSrc, /isOsCredentialOnlyRef\.current/);
+      assert.match(authSrc, /pinLengthHintRef\.current/);
+    },
+  },
+  {
+    id: 'T1.16.3',
+    feature: 'R6.1 Phase A Stability & Dead-Control Gate',
+    name: 'DeleteAuthModal immediately opens 6-digit PIN prompt when biometric verification fails or cancels',
+    run: async () => {
+      const deleteModalSrc = fs.readFileSync(path.join(SRC_DIR, 'components/DeleteAuthModal.tsx'), 'utf8');
+      assert.match(deleteModalSrc, /verifySensitiveActionBiometric\(\)[\s\S]*?setShowPinPrompt\(true\)/);
+    },
+  },
+  {
+    id: 'T1.16.4',
+    feature: 'R6.1 Phase A Stability & Dead-Control Gate',
+    name: 'HealthContext serializes persist calls and uses live refs for debounced diary saves',
+    run: async () => {
+      const healthSrc = fs.readFileSync(path.join(SRC_DIR, 'context/HealthContext.tsx'), 'utf8');
+      assert.match(healthSrc, /persistQueueRef/);
+      assert.match(healthSrc, /conditionsRef\.current/);
+      assert.match(healthSrc, /logsRef\.current/);
+      assert.match(healthSrc, /diagnosticRecordsRef\.current/);
+      assert.match(healthSrc, /diaryEntriesRef\.current/);
+    },
+  },
+  {
+    id: 'T1.16.5',
+    feature: 'R6.1 Phase A Stability & Dead-Control Gate',
+    name: 'Forms and contexts use local date helpers instead of UTC toISOString date slicing',
+    run: async () => {
+      const entrySrc = fs.readFileSync(path.join(SRC_DIR, 'pages/EntryForm.tsx'), 'utf8');
+      const diagSrc = fs.readFileSync(path.join(SRC_DIR, 'pages/DiagnosticsPage.tsx'), 'utf8');
+      const historySrc = fs.readFileSync(path.join(SRC_DIR, 'pages/History.tsx'), 'utf8');
+      const settingsSrc = fs.readFileSync(path.join(SRC_DIR, 'pages/Settings.tsx'), 'utf8');
+      assert.doesNotMatch(entrySrc, /new Date\(\)\.toISOString\(\)\.(split|slice)/);
+      assert.doesNotMatch(diagSrc, /new Date\(\)\.toISOString\(\)\.(split|slice)/);
+      assert.doesNotMatch(historySrc, /new Date\(log\.date\)\.toISOString\(\)\.slice/);
+      assert.doesNotMatch(settingsSrc, /new Date\(\)\.toISOString\(\)\.split/);
+    },
+  },
+  {
+    id: 'T1.16.6',
+    feature: 'R6.1 Phase A Stability & Dead-Control Gate',
+    name: 'Forms scroll/focus missing required fields and Settings marks unimplemented v4 toggles as 개발중/disabled',
+    run: async () => {
+      const entrySrc = fs.readFileSync(path.join(SRC_DIR, 'pages/EntryForm.tsx'), 'utf8');
+      const diagSrc = fs.readFileSync(path.join(SRC_DIR, 'pages/DiagnosticsPage.tsx'), 'utf8');
+      const settingsSrc = fs.readFileSync(path.join(SRC_DIR, 'pages/Settings.tsx'), 'utf8');
+      assert.match(entrySrc, /noValidate/);
+      assert.match(entrySrc, /focusInvalidElement/);
+      assert.match(diagSrc, /noValidate/);
+      assert.match(diagSrc, /focusInvalidElement/);
+      assert.match(settingsSrc, /개발중 \(v4 예정\)/);
+      assert.match(settingsSrc, /<input[\s\S]*?disabled[\s\S]*?checked=\{settings\.localLlm\.enabled\}/);
     },
   },
 ];

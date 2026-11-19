@@ -13,11 +13,13 @@ export interface SecureAuthPlugin {
     title?: string;
     subtitle?: string;
     negativeButtonText?: string;
+    allowDeviceCredential?: boolean;
   }): Promise<{ success: boolean; errorCode?: number }>;
   authenticateBiometricPin(options?: {
     title?: string;
     subtitle?: string;
     negativeButtonText?: string;
+    allowDeviceCredential?: boolean;
   }): Promise<{ success: boolean; pin?: string; invalidated?: boolean; errorCode?: number }>;
   clearBiometricPin(): Promise<{ success: boolean }>;
   getOrCreateDeviceMasterKeyHex(options?: {

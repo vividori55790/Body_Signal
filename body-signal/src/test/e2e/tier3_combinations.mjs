@@ -116,11 +116,13 @@ export const tier3Tests = [
   },
   {
     id: 'T3.5',
-    feature: 'R2.2 + R4.3 (Manifest Shortcut & Streaming Clinical Briefing)',
-    name: 'PWA shortcut /briefing launches Clinical Briefing with streaming AI analysis integration',
+    feature: 'R2.2 + R4.3 (Shortcut Gate & Streaming Clinical Briefing)',
+    name: 'Clinical Briefing streaming integration remains intact on /briefing route while unfinished PWA/Android shortcuts are gated as 개발중',
     run: async () => {
       const viteConfig = fs.readFileSync(path.join(PROJECT_DIR, 'vite.config.js'), 'utf8');
-      assert.match(viteConfig, /url:\s*['"]\/briefing['"]/);
+      const shortcutsXml = fs.readFileSync(path.join(ANDROID_DIR, 'app/src/main/res/xml/shortcuts.xml'), 'utf8');
+      assert.match(viteConfig, /\/\/.*url:\s*["']\.\/briefing["']/);
+      assert.match(shortcutsXml, /android:shortcutId="clinical_briefing"[\s\S]*?android:enabled="false"/);
 
       const briefingSrc = fs.readFileSync(path.join(SRC_DIR, 'pages/ClinicalBriefing.tsx'), 'utf8');
       assert.match(briefingSrc, /generateClinicalAiAnalysisStream/);

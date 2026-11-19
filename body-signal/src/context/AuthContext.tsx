@@ -91,6 +91,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const externalPickerGraceUntilRef = useRef<number | null>(null);
   const isPinSetRef = useRef<boolean>(false);
   const isTotpEnabledRef = useRef<boolean>(false);
+  const isOsCredentialOnlyRef = useRef<boolean>(false);
+  const pinLengthHintRef = useRef<number>(FIXED_PIN_LENGTH);
   const pendingPinRef = useRef<string | null>(null);
 
   const beginExternalPickerGrace = useCallback((durationMs = 180_000) => {
@@ -104,6 +106,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     isTotpEnabledRef.current = isTotpEnabled;
   }, [isTotpEnabled]);
+
+  useEffect(() => {
+    isOsCredentialOnlyRef.current = isOsCredentialOnly;
+  }, [isOsCredentialOnly]);
+
+  useEffect(() => {
+    pinLengthHintRef.current = pinLengthHint;
+  }, [pinLengthHint]);
 
   const verifyNativeDeviceIntegrity = useCallback(async (): Promise<boolean> => {
     if (!isNativeAndroidSecureAuth()) return true;
@@ -135,13 +145,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       isPinConfigured(),
       getPinRequirements(),
       checkLockout(),
-      checkBiometricAvailability(),
+      checkBiometricAvailability({ allowDeviceCredential: false }),
+      checkBiometricAvailability({ allowDeviceCredential: true }),
       getBiometricMeta(),
       getTotpMeta(),
     ])
-      .then(([deviceOk, configured, pinReq, lockout, bioAvail, bioMeta, totpMeta]) => {
+      .then(([deviceOk, configured, pinReq, lockout, strongBioAvail, anyBioAvail, bioMeta, totpMeta]) => {
         if (!mounted) return;
         isPinSetRef.current = configured;
+        isOsCredentialOnlyRef.current = pinReq.isOsCredentialOnly;
+        pinLengthHintRef.current = pinReq.pinLength;
         setIsPinSet(configured);
         setPinLengthHint(pinReq.pinLength);
         setIsOsCredentialOnly(pinReq.isOsCredentialOnly);
@@ -150,7 +163,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (lockout.isLocked) {
           setLockoutRemainingMs(lockout.remainingMs);
         }
-        setIsBiometricAvailable(bioAvail);
+        setIsBiometricAvailable(pinReq.isOsCredentialOnly ? anyBioAvail : strongBioAvail);
         setIsBiometricEnabled(Boolean(bioMeta && bioMeta.enabled));
         const totpOn = Boolean(totpMeta && totpMeta.enabled);
         isTotpEnabledRef.current = totpOn;
@@ -339,7 +352,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return false;
     }
 
-    const result = await authenticateWithBiometrics();
+    const result = await authenticateWithBiometrics({
+      allowDeviceCredential: isOsCredentialOnlyRef.current,
+      expectedPinLength: pinLengthHintRef.current,
+    });
     if (result.success && result.pin) {
       await completePrimaryFactor(result.pin, isUnlocked);
       return true;
@@ -411,7 +427,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const randomPin = generateUnbiasedRandomDigits(16);
     await reEncryptHealthData(randomPin, activeSessionPin || undefined);
     const sessionSalt = await setAppPin(randomPin, { isOsCredentialOnly: true });
-    const enrolled = await enrollBiometrics(randomPin);
+    const enrolled = await enrollBiometrics(randomPin, { allowDeviceCredential: true });
     if (!enrolled) {
       await reEncryptHealthData(activeSessionPin || undefined, randomPin);
       if (!activeSessionPin) {
@@ -475,7 +491,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (!isPinSet || !verifiedPin) {
         return false;
       }
-      const ok = await enrollBiometrics(verifiedPin);
+      const ok = await enrollBiometrics(verifiedPin, {
+        allowDeviceCredential: isOsCredentialOnlyRef.current,
+      });
       if (ok) {
         setIsBiometricEnabled(true);
         return true;
@@ -491,6 +509,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const setupNewPin = async (pin: string): Promise<{ biometricSynced: boolean }> => {
     await reEncryptHealthData(pin, activeSessionPin || undefined);
     const sessionSalt = await setAppPin(pin, { isOsCredentialOnly: false });
+    isOsCredentialOnlyRef.current = false;
+    pinLengthHintRef.current = pin.length;
     await initSessionCryptoKeyFromPin(pin, sessionSalt);
     await migratePinRecordsToSessionKey(pin);
     let biometricSynced = true;
@@ -505,6 +525,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setIsPinSet(true);
     setPinLengthHint(pin.length);
     setIsOsCredentialOnly(false);
+    setIsBiometricAvailable(await checkBiometricAvailability({ allowDeviceCredential: false }));
     setActiveSessionPin(SESSION_KEY_TOKEN);
     setIsUnlocked(true);
     return { biometricSynced };
@@ -547,7 +568,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     beginExternalPickerGrace(120_000);
     try {
-      const result = await authenticateWithBiometrics();
+      const result = await authenticateWithBiometrics({
+        allowDeviceCredential: isOsCredentialOnlyRef.current,
+        expectedPinLength: pinLengthHintRef.current,
+      });
       return Boolean(result.success && result.pin);
     } finally {
       externalPickerGraceUntilRef.current = null;

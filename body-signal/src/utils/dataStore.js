@@ -1,3 +1,7 @@
+/**
+ * @deprecated Legacy plaintext localStorage helper retained strictly for `scripts/test-data-store.mjs`.
+ * Production runtime uses encrypted IndexedDB (`src/utils/storage.ts`).
+ */
 const STORAGE_KEY = "bs-data-v2";
 const SYNC_QUEUE_KEY = "bs-sync-queue-v1";
 const STORAGE_VERSION = 1;

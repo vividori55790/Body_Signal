@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { UserSettings, MedicationPreset, LogoVariant } from '../types/health';
 import { loadUserSettings, saveUserSettings, DEFAULT_SETTINGS } from '../utils/storage';
 import { translations, Language } from '../i18n/translations';
-import { scheduleDailyReminder, cancelDailyReminder, triggerHaptic, setHapticsEnabled } from '../utils/native';
+import { cancelDailyReminder, triggerHaptic, setHapticsEnabled } from '../utils/native';
 
 interface SettingsContextValue {
   settings: UserSettings;
@@ -196,16 +196,13 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     return shouldPrompt;
   };
 
-  const setReminder = async (reminderEnabled: boolean, reminderTime?: string) => {
+  const setReminder = async (_reminderEnabled: boolean, reminderTime?: string) => {
+    // Deferred to v4: keep reminders disabled and avoid LocalNotifications permission prompts in v2/v3.
     const time = reminderTime || settings.reminderTime;
-    if (reminderEnabled) {
-      await scheduleDailyReminder(time);
-    } else {
-      await cancelDailyReminder();
-    }
+    await cancelDailyReminder();
     await updateAndSave((prev) => ({
       ...prev,
-      reminderEnabled,
+      reminderEnabled: false,
       reminderTime: time,
     }));
   };

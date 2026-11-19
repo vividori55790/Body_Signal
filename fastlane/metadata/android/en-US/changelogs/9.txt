@@ -1,0 +1,5 @@
+v2.1.1
+- Fixed Android biometric prompts to fall back cleanly to the 6-digit app PIN on unlock and delete confirmation
+- Fixed debounced diary save races via serialized persistence and unified local date formatting to avoid UTC drift
+- Added auto-scroll, focus, and highlight rings for missing required fields plus photo rollback on save failure
+- Disabled deferred v4 controls/notification permissions ("In Dev") and prevented Workbox SW cache staleness in APKs

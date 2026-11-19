@@ -14,6 +14,7 @@ import {
   importKeyFromHex,
 } from './crypto';
 import SecureAuth, { isNativeAndroidSecureAuth } from './secureAuthBridge';
+import { toLocalYmd } from './dateUtils';
 
 const DB_NAME = 'bignal_mobile_db';
 const DB_VERSION = 3;
@@ -114,7 +115,7 @@ export async function migrateLegacyDataIfNeeded(): Promise<HealthDataPayload | n
           id: c.id || crypto.randomUUID(),
           label: c.label || '미지정',
           bodyPart: c.bodyPart || '미지정',
-          onsetDate: c.onsetDate || new Date().toISOString().split('T')[0],
+          onsetDate: c.onsetDate || toLocalYmd(new Date()),
           isArchived: Boolean(c.isArchived),
         })),
         logs: data.logs.map((l: any) => ({

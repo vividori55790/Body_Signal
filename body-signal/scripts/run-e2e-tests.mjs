@@ -152,8 +152,8 @@ async function runTestSuite() {
   );
   console.log(`${c.cyan}----------------------------------------------------------------------${c.reset}`);
 
-  // Feature Checklist (15 Features)
-  console.log(`\n${c.bold}Feature Inventory Coverage (15 Features):${c.reset}`);
+  // Feature Checklist (16 Features)
+  console.log(`\n${c.bold}Feature Inventory Coverage (16 Features):${c.reset}`);
   const features = [
     'R1.1 Acute Pain Mode Large Touch UI',
     'R1.2 Dashboard Top Rapid Integration',
@@ -170,6 +170,7 @@ async function runTestSuite() {
     'R5.1 TypeScript Integrity Verification',
     'R5.2 Capacitor Android Sync & Build',
     'R5.3 Android APK Output Verification',
+    'R6.1 Phase A Stability & Dead-Control Gate',
   ];
 
   for (const feat of features) {

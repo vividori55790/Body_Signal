@@ -40,6 +40,7 @@ import { useAuthorizedDelete } from '../components/DeleteAuthModal';
 import { triggerHaptic } from '../utils/native';
 import { testLocalLlmConnection, isOnDeviceLlmEndpoint } from '../utils/localLlm';
 import { encryptBackupWithPassphrase, decryptBackupWithPassphrase } from '../utils/crypto';
+import { toLocalYmd } from '../utils/dateUtils';
 import {
   generateTotpSecret,
   buildOtpAuthUri,
@@ -81,7 +82,6 @@ export const SettingsPage: React.FC = () => {
     setShowDiagnosticsTab,
     setDefaultQuickLoggerOpen,
     setDefaultBodyMapOpen,
-    setReminder,
     addMedicationPreset,
     removeMedicationPreset,
     updateLocalLlm,
@@ -291,7 +291,7 @@ export const SettingsPage: React.FC = () => {
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `body-signal-encrypted-backup-${new Date().toISOString().split('T')[0]}.json`;
+      link.download = `body-signal-encrypted-backup-${toLocalYmd(new Date())}.json`;
       link.click();
       URL.revokeObjectURL(url);
       resetBackupModal();
@@ -336,7 +336,7 @@ export const SettingsPage: React.FC = () => {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `body-signal-report-${new Date().toISOString().split('T')[0]}.csv`;
+    link.download = `body-signal-report-${toLocalYmd(new Date())}.csv`;
     link.click();
     URL.revokeObjectURL(url);
     setCsvWarningModalOpen(false);
@@ -479,7 +479,7 @@ export const SettingsPage: React.FC = () => {
                 <div>
                   <span className="font-bold text-sm block">{isEn ? 'Display & Usability' : '화면 및 사용성'}</span>
                   <span className="text-[11px] text-slate-400">
-                    {isEn ? 'Theme · Language · Bottom Tabs · Reminders' : '테마 · 언어 · 하단 패널 · 알림'}
+                    {isEn ? 'Theme · Language · Bottom Tabs · SOS' : '테마 · 언어 · 하단 패널 · 긴급 버튼'}
                   </span>
                 </div>
               </div>
@@ -570,11 +570,11 @@ export const SettingsPage: React.FC = () => {
                   <Bot size={18} />
                 </div>
                 <div>
-                  <span className="font-bold text-sm block">{isEn ? 'Labs (Experimental)' : '실험실 (개발 중)'}</span>
+                  <span className="font-bold text-sm block">{isEn ? 'Labs (In Development)' : '실험실 (개발 중)'}</span>
                   <span className="text-[11px] text-slate-400">
                     {isEn
-                      ? `On-Device LLM (${settings.localLlm.enabled ? 'ON' : 'OFF'})`
-                      : `로컬 LLM 연동 (${settings.localLlm.enabled ? '활성' : '비활성'})`}
+                      ? 'On-Device LLM (In Dev · Planned for v4.0.0)'
+                      : '로컬 LLM 연동 (개발중 · v4.0.0 정식 지원 예정)'}
                   </span>
                 </div>
               </div>
@@ -811,38 +811,34 @@ export const SettingsPage: React.FC = () => {
             </button>
           </div>
 
-          {/* Daily Reminder */}
-          <div className="p-3.5 space-y-2">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <Bell size={18} className="text-slate-500" />
-                <span className="font-bold text-xs">{t('dailyReminder')}</span>
+          {/* Daily Reminder (In Development — deferred to v4.0.0) */}
+          <div className="p-3.5 space-y-2 opacity-65">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-3 min-w-0">
+                <Bell size={18} className="text-slate-400 shrink-0" />
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="font-bold text-xs">{t('dailyReminder')}</span>
+                    <span className="rounded-full bg-amber-100 dark:bg-amber-950/70 px-2 py-0.5 text-[10px] font-bold text-amber-700 dark:text-amber-300">
+                      {isEn ? 'In Dev (v4)' : '개발중 (v4 예정)'}
+                    </span>
+                  </div>
+                  <p className="text-[10px] text-slate-400">
+                    {isEn
+                      ? 'Background notification channels will be introduced in v4.0.0.'
+                      : '백그라운드 알림·채널 기능은 v4.0.0에서 정식 지원 예정입니다.'}
+                  </p>
+                </div>
               </div>
               <button
                 type="button"
-                onClick={() => setReminder(!settings.reminderEnabled)}
-                className={`w-11 h-6 rounded-full transition-colors ${
-                  settings.reminderEnabled ? 'bg-teal-600' : 'bg-slate-300 dark:bg-slate-700'
-                }`}
+                disabled
+                aria-label={isEn ? 'Daily reminder (in development)' : '일일 기록 알림 (개발중)'}
+                className="w-11 h-6 rounded-full bg-slate-200 dark:bg-slate-800 cursor-not-allowed shrink-0"
               >
-                <div
-                  className={`w-4 h-4 rounded-full bg-white transition-transform ${
-                    settings.reminderEnabled ? 'translate-x-6' : 'translate-x-1'
-                  }`}
-                />
+                <div className="w-4 h-4 rounded-full bg-white translate-x-1" />
               </button>
             </div>
-            {settings.reminderEnabled && (
-              <div className="flex items-center justify-between pl-7">
-                <span className="text-xs text-slate-500">{t('reminderTimeSetting')}</span>
-                <input
-                  type="time"
-                  value={settings.reminderTime}
-                  onChange={(e) => setReminder(true, e.target.value)}
-                  className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-2 py-1 text-xs font-bold"
-                />
-              </div>
-            )}
           </div>
         </div>
       )}
@@ -1118,26 +1114,32 @@ export const SettingsPage: React.FC = () => {
         </div>
       )}
 
-      {/* DEPTH 2E: Experimental Labs (Local LLM, hidden from root clutter) */}
+      {/* DEPTH 2E: Experimental Labs (Local LLM — disabled / in development until v4.0.0) */}
       {activeSection === 'labs' && (
         <section className="space-y-3">
           <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-sm space-y-4">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-2">
               <div>
-                <h2 className="text-xs font-bold text-slate-800 dark:text-slate-100">
-                  {isEn ? 'Local LLM (Private On-Device AI)' : '로컬 LLM (오프라인 프라이빗 AI)'}
-                </h2>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <h2 className="text-xs font-bold text-slate-800 dark:text-slate-100">
+                    {isEn ? 'Local LLM (Private On-Device AI)' : '로컬 LLM (오프라인 프라이빗 AI)'}
+                  </h2>
+                  <span className="rounded-full bg-amber-100 dark:bg-amber-950/70 px-2 py-0.5 text-[10px] font-bold text-amber-700 dark:text-amber-300">
+                    {isEn ? 'In Dev (v4)' : '개발중 (v4 예정)'}
+                  </span>
+                </div>
                 <span className="text-[10px] text-slate-400">
                   {isEn
-                    ? 'On-device AI summary assistant (external hosts blocked)'
-                    : '로컬 LLM 임상 보조 연동 · 온디바이스 전용 (외부 전송 차단)'}
+                    ? 'On-device AI summary assistant (disabled until v4.0.0 integration)'
+                    : '로컬 LLM 임상 보조 연동 · 현재 개발중으로 비활성화됨 (v4.0.0 연동 예정)'}
                 </span>
               </div>
               <input
                 type="checkbox"
+                disabled
                 checked={settings.localLlm.enabled}
                 onChange={(e) => updateLocalLlm({ enabled: e.target.checked })}
-                className="h-5 w-5 accent-teal-600 rounded cursor-pointer"
+                className="h-5 w-5 accent-teal-600 rounded cursor-not-allowed opacity-50"
               />
             </div>
 
@@ -1754,7 +1756,7 @@ export const SettingsPage: React.FC = () => {
         <div>
           <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-200/60 dark:bg-slate-800 text-[10px] font-bold text-slate-500">
             <Shield size={12} className="text-teal-600" />
-            Body Signal Mobile v2.1.0 (Encrypted)
+            Body Signal Mobile v2.1.1 (Encrypted)
           </span>
         </div>
       </div>

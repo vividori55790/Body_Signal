@@ -67,11 +67,13 @@ export function useAuthorizedDelete() {
       return;
     }
     setIsVerifying(false);
+    setPinError('');
     setAuthError(
       isEn
-        ? 'Biometric check was canceled or failed. Please verify with your app PIN.'
-        : '생체인증이 취소되거나 실패했습니다. 앱 PIN으로 인증해 주세요.'
+        ? 'Biometrics canceled or failed. Switched to App PIN verification.'
+        : '생체인증이 취소되거나 실패하여 앱 PIN 입력으로 전환했습니다.'
     );
+    setShowPinPrompt(true);
   };
 
   const handlePinVerify = async (pin: string) => {
@@ -207,6 +209,7 @@ export function useAuthorizedDelete() {
         expectedLength={pinLengthHint}
         title={isEn ? 'Verify PIN to Delete' : '삭제 본인 확인 (PIN)'}
         subtitle={
+          authError ||
           pendingRequest?.description ||
           (isEn ? 'Enter your saved PIN to confirm deletion.' : '기록을 삭제하려면 저장된 PIN을 입력해 주세요.')
         }

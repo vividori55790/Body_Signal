@@ -12,6 +12,7 @@ import {
 import { loadHealthData, saveHealthData, resetAllData } from '../utils/storage';
 import { computeRecordSignature, verifyRecordSignature } from '../utils/crypto';
 import { deleteEncryptedPhoto } from '../utils/mediaStorage';
+import { toLocalYmd } from '../utils/dateUtils';
 import { useAuth } from './AuthContext';
 import { format, differenceInDays } from 'date-fns';
 
@@ -86,8 +87,13 @@ export const HealthProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [diagnosticRecords, setDiagnosticRecords] = useState<DiagnosticRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Debounce timer for diary auto-saving
+  // Debounce timer for diary auto-saving and live refs to avoid stale closures / race overwrites
   const diaryDebounceTimer = useRef<any>(null);
+  const conditionsRef = useRef<Condition[]>([]);
+  const logsRef = useRef<PainLog[]>([]);
+  const diaryEntriesRef = useRef<DiaryEntry[]>([]);
+  const diagnosticRecordsRef = useRef<DiagnosticRecord[]>([]);
+  const persistQueueRef = useRef<Promise<void>>(Promise.resolve());
 
   // Load data once unlocked; purge sensitive records from memory immediately when locked
   useEffect(() => {
@@ -96,6 +102,10 @@ export const HealthProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         clearTimeout(diaryDebounceTimer.current);
         diaryDebounceTimer.current = null;
       }
+      conditionsRef.current = [];
+      logsRef.current = [];
+      diaryEntriesRef.current = [];
+      diagnosticRecordsRef.current = [];
       setConditions([]);
       setLogs([]);
       setDiaryEntries([]);
@@ -107,10 +117,18 @@ export const HealthProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     setIsLoading(true);
     loadHealthData(activeSessionPin || undefined)
       .then(({ data }) => {
-        setConditions(data.conditions || []);
-        setLogs(data.logs || []);
-        setDiaryEntries(data.diaryEntries || []);
-        setDiagnosticRecords(data.diagnosticRecords || []);
+        const nextConditions = data.conditions || [];
+        const nextLogs = data.logs || [];
+        const nextDiary = data.diaryEntries || [];
+        const nextDiagnostics = data.diagnosticRecords || [];
+        conditionsRef.current = nextConditions;
+        logsRef.current = nextLogs;
+        diaryEntriesRef.current = nextDiary;
+        diagnosticRecordsRef.current = nextDiagnostics;
+        setConditions(nextConditions);
+        setLogs(nextLogs);
+        setDiaryEntries(nextDiary);
+        setDiagnosticRecords(nextDiagnostics);
       })
       .catch((err) => {
         console.error('Failed to load health data:', err);
@@ -120,19 +138,21 @@ export const HealthProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       });
   }, [isUnlocked, activeSessionPin]);
 
-  // Persist data helper
-  const persist = async (
-    nextConditions: Condition[],
-    nextLogs: PainLog[],
-    nextDiary: DiaryEntry[],
-    nextDiagnostics: DiagnosticRecord[] = diagnosticRecords
-  ) => {
+  // Serialized persist helper ensuring latest slices & persist-before-commit safety
+  const persist = (
+    nextConditions: Condition[] = conditionsRef.current,
+    nextLogs: PainLog[] = logsRef.current,
+    nextDiary: DiaryEntry[] = diaryEntriesRef.current,
+    nextDiagnostics: DiagnosticRecord[] = diagnosticRecordsRef.current
+  ): Promise<void> => {
     if (isPinSet && !activeSessionPin) {
       const isEn = typeof document !== 'undefined' && document.documentElement?.dataset?.lang === 'en';
-      throw new Error(
-        isEn
-          ? 'App is locked; cannot access the encryption key.'
-          : '앱이 잠겨 있어 암호화 키에 접근할 수 없습니다.'
+      return Promise.reject(
+        new Error(
+          isEn
+            ? 'App is locked; cannot access the encryption key.'
+            : '앱이 잠겨 있어 암호화 키에 접근할 수 없습니다.'
+        )
       );
     }
     const payload: HealthDataPayload = {
@@ -142,7 +162,9 @@ export const HealthProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       diagnosticRecords: nextDiagnostics,
       lastUpdated: new Date().toISOString(),
     };
-    await saveHealthData(payload, activeSessionPin || undefined);
+    const task = persistQueueRef.current.then(() => saveHealthData(payload, activeSessionPin || undefined));
+    persistQueueRef.current = task.catch(() => {});
+    return task;
   };
 
   const saveEntry = async (payload: {
@@ -175,8 +197,13 @@ export const HealthProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       claimDeadlineYears?: number;
     };
   }): Promise<boolean> => {
+    const curConditions = conditionsRef.current;
+    const curLogs = logsRef.current;
+    const curDiary = diaryEntriesRef.current;
+    const curDiagnostics = diagnosticRecordsRef.current;
+
     let conditionId = payload.isUnassigned ? UNASSIGNED_CONDITION_ID : payload.conditionData.id;
-    let nextConditions = [...conditions];
+    let nextConditions = [...curConditions];
 
     if (payload.isNewCondition && !payload.isUnassigned) {
       if (!payload.conditionData.label?.trim() || !payload.conditionData.bodyPart?.trim()) {
@@ -187,18 +214,17 @@ export const HealthProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         id: conditionId,
         label: payload.conditionData.label.trim(),
         bodyPart: payload.conditionData.bodyPart.trim(),
-        onsetDate: payload.conditionData.onsetDate || new Date().toISOString().split('T')[0],
+        onsetDate: payload.conditionData.onsetDate || toLocalYmd(new Date()),
         isArchived: false,
       };
       nextConditions = [...nextConditions, newCond];
-      setConditions(nextConditions);
     }
 
     if (!conditionId) return false;
 
-    let nextLogs = logs;
+    let nextLogs = curLogs;
     if (!payload.skipPainLog) {
-      const prevSignature = logs.length > 0 && logs[0].signature ? logs[0].signature : '';
+      const prevSignature = curLogs.length > 0 && curLogs[0].signature ? curLogs[0].signature : '';
       const newLog: PainLog = {
         id: crypto.randomUUID(),
         conditionId,
@@ -219,11 +245,10 @@ export const HealthProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       };
 
       newLog.signature = await computeRecordSignature(newLog, prevSignature);
-      nextLogs = [newLog, ...logs];
-      setLogs(nextLogs);
+      nextLogs = [newLog, ...curLogs];
     }
 
-    let nextDiagnostics = diagnosticRecords;
+    let nextDiagnostics = curDiagnostics;
     const diagName = payload.diagnosticData?.diagnosisName?.trim();
     if (diagName) {
       const nowIso = new Date().toISOString();
@@ -231,7 +256,7 @@ export const HealthProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         id: crypto.randomUUID(),
         conditionId: payload.isUnassigned ? undefined : conditionId,
         diagnosisDate:
-          payload.diagnosticData?.diagnosisDate || new Date().toISOString().slice(0, 10),
+          payload.diagnosticData?.diagnosisDate || toLocalYmd(new Date()),
         diagnosisName: diagName,
         hospitalName: payload.diagnosticData?.hospitalName?.trim() || '',
         department: payload.diagnosticData?.department?.trim() || '',
@@ -243,11 +268,22 @@ export const HealthProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         createdAt: nowIso,
         updatedAt: nowIso,
       };
-      nextDiagnostics = [newDiag, ...diagnosticRecords];
-      setDiagnosticRecords(nextDiagnostics);
+      nextDiagnostics = [newDiag, ...curDiagnostics];
     }
 
-    await persist(nextConditions, nextLogs, diaryEntries, nextDiagnostics);
+    await persist(nextConditions, nextLogs, curDiary, nextDiagnostics);
+    if (nextConditions !== curConditions) {
+      conditionsRef.current = nextConditions;
+      setConditions(nextConditions);
+    }
+    if (nextLogs !== curLogs) {
+      logsRef.current = nextLogs;
+      setLogs(nextLogs);
+    }
+    if (nextDiagnostics !== curDiagnostics) {
+      diagnosticRecordsRef.current = nextDiagnostics;
+      setDiagnosticRecords(nextDiagnostics);
+    }
     return true;
   };
 
@@ -261,7 +297,11 @@ export const HealthProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     if (!logIds.length) return null;
 
     let targetId = target.existingConditionId;
-    let nextConditions = [...conditions];
+    const curConditions = conditionsRef.current;
+    const curLogs = logsRef.current;
+    const curDiary = diaryEntriesRef.current;
+    const curDiagnostics = diagnosticRecordsRef.current;
+    let nextConditions = [...curConditions];
 
     if (!targetId && target.newCondition) {
       const label = target.newCondition.label.trim();
@@ -275,18 +315,17 @@ export const HealthProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           id: targetId,
           label,
           bodyPart,
-          onsetDate: target.newCondition.onsetDate || new Date().toISOString().split('T')[0],
+          onsetDate: target.newCondition.onsetDate || toLocalYmd(new Date()),
           isArchived: false,
         },
       ];
-      setConditions(nextConditions);
     }
 
     if (!targetId) return null;
 
     const idSet = new Set(logIds);
     const nextLogs = await Promise.all(
-      logs.map(async (log) => {
+      curLogs.map(async (log) => {
         if (!idSet.has(log.id)) return log;
         const updated: PainLog = {
           ...log,
@@ -298,15 +337,19 @@ export const HealthProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       })
     );
 
+    await persist(nextConditions, nextLogs, curDiary, curDiagnostics);
+    conditionsRef.current = nextConditions;
+    logsRef.current = nextLogs;
+    setConditions(nextConditions);
     setLogs(nextLogs);
-    await persist(nextConditions, nextLogs, diaryEntries);
     return targetId;
   };
 
   const updateCondition = async (id: string, updates: Partial<Condition>): Promise<boolean> => {
-    const next = conditions.map((c) => (c.id === id ? { ...c, ...updates } : c));
+    const next = conditionsRef.current.map((c) => (c.id === id ? { ...c, ...updates } : c));
+    await persist(next, logsRef.current, diaryEntriesRef.current, diagnosticRecordsRef.current);
+    conditionsRef.current = next;
     setConditions(next);
-    await persist(next, logs, diaryEntries);
     return true;
   };
 
@@ -315,7 +358,8 @@ export const HealthProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   };
 
   const updateLog = async (id: string, updates: Partial<PainLog>): Promise<boolean> => {
-    const logToUpdate = logs.find((l) => l.id === id);
+    const curLogs = logsRef.current;
+    const logToUpdate = curLogs.find((l) => l.id === id);
     if (!logToUpdate) return false;
 
     const updatedLog: PainLog = {
@@ -326,24 +370,27 @@ export const HealthProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     updatedLog.signedAt = new Date().toISOString();
     updatedLog.signature = await computeRecordSignature(updatedLog, prevSig);
 
-    const next = logs.map((l) => (l.id === id ? updatedLog : l));
+    const next = curLogs.map((l) => (l.id === id ? updatedLog : l));
+    await persist(conditionsRef.current, next, diaryEntriesRef.current, diagnosticRecordsRef.current);
+    logsRef.current = next;
     setLogs(next);
-    await persist(conditions, next, diaryEntries);
     return true;
   };
 
   const deleteLog = async (id: string): Promise<boolean> => {
-    const next = logs.filter((l) => l.id !== id);
+    const next = logsRef.current.filter((l) => l.id !== id);
+    await persist(conditionsRef.current, next, diaryEntriesRef.current, diagnosticRecordsRef.current);
+    logsRef.current = next;
     setLogs(next);
-    await persist(conditions, next, diaryEntries);
     return true;
   };
 
-  // Debounced Diary Entry saving
+  // Debounced Diary Entry saving using live refs to avoid overwriting concurrent log/condition changes
   const saveDiaryEntry = (date: string, text: string) => {
-    const dateKey = date.slice(0, 10);
-    const existingIndex = diaryEntries.findIndex((e) => e.date === dateKey);
-    let nextEntries = [...diaryEntries];
+    const dateKey = toLocalYmd(date);
+    const curEntries = diaryEntriesRef.current;
+    const existingIndex = curEntries.findIndex((e) => e.date === dateKey);
+    const nextEntries = [...curEntries];
 
     if (existingIndex >= 0) {
       if (!text.trim()) {
@@ -363,14 +410,22 @@ export const HealthProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       });
     }
 
+    diaryEntriesRef.current = nextEntries;
     setDiaryEntries(nextEntries);
 
-    // Debounce IndexedDB writing
     if (diaryDebounceTimer.current) {
       clearTimeout(diaryDebounceTimer.current);
     }
     diaryDebounceTimer.current = setTimeout(() => {
-      persist(conditions, logs, nextEntries);
+      diaryDebounceTimer.current = null;
+      persist(
+        conditionsRef.current,
+        logsRef.current,
+        diaryEntriesRef.current,
+        diagnosticRecordsRef.current
+      ).catch((err) => {
+        console.error('Failed to persist debounced diary entry:', err);
+      });
     }, 400);
   };
 
@@ -380,7 +435,7 @@ export const HealthProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const activeConditions = conditions.filter((c) => !c.isArchived);
 
     // Days tracked
-    const uniqueDates = new Set(logs.map((l) => l.date.slice(0, 10)));
+    const uniqueDates = new Set(logs.map((l) => toLocalYmd(l.date)));
 
     // Red flags accumulator
     const redFlagsSet = new Set<string>();
@@ -723,9 +778,10 @@ export const HealthProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       createdAt: now,
       updatedAt: now,
     };
-    const nextDiagnostics = [created, ...diagnosticRecords];
+    const nextDiagnostics = [created, ...diagnosticRecordsRef.current];
+    await persist(conditionsRef.current, logsRef.current, diaryEntriesRef.current, nextDiagnostics);
+    diagnosticRecordsRef.current = nextDiagnostics;
     setDiagnosticRecords(nextDiagnostics);
-    await persist(conditions, logs, diaryEntries, nextDiagnostics);
     return created;
   };
 
@@ -733,31 +789,34 @@ export const HealthProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     id: string,
     updates: Partial<DiagnosticRecord>
   ): Promise<boolean> => {
-    const nextDiagnostics = diagnosticRecords.map((d) =>
+    const nextDiagnostics = diagnosticRecordsRef.current.map((d) =>
       d.id === id ? { ...d, ...updates, updatedAt: new Date().toISOString() } : d
     );
+    await persist(conditionsRef.current, logsRef.current, diaryEntriesRef.current, nextDiagnostics);
+    diagnosticRecordsRef.current = nextDiagnostics;
     setDiagnosticRecords(nextDiagnostics);
-    await persist(conditions, logs, diaryEntries, nextDiagnostics);
     return true;
   };
 
   const deleteDiagnosticRecord = async (id: string): Promise<boolean> => {
-    const target = diagnosticRecords.find((d) => d.id === id);
+    const curDiagnostics = diagnosticRecordsRef.current;
+    const target = curDiagnostics.find((d) => d.id === id);
+    const nextDiagnostics = curDiagnostics.filter((d) => d.id !== id);
+    await persist(conditionsRef.current, logsRef.current, diaryEntriesRef.current, nextDiagnostics);
     if (target?.photoIds?.length) {
       await Promise.all(target.photoIds.map((pid) => deleteEncryptedPhoto(pid)));
     }
-    const nextDiagnostics = diagnosticRecords.filter((d) => d.id !== id);
+    diagnosticRecordsRef.current = nextDiagnostics;
     setDiagnosticRecords(nextDiagnostics);
-    await persist(conditions, logs, diaryEntries, nextDiagnostics);
     return true;
   };
 
   const exportBackupJson = (): string => {
     const payload: HealthDataPayload = {
-      conditions,
-      logs,
-      diaryEntries,
-      diagnosticRecords,
+      conditions: conditionsRef.current,
+      logs: logsRef.current,
+      diaryEntries: diaryEntriesRef.current,
+      diagnosticRecords: diagnosticRecordsRef.current,
       lastUpdated: new Date().toISOString(),
     };
     return JSON.stringify(payload, null, 2);
@@ -774,16 +833,20 @@ export const HealthProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         diagnosticRecords: Array.isArray(raw.diagnosticRecords) ? raw.diagnosticRecords : [],
         lastUpdated: typeof raw.lastUpdated === 'string' ? raw.lastUpdated : new Date().toISOString(),
       });
-      setConditions(validated.conditions);
-      setLogs(validated.logs);
-      setDiaryEntries(validated.diaryEntries);
-      setDiagnosticRecords(validated.diagnosticRecords);
       await persist(
         validated.conditions,
         validated.logs,
         validated.diaryEntries,
         validated.diagnosticRecords
       );
+      conditionsRef.current = validated.conditions;
+      logsRef.current = validated.logs;
+      diaryEntriesRef.current = validated.diaryEntries;
+      diagnosticRecordsRef.current = validated.diagnosticRecords;
+      setConditions(validated.conditions);
+      setLogs(validated.logs);
+      setDiaryEntries(validated.diaryEntries);
+      setDiagnosticRecords(validated.diagnosticRecords);
     } else {
       const isEn = typeof document !== 'undefined' && document.documentElement?.dataset?.lang === 'en';
       throw new Error(isEn ? 'Invalid backup file format.' : '올바른 백업 파일 형식이 아닙니다.');
@@ -791,7 +854,15 @@ export const HealthProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   };
 
   const resetData = async () => {
+    if (diaryDebounceTimer.current) {
+      clearTimeout(diaryDebounceTimer.current);
+      diaryDebounceTimer.current = null;
+    }
     await resetAllData();
+    conditionsRef.current = [];
+    logsRef.current = [];
+    diaryEntriesRef.current = [];
+    diagnosticRecordsRef.current = [];
     setConditions([]);
     setLogs([]);
     setDiaryEntries([]);

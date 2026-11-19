@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   ArrowLeft,
   Clock,
@@ -20,7 +20,9 @@ import BodyMap, { parseMultiRegionParts, formatMultiRegionParts } from '../compo
 import DefaultClosedSuggestion from '../components/DefaultClosedSuggestion';
 import { triggerHaptic } from '../utils/native';
 import { formatMedicationPreset } from '../utils/medication';
-import { compressAndStripExif, encryptDraftPhotos } from '../utils/mediaStorage';
+import { compressAndStripExif, encryptDraftPhotos, deleteEncryptedPhoto } from '../utils/mediaStorage';
+import { toLocalYmd, toLocalDateTimeInput } from '../utils/dateUtils';
+import { focusInvalidElement } from '../utils/formFocus';
 import AddMedicationInline from '../components/AddMedicationInline';
 import PainLevelSelector from '../components/PainLevelSelector';
 import PhotoAttachmentField from '../components/PhotoAttachmentField';
@@ -105,7 +107,7 @@ export const EntryFormPage: React.FC = () => {
   // New Condition Fields
   const [newLabel, setNewLabel] = useState('');
   const [newBodyPart, setNewBodyPart] = useState('');
-  const [newOnsetDate, setNewOnsetDate] = useState(new Date().toISOString().split('T')[0]);
+  const [newOnsetDate, setNewOnsetDate] = useState(() => toLocalYmd(new Date()));
   const [showBodyMap, setShowBodyMap] = useState(settings.defaultBodyMapOpen ?? true);
   const [usedBodyMap, setUsedBodyMap] = useState(false);
   const [showBodyMapPrompt, setShowBodyMapPrompt] = useState(false);
@@ -150,12 +152,23 @@ export const EntryFormPage: React.FC = () => {
   };
 
   // Clinical Observation Fields
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 16));
+  const [date, setDate] = useState(() => toLocalDateTimeInput(new Date()));
   const [intensity, setIntensity] = useState<number>(5);
   const [medication, setMedication] = useState('');
   const [showAddMed, setShowAddMed] = useState(false);
   const [notes, setNotes] = useState('');
   const [error, setError] = useState('');
+  const [invalidField, setInvalidField] = useState<
+    'selectedCondition' | 'unassignedBodyPart' | 'newLabel' | 'newBodyPart' | 'newOnsetDate' | 'diagnosisName' | null
+  >(null);
+
+  const selectedConditionRef = useRef<HTMLSelectElement>(null);
+  const unassignedBodyPartRef = useRef<HTMLInputElement>(null);
+  const newLabelRef = useRef<HTMLInputElement>(null);
+  const newBodyPartRef = useRef<HTMLInputElement>(null);
+  const newOnsetDateRef = useRef<HTMLInputElement>(null);
+  const diagnosisNameRef = useRef<HTMLInputElement>(null);
+  const invalidHighlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Clinical PQRST & Red Flag States
   const [selectedQualities, setSelectedQualities] = useState<string[]>([]);
@@ -167,7 +180,7 @@ export const EntryFormPage: React.FC = () => {
   // Integrated Diagnostic / Visit / Checkup Section (Optional, or standalone when diagnosticOnly is enabled)
   const [includeDiagnostic, setIncludeDiagnostic] = useState(initialIncludeDiagnostic);
   const [diagnosticOnly, setDiagnosticOnly] = useState(initialIncludeDiagnostic);
-  const [diagnosisDate, setDiagnosisDate] = useState(new Date().toISOString().slice(0, 10));
+  const [diagnosisDate, setDiagnosisDate] = useState(() => toLocalYmd(new Date()));
   const [diagnosisName, setDiagnosisName] = useState('');
   const [hospitalName, setHospitalName] = useState('');
   const [department, setDepartment] = useState('');
@@ -185,7 +198,7 @@ export const EntryFormPage: React.FC = () => {
     } else if (type === 'yesterday') {
       d.setDate(d.getDate() - 1);
     }
-    setDate(d.toISOString().slice(0, 16));
+    setDate(toLocalDateTimeInput(d));
   };
 
   const handleIntensityClick = (num: number) => {
@@ -231,20 +244,66 @@ export const EntryFormPage: React.FC = () => {
     setMedication((prev) => (prev ? `${prev}, ${name}` : name));
   };
 
+  const flagInvalidField = (
+    field: NonNullable<typeof invalidField>,
+    message: string,
+    targetEl: HTMLElement | null
+  ) => {
+    triggerHaptic();
+    setError(message);
+    setInvalidField(field);
+    if (invalidHighlightTimerRef.current) {
+      clearTimeout(invalidHighlightTimerRef.current);
+    }
+    focusInvalidElement(targetEl);
+    invalidHighlightTimerRef.current = setTimeout(() => {
+      setInvalidField(null);
+    }, 2400);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setInvalidField(null);
 
     if (mode === 'new') {
-      if (!newLabel.trim() || !newBodyPart.trim()) {
-        setError(isEn ? 'Enter both condition name and body part.' : '질환명과 신체 부위를 입력해 주세요.');
+      if (!newLabel.trim()) {
+        flagInvalidField(
+          'newLabel',
+          isEn ? 'Enter the condition name.' : '질환명을 입력해 주세요.',
+          newLabelRef.current
+        );
+        return;
+      }
+      if (!newBodyPart.trim()) {
+        flagInvalidField(
+          'newBodyPart',
+          isEn ? 'Select or enter the affected body part.' : '신체 부위를 선택하거나 입력해 주세요.',
+          newBodyPartRef.current
+        );
+        return;
+      }
+      if (!newOnsetDate) {
+        flagInvalidField(
+          'newOnsetDate',
+          isEn ? 'Select the condition onset date.' : '발병일을 선택해 주세요.',
+          newOnsetDateRef.current
+        );
         return;
       }
     } else if (mode === 'existing' && !selectedConditionId) {
-      setError(isEn ? 'Please select a condition to track.' : '추적할 질환을 선택해 주세요.');
+      flagInvalidField(
+        'selectedCondition',
+        isEn ? 'Please select a condition to track.' : '추적할 질환을 선택해 주세요.',
+        selectedConditionRef.current
+      );
       return;
     } else if (mode === 'unassigned' && !diagnosticOnly && !unassignedBodyPart.trim()) {
-      setError(isEn ? 'Select or enter the affected body part.' : '아픈 부위를 선택하거나 입력해 주세요.');
+      flagInvalidField(
+        'unassignedBodyPart',
+        isEn ? 'Select or enter the affected body part.' : '아픈 부위를 선택하거나 입력해 주세요.',
+        unassignedBodyPartRef.current
+      );
       return;
     }
 
@@ -254,17 +313,24 @@ export const EntryFormPage: React.FC = () => {
       Boolean(diagnosisName.trim() || hospitalName.trim() || department.trim() || amountKrw.trim() || draftPhotos.length > 0);
 
     if (hasDiagnosticInput && !diagnosisName.trim()) {
-      setError(
-        isEn
-          ? 'Please enter a diagnosis, visit, or checkup title.'
-          : '진단명 또는 진료·검사 내용을 입력해 주세요.'
-      );
+      setIncludeDiagnostic(true);
+      setTimeout(() => {
+        flagInvalidField(
+          'diagnosisName',
+          isEn
+            ? 'Please enter a diagnosis, visit, or checkup title.'
+            : '진단명 또는 진료·검사 내용을 입력해 주세요.',
+          diagnosisNameRef.current
+        );
+      }, 20);
       return;
     }
 
     setIsSubmitting(true);
+    let createdPhotoIds: string[] = [];
     try {
       const photoIds = await encryptDraftPhotos(draftPhotos, activeSessionPin || undefined);
+      createdPhotoIds = photoIds;
 
       const parsedAmount = amountKrw.trim() ? Number(amountKrw.replace(/,/g, '')) : undefined;
 
@@ -313,11 +379,17 @@ export const EntryFormPage: React.FC = () => {
         triggerHaptic();
         navigate('/');
       } else {
+        if (createdPhotoIds.length) {
+          await Promise.all(createdPhotoIds.map((pid) => deleteEncryptedPhoto(pid).catch(() => {})));
+        }
         setError(
           isEn ? 'Failed to save record. Please check your inputs.' : '기록 저장에 실패했습니다. 입력값을 확인해 주세요.'
         );
       }
     } catch (err: any) {
+      if (createdPhotoIds.length) {
+        await Promise.all(createdPhotoIds.map((pid) => deleteEncryptedPhoto(pid).catch(() => {})));
+      }
       setError(
         err?.message || (isEn ? 'Failed to save record. Please try again.' : '기록 저장 중 오류가 발생했습니다.')
       );
@@ -355,7 +427,7 @@ export const EntryFormPage: React.FC = () => {
         </div>
       </header>
 
-      <form onSubmit={handleSubmit} className="p-4 max-w-md mx-auto space-y-5">
+      <form onSubmit={handleSubmit} noValidate className="p-4 max-w-md mx-auto space-y-5">
         {error && (
           <div className="flex items-center gap-2 rounded-xl border border-rose-200 dark:border-rose-900 bg-rose-50 dark:bg-rose-950/50 p-3 text-xs font-bold text-rose-600 dark:text-rose-400">
             <AlertCircle size={16} />
@@ -424,9 +496,17 @@ export const EntryFormPage: React.FC = () => {
                 {t('selectCondition')}
               </label>
               <select
+                ref={selectedConditionRef}
                 value={selectedConditionId}
-                onChange={(e) => setSelectedConditionId(e.target.value)}
-                className="w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 p-3 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                onChange={(e) => {
+                  setSelectedConditionId(e.target.value);
+                  if (invalidField === 'selectedCondition') setInvalidField(null);
+                }}
+                className={`w-full rounded-xl border bg-slate-50 dark:bg-slate-800 p-3 text-sm font-medium focus:outline-none focus:ring-2 ${
+                  invalidField === 'selectedCondition'
+                    ? 'border-rose-500 ring-2 ring-rose-500 focus:ring-rose-500'
+                    : 'border-slate-200 dark:border-slate-800 focus:ring-emerald-500'
+                }`}
               >
                 {activeConditions.map((c) => (
                   <option key={c.id} value={c.id}>
@@ -462,12 +542,20 @@ export const EntryFormPage: React.FC = () => {
                   </button>
                 </div>
                 <input
+                  ref={unassignedBodyPartRef}
                   required={!diagnosticOnly}
                   type="text"
                   placeholder={t('bodyPartPlaceholder')}
                   value={unassignedBodyPart}
-                  onChange={(e) => setUnassignedBodyPart(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 p-3 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  onChange={(e) => {
+                    setUnassignedBodyPart(e.target.value);
+                    if (invalidField === 'unassignedBodyPart') setInvalidField(null);
+                  }}
+                  className={`w-full rounded-xl border bg-slate-50 dark:bg-slate-800 p-3 text-sm font-medium focus:outline-none focus:ring-2 ${
+                    invalidField === 'unassignedBodyPart'
+                      ? 'border-rose-500 ring-2 ring-rose-500 focus:ring-rose-500'
+                      : 'border-slate-200 dark:border-slate-800 focus:ring-emerald-500'
+                  }`}
                 />
               </div>
               {showBodyMapPrompt && (
@@ -506,12 +594,20 @@ export const EntryFormPage: React.FC = () => {
                   {t('conditionLabel')}
                 </label>
                 <input
+                  ref={newLabelRef}
                   required
                   type="text"
                   placeholder={t('conditionLabelPlaceholder')}
                   value={newLabel}
-                  onChange={(e) => setNewLabel(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 p-3 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  onChange={(e) => {
+                    setNewLabel(e.target.value);
+                    if (invalidField === 'newLabel') setInvalidField(null);
+                  }}
+                  className={`w-full rounded-xl border bg-slate-50 dark:bg-slate-800 p-3 text-sm font-medium focus:outline-none focus:ring-2 ${
+                    invalidField === 'newLabel'
+                      ? 'border-rose-500 ring-2 ring-rose-500 focus:ring-rose-500'
+                      : 'border-slate-200 dark:border-slate-800 focus:ring-emerald-500'
+                  }`}
                 />
               </div>
 
@@ -535,12 +631,20 @@ export const EntryFormPage: React.FC = () => {
                   </button>
                 </div>
                 <input
+                  ref={newBodyPartRef}
                   required
                   type="text"
                   placeholder={t('bodyPartPlaceholder')}
                   value={newBodyPart}
-                  onChange={(e) => setNewBodyPart(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 p-3 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  onChange={(e) => {
+                    setNewBodyPart(e.target.value);
+                    if (invalidField === 'newBodyPart') setInvalidField(null);
+                  }}
+                  className={`w-full rounded-xl border bg-slate-50 dark:bg-slate-800 p-3 text-sm font-medium focus:outline-none focus:ring-2 ${
+                    invalidField === 'newBodyPart'
+                      ? 'border-rose-500 ring-2 ring-rose-500 focus:ring-rose-500'
+                      : 'border-slate-200 dark:border-slate-800 focus:ring-emerald-500'
+                  }`}
                 />
               </div>
 
@@ -581,11 +685,19 @@ export const EntryFormPage: React.FC = () => {
                   {t('onsetDate')}
                 </label>
                 <input
+                  ref={newOnsetDateRef}
                   required
                   type="date"
                   value={newOnsetDate}
-                  onChange={(e) => setNewOnsetDate(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 p-3 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  onChange={(e) => {
+                    setNewOnsetDate(e.target.value);
+                    if (invalidField === 'newOnsetDate') setInvalidField(null);
+                  }}
+                  className={`w-full rounded-xl border bg-slate-50 dark:bg-slate-800 p-3 text-sm font-medium focus:outline-none focus:ring-2 ${
+                    invalidField === 'newOnsetDate'
+                      ? 'border-rose-500 ring-2 ring-rose-500 focus:ring-rose-500'
+                      : 'border-slate-200 dark:border-slate-800 focus:ring-emerald-500'
+                  }`}
                 />
               </div>
             </div>
@@ -964,14 +1076,22 @@ export const EntryFormPage: React.FC = () => {
                   {isEn ? 'Diagnosis / Exam Details' : '진단명 / 진료·검사 내용'}
                 </label>
                 <input
+                  ref={diagnosisNameRef}
                   type="text"
                   required={diagnosticOnly}
                   value={diagnosisName}
-                  onChange={(e) => setDiagnosisName(e.target.value)}
+                  onChange={(e) => {
+                    setDiagnosisName(e.target.value);
+                    if (invalidField === 'diagnosisName') setInvalidField(null);
+                  }}
                   placeholder={
                     isEn ? 'e.g., Lumbar X-ray, Outpatient orthopedic visit' : '예: 요추 X-ray 검사, 정형외과 외래 진료'
                   }
-                  className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs"
+                  className={`w-full p-2.5 rounded-xl border bg-slate-50 dark:bg-slate-800 text-xs focus:outline-none focus:ring-2 ${
+                    invalidField === 'diagnosisName'
+                      ? 'border-rose-500 ring-2 ring-rose-500 focus:ring-rose-500'
+                      : 'border-slate-200 dark:border-slate-700 focus:ring-emerald-500'
+                  }`}
                 />
               </div>
 

@@ -87,44 +87,18 @@ export async function triggerHaptic(style: ImpactStyle = ImpactStyle.Light): Pro
 
 
 /**
- * Schedule daily recurring reminder
+ * Schedule daily recurring reminder.
+ *
+ * Deferred to v4: blocked during v2/v3 so @capacitor/local-notifications never
+ * triggers runtime POST_NOTIFICATIONS permission prompts while UI is disabled.
  */
-export async function scheduleDailyReminder(time: string, title = '바디 시그널 알림', body = '오늘의 통증과 복용 약물을 기록해 보세요.'): Promise<boolean> {
-  try {
-    const [hoursStr, minutesStr] = time.split(':');
-    const hours = parseInt(hoursStr, 10);
-    const minutes = parseInt(minutesStr, 10);
-
-    const perm = await LocalNotifications.requestPermissions();
-    if (perm.display !== 'granted') {
-      return false;
-    }
-
-    // Cancel existing reminder
-    await LocalNotifications.cancel({ notifications: [{ id: 1001 }] });
-
-    // Schedule notification
-    await LocalNotifications.schedule({
-      notifications: [
-        {
-          id: 1001,
-          title,
-          body,
-          schedule: {
-            on: {
-              hour: hours,
-              minute: minutes,
-            },
-            allowWhileIdle: true,
-          },
-        },
-      ],
-    });
-    return true;
-  } catch (err) {
-    console.warn('LocalNotifications scheduling failed (web fallback):', err);
-    return false;
-  }
+export async function scheduleDailyReminder(
+  _time: string,
+  _title = '바디 시그널 알림',
+  _body = '오늘의 통증과 복용 약물을 기록해 보세요.'
+): Promise<boolean> {
+  await cancelDailyReminder();
+  return false;
 }
 
 /**

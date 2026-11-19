@@ -126,13 +126,21 @@ export async function saveBiometricMeta(meta: BiometricMeta | null): Promise<voi
 /**
  * Checks if biometric / platform passkey authentication is available on device
  */
-export async function checkBiometricAvailability(): Promise<boolean> {
+export async function checkBiometricAvailability(options?: {
+  allowDeviceCredential?: boolean;
+}): Promise<boolean> {
   if (mockModeOverride !== null) return mockModeOverride;
   if (typeof window === 'undefined') return false;
 
   if (isNativeAndroidSecureAuth()) {
     try {
       const res = await SecureAuth.isBiometricAvailable();
+      if (options?.allowDeviceCredential) {
+        return Boolean(res.available);
+      }
+      if (typeof res.strongBiometric === 'boolean') {
+        return res.strongBiometric;
+      }
       return Boolean(res.available);
     } catch (err) {
       console.warn('Native biometric availability check failed:', err);
@@ -156,7 +164,10 @@ export async function checkBiometricAvailability(): Promise<boolean> {
 /**
  * Enrolls biometrics with user's validated PIN
  */
-export async function enrollBiometrics(pin: string): Promise<boolean> {
+export async function enrollBiometrics(
+  pin: string,
+  options?: { allowDeviceCredential?: boolean }
+): Promise<boolean> {
   try {
     // 1. Verify PIN before enrollment
     const pinCheck = await verifyAppPin(pin);
@@ -166,11 +177,16 @@ export async function enrollBiometrics(pin: string): Promise<boolean> {
 
     // Native Android path: Hardware-backed AndroidKeyStore + BiometricPrompt
     if (mockModeOverride === null && isNativeAndroidSecureAuth()) {
+      const isEn = typeof document !== 'undefined' && document.documentElement?.dataset?.lang === 'en';
+      const allowDeviceCredential = Boolean(options?.allowDeviceCredential);
       const res = await SecureAuth.enrollBiometricPin({
         pin,
-        title: '생체인증 등록',
-        subtitle: '지문 또는 생체정보로 앱 잠금을 안전하게 보호합니다.',
-        negativeButtonText: '취소',
+        title: isEn ? 'Enable Biometric Unlock' : '생체인증 등록',
+        subtitle: isEn
+          ? 'Protect app unlock with your device fingerprint or biometrics.'
+          : '지문 또는 생체정보로 앱 잠금을 안전하게 보호합니다.',
+        negativeButtonText: isEn ? 'Cancel' : '취소',
+        allowDeviceCredential,
       });
       if (res.success) {
         await saveBiometricMeta(null);
@@ -294,14 +310,29 @@ export async function disableBiometrics(): Promise<void> {
  * Prompts user for biometric verification and unwraps active session PIN
  * Resolves { success: false } smoothly without throwing on cancel or failure.
  */
-export async function authenticateWithBiometrics(): Promise<{ success: boolean; pin?: string }> {
+export async function authenticateWithBiometrics(options?: {
+  allowDeviceCredential?: boolean;
+  expectedPinLength?: number;
+}): Promise<{ success: boolean; pin?: string }> {
   try {
     // Native Android path: Hardware-backed AndroidKeyStore + BiometricPrompt CryptoObject
     if (mockModeOverride === null && isNativeAndroidSecureAuth()) {
+      const isEn = typeof document !== 'undefined' && document.documentElement?.dataset?.lang === 'en';
+      const allowDeviceCredential = Boolean(options?.allowDeviceCredential);
+      const pinLen = options?.expectedPinLength || 6;
       const res = await SecureAuth.authenticateBiometricPin({
-        title: '생체인증 잠금 해제',
-        subtitle: '건강 데이터 접근을 위해 본인 인증이 필요합니다.',
-        negativeButtonText: 'PIN 입력',
+        title: isEn ? 'Biometric Unlock' : '생체인증 잠금 해제',
+        subtitle: isEn
+          ? 'Verify your biometrics to unlock health records.'
+          : '건강 데이터 접근을 위해 본인 인증이 필요합니다.',
+        negativeButtonText: allowDeviceCredential
+          ? isEn
+            ? 'Cancel'
+            : '취소'
+          : isEn
+          ? `Enter ${pinLen}-digit PIN`
+          : `${pinLen}자리 PIN 입력`,
+        allowDeviceCredential,
       });
       if (!res.success || !res.pin) {
         return { success: false };

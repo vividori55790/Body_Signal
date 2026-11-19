@@ -24,7 +24,15 @@ import { useAuth } from '../context/AuthContext';
 import { useSettings } from '../context/SettingsContext';
 import { DiagnosticRecord } from '../types/health';
 import { calculateInsuranceClaimStatus } from '../utils/insurance';
-import { compressAndStripExif, encryptDraftPhotos, saveEncryptedPhoto, loadEncryptedPhoto } from '../utils/mediaStorage';
+import {
+  compressAndStripExif,
+  encryptDraftPhotos,
+  saveEncryptedPhoto,
+  loadEncryptedPhoto,
+  deleteEncryptedPhoto,
+} from '../utils/mediaStorage';
+import { toLocalYmd } from '../utils/dateUtils';
+import { focusInvalidElement } from '../utils/formFocus';
 import { triggerHaptic } from '../utils/native';
 
 export const DiagnosticsPage: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
@@ -43,7 +51,7 @@ export const DiagnosticsPage: React.FC<{ embedded?: boolean }> = ({ embedded = f
   const preselectedConditionId = (location.state as { conditionId?: string } | null)?.conditionId || '';
   const [isFormOpen, setIsFormOpen] = useState(Boolean(preselectedConditionId));
   const [linkedConditionId, setLinkedConditionId] = useState(preselectedConditionId);
-  const [diagnosisDate, setDiagnosisDate] = useState(new Date().toISOString().slice(0, 10));
+  const [diagnosisDate, setDiagnosisDate] = useState(() => toLocalYmd(new Date()));
   const [diagnosisName, setDiagnosisName] = useState('');
   const [hospitalName, setHospitalName] = useState('');
   const [department, setDepartment] = useState('');
@@ -53,6 +61,10 @@ export const DiagnosticsPage: React.FC<{ embedded?: boolean }> = ({ embedded = f
   const [draftPhotos, setDraftPhotos] = useState<string[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [formError, setFormError] = useState('');
+  const [invalidField, setInvalidField] = useState<'diagnosisDate' | 'diagnosisName' | null>(null);
+  const diagnosisDateRef = useRef<HTMLInputElement>(null);
+  const diagnosisNameRef = useRef<HTMLInputElement>(null);
+  const invalidTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Decrypted photos cache in memory (automatically purged on lock/unmount)
   const [decryptedPhotos, setDecryptedPhotos] = useState<Record<string, string>>({});
@@ -175,7 +187,7 @@ export const DiagnosticsPage: React.FC<{ embedded?: boolean }> = ({ embedded = f
   }, [enrichedRecords]);
 
   const resetForm = () => {
-    setDiagnosisDate(new Date().toISOString().slice(0, 10));
+    setDiagnosisDate(toLocalYmd(new Date()));
     setDiagnosisName('');
     setHospitalName('');
     setDepartment('');
@@ -185,18 +197,46 @@ export const DiagnosticsPage: React.FC<{ embedded?: boolean }> = ({ embedded = f
     setLinkedConditionId('');
     setDraftPhotos([]);
     setFormError('');
+    setInvalidField(null);
     setIsFormOpen(false);
+  };
+
+  const flagInvalid = (
+    field: NonNullable<typeof invalidField>,
+    message: string,
+    targetEl: HTMLElement | null
+  ) => {
+    triggerHaptic();
+    setFormError(message);
+    setInvalidField(field);
+    if (invalidTimerRef.current) clearTimeout(invalidTimerRef.current);
+    focusInvalidElement(targetEl);
+    invalidTimerRef.current = setTimeout(() => setInvalidField(null), 2400);
   };
 
   const handleSaveRecord = async (e: React.FormEvent) => {
     e.preventDefault();
+    setInvalidField(null);
+    if (!diagnosisDate) {
+      flagInvalid(
+        'diagnosisDate',
+        isEn ? 'Please select the diagnosis or visit date.' : '진단일자를 선택해 주세요.',
+        diagnosisDateRef.current
+      );
+      return;
+    }
     if (!diagnosisName.trim()) {
-      setFormError(isEn ? 'Please enter a diagnosis or visit title.' : '진단명 또는 진료 내용을 입력해 주세요.');
+      flagInvalid(
+        'diagnosisName',
+        isEn ? 'Please enter a diagnosis or visit title.' : '진단명 또는 진료 내용을 입력해 주세요.',
+        diagnosisNameRef.current
+      );
       return;
     }
 
     setIsSaving(true);
     setFormError('');
+    let createdPhotoIds: string[] = [];
     try {
       triggerHaptic();
       const photoIds = await encryptDraftPhotos(
@@ -204,13 +244,7 @@ export const DiagnosticsPage: React.FC<{ embedded?: boolean }> = ({ embedded = f
         activeSessionPin || undefined,
         saveEncryptedPhoto
       );
-      setDecryptedPhotos((prev) => {
-        const next = { ...prev };
-        photoIds.forEach((pid, idx) => {
-          if (draftPhotos[idx]) next[pid] = draftPhotos[idx];
-        });
-        return next;
-      });
+      createdPhotoIds = photoIds;
 
       const parsedAmount = amountKrw.trim() ? Number(amountKrw.replace(/,/g, '')) : undefined;
       await addDiagnosticRecord({
@@ -226,8 +260,19 @@ export const DiagnosticsPage: React.FC<{ embedded?: boolean }> = ({ embedded = f
         claimDeadlineYears,
       });
 
+      setDecryptedPhotos((prev) => {
+        const next = { ...prev };
+        photoIds.forEach((pid, idx) => {
+          if (draftPhotos[idx]) next[pid] = draftPhotos[idx];
+        });
+        return next;
+      });
+
       resetForm();
     } catch (err: any) {
+      if (createdPhotoIds.length) {
+        await Promise.all(createdPhotoIds.map((pid) => deleteEncryptedPhoto(pid).catch(() => {})));
+      }
       setFormError(err?.message || (isEn ? 'Failed to save diagnostic record.' : '진단 기록 저장에 실패했습니다.'));
     } finally {
       setIsSaving(false);
@@ -663,6 +708,7 @@ export const DiagnosticsPage: React.FC<{ embedded?: boolean }> = ({ embedded = f
         <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
           <form
             onSubmit={handleSaveRecord}
+            noValidate
             className="w-full max-w-md rounded-t-3xl sm:rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-5 shadow-2xl space-y-3.5 max-h-[90vh] overflow-y-auto"
           >
             <div className="flex items-center justify-between">
@@ -680,11 +726,19 @@ export const DiagnosticsPage: React.FC<{ embedded?: boolean }> = ({ embedded = f
                   {isEn ? 'Diagnosis Date' : '진단일자'}
                 </label>
                 <input
+                  ref={diagnosisDateRef}
                   type="date"
                   required
                   value={diagnosisDate}
-                  onChange={(e) => setDiagnosisDate(e.target.value)}
-                  className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-bold"
+                  onChange={(e) => {
+                    setDiagnosisDate(e.target.value);
+                    if (invalidField === 'diagnosisDate') setInvalidField(null);
+                  }}
+                  className={`w-full p-2.5 rounded-xl border bg-slate-50 dark:bg-slate-800 text-xs font-bold focus:outline-none focus:ring-2 ${
+                    invalidField === 'diagnosisDate'
+                      ? 'border-rose-500 ring-2 ring-rose-500 focus:ring-rose-500'
+                      : 'border-slate-200 dark:border-slate-700 focus:ring-emerald-500'
+                  }`}
                 />
               </div>
               <div>
@@ -708,12 +762,20 @@ export const DiagnosticsPage: React.FC<{ embedded?: boolean }> = ({ embedded = f
                 {isEn ? 'Diagnosis / Visit Details *' : '진단명 / 진료 내용 *'}
               </label>
               <input
+                ref={diagnosisNameRef}
                 type="text"
                 required
                 value={diagnosisName}
-                onChange={(e) => setDiagnosisName(e.target.value)}
+                onChange={(e) => {
+                  setDiagnosisName(e.target.value);
+                  if (invalidField === 'diagnosisName') setInvalidField(null);
+                }}
                 placeholder={isEn ? 'e.g., Lumbar sprain, Outpatient migraine visit' : '예: 요추 염좌, 편두통 외래 진료'}
-                className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs"
+                className={`w-full p-2.5 rounded-xl border bg-slate-50 dark:bg-slate-800 text-xs focus:outline-none focus:ring-2 ${
+                  invalidField === 'diagnosisName'
+                    ? 'border-rose-500 ring-2 ring-rose-500 focus:ring-rose-500'
+                    : 'border-slate-200 dark:border-slate-700 focus:ring-emerald-500'
+                }`}
               />
             </div>
 

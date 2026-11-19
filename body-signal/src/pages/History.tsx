@@ -30,6 +30,7 @@ import { useHealth } from '../context/HealthContext';
 import { useSettings } from '../context/SettingsContext';
 import { PainLog, Condition, UNASSIGNED_CONDITION_ID } from '../types/health';
 import { triggerHaptic } from '../utils/native';
+import { toLocalDateTimeInput } from '../utils/dateUtils';
 import CalendarPage from './CalendarPage';
 import DiagnosticsPage from './DiagnosticsPage';
 import StatsPage from './StatsPage';
@@ -115,7 +116,7 @@ const HistoryItem: React.FC<HistoryItemProps> = ({
 
   const beginEdit = (e: React.MouseEvent) => {
     e.stopPropagation();
-    setEditDate(new Date(log.date).toISOString().slice(0, 16));
+    setEditDate(toLocalDateTimeInput(log.date));
     setEditIntensity(log.intensity);
     setEditMedication(log.medication || '');
     setEditNotes(log.notes || '');

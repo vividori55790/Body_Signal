@@ -1,3 +1,7 @@
+/**
+ * @deprecated Legacy offline sync queue helper retained strictly for `scripts/test-data-store.mjs`.
+ * Not imported by the production offline-first bundle.
+ */
 import { acknowledgeSyncItem, getNextSyncItem } from "./dataStore.js";
 
 export const drainSyncQueue = async (sendSnapshot) => {

@@ -104,7 +104,7 @@ export const UserSettingsSchema = z.object({
   theme: z.enum(['light', 'dark', 'system']).default('system'),
   logoVariant: LogoVariantSchema.default('cube-3d'),
   hapticsEnabled: z.boolean().default(true),
-  reminderEnabled: z.boolean().default(false),
+  reminderEnabled: z.boolean().default(false), // Deferred to v4.0.0 UI (disabled under Zero Dead-Control Gate)
   reminderTime: z.string().default('21:00'), // HH:mm
   pinEnabled: z.boolean().default(false),
   quickSosEnabled: z.boolean().default(false),
@@ -113,7 +113,7 @@ export const UserSettingsSchema = z.object({
   defaultBodyMapOpen: z.boolean().default(true),
   quickLoggerUnusedCloseCount: z.number().int().min(0).default(0),
   bodyMapUnusedCloseCount: z.number().int().min(0).default(0),
-  emrFormat: z.enum(['standard', 'soap']).default('standard'),
+  emrFormat: z.enum(['standard', 'soap']).default('standard'), // Deferred/legacy preference (disabled in v2 Settings UI)
   localLlm: LocalLlmConfigSchema.default({
     enabled: false,
     endpoint: 'http://localhost:11434/v1',

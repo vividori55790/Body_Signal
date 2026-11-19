@@ -48,6 +48,7 @@ public class SecureAuthPlugin extends Plugin {
     private static final String PREF_BIO_IV = "bio_pin_iv";
     private static final String PREF_BIO_KEY_ALIAS = "bio_key_alias";
     private static final String PREF_BIO_MODE = "bio_auth_mode"; // "keystore_auth" | "legacy_keyguard"
+    private static final String PREF_BIO_ALLOW_DEVICE_CRED = "bio_allow_device_cred";
     private static final String PREF_BIO_ENROLLED_AT = "bio_enrolled_at";
     private static final String PREF_DEVICE_KEY_CT = "device_key_ct";
     private static final String PREF_DEVICE_KEY_IV = "device_key_iv";
@@ -79,7 +80,7 @@ public class SecureAuthPlugin extends Plugin {
         return km != null && km.isDeviceSecure();
     }
 
-    private SecretKey getOrCreateBioKey(String alias, boolean recreate) throws Exception {
+    private SecretKey getOrCreateBioKey(String alias, boolean recreate, boolean allowDeviceCredential) throws Exception {
         KeyStore keyStore = KeyStore.getInstance(ANDROID_KEYSTORE);
         keyStore.load(null);
 
@@ -103,10 +104,10 @@ public class SecureAuthPlugin extends Plugin {
                 .setInvalidatedByBiometricEnrollment(true);
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                builder.setUserAuthenticationParameters(
-                    0,
-                    KeyProperties.AUTH_BIOMETRIC_STRONG | KeyProperties.AUTH_DEVICE_CREDENTIAL
-                );
+                int authTypes = allowDeviceCredential
+                    ? (KeyProperties.AUTH_BIOMETRIC_STRONG | KeyProperties.AUTH_DEVICE_CREDENTIAL)
+                    : KeyProperties.AUTH_BIOMETRIC_STRONG;
+                builder.setUserAuthenticationParameters(0, authTypes);
             }
 
             keyGenerator.init(builder.build());
@@ -114,6 +115,23 @@ public class SecureAuthPlugin extends Plugin {
         }
 
         return ((KeyStore.SecretKeyEntry) keyStore.getEntry(alias, null)).getSecretKey();
+    }
+
+    private void configurePromptAuthenticators(
+        BiometricPrompt.PromptInfo.Builder promptBuilder,
+        boolean allowDeviceCredential,
+        String negativeButtonText
+    ) {
+        if (allowDeviceCredential && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            promptBuilder.setAllowedAuthenticators(
+                BiometricManager.Authenticators.BIOMETRIC_STRONG
+                    | BiometricManager.Authenticators.DEVICE_CREDENTIAL
+            );
+        } else {
+            promptBuilder
+                .setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG)
+                .setNegativeButtonText(negativeButtonText);
+        }
     }
 
     @SuppressWarnings("deprecation")
@@ -195,6 +213,7 @@ public class SecureAuthPlugin extends Plugin {
             .remove(PREF_BIO_IV)
             .remove(PREF_BIO_KEY_ALIAS)
             .remove(PREF_BIO_MODE)
+            .remove(PREF_BIO_ALLOW_DEVICE_CRED)
             .remove(PREF_BIO_ENROLLED_AT)
             .apply();
         deleteKeyAliasQuietly(BIO_KEY_ALIAS);
@@ -241,20 +260,22 @@ public class SecureAuthPlugin extends Plugin {
             return;
         }
 
-        String title = call.getString("title", "생체인증 / 기기 잠금 등록");
-        String subtitle = call.getString("subtitle", "안드로이드에 저장된 지문·PIN·비밀번호로 잠금을 보호합니다.");
+        String title = call.getString("title", "생체인증 등록");
+        String subtitle = call.getString("subtitle", "지문 또는 생체정보로 앱 잠금을 안전하게 보호합니다.");
         String negativeButtonText = call.getString("negativeButtonText", "취소");
+        boolean allowDeviceCredential = Boolean.TRUE.equals(call.getBoolean("allowDeviceCredential", false));
 
-        // API 30+: Unified BiometricStrong + DeviceCredential hardware-backed CryptoObject
-        // API 24-29 with strong biometric: Strong biometric CryptoObject
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R || isStrongBiometricAvailable()) {
+        // Use pure BIOMETRIC_STRONG for standard app-PIN users even on API 30+, keeping DEVICE_CREDENTIAL strictly opt-in
+        boolean canUseKeystoreCrypto = isStrongBiometricAvailable()
+            || (allowDeviceCredential && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R);
+        if (canUseKeystoreCrypto) {
             final String currentAlias = getPrefs().getString(PREF_BIO_KEY_ALIAS, BIO_KEY_ALIAS);
             final boolean hasExisting = getPrefs().contains(PREF_BIO_CT);
             final String targetAlias = hasExisting
                 ? (BIO_KEY_ALIAS.equals(currentAlias) ? BIO_KEY_ALIAS_ALT : BIO_KEY_ALIAS)
                 : BIO_KEY_ALIAS;
             try {
-                SecretKey key = getOrCreateBioKey(targetAlias, true);
+                SecretKey key = getOrCreateBioKey(targetAlias, true, allowDeviceCredential);
                 Cipher cipher = Cipher.getInstance(TRANSFORMATION);
                 cipher.init(Cipher.ENCRYPT_MODE, key);
 
@@ -288,6 +309,7 @@ public class SecureAuthPlugin extends Plugin {
                                         .putString(PREF_BIO_IV, Base64.encodeToString(iv, Base64.NO_WRAP))
                                         .putString(PREF_BIO_KEY_ALIAS, targetAlias)
                                         .putString(PREF_BIO_MODE, "keystore_auth")
+                                        .putBoolean(PREF_BIO_ALLOW_DEVICE_CRED, allowDeviceCredential)
                                         .putString(PREF_BIO_ENROLLED_AT, String.valueOf(System.currentTimeMillis()))
                                         .apply();
 
@@ -323,16 +345,7 @@ public class SecureAuthPlugin extends Plugin {
                         .setTitle(title)
                         .setSubtitle(subtitle);
 
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                        promptBuilder.setAllowedAuthenticators(
-                            BiometricManager.Authenticators.BIOMETRIC_STRONG
-                                | BiometricManager.Authenticators.DEVICE_CREDENTIAL
-                        );
-                    } else {
-                        promptBuilder
-                            .setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG)
-                            .setNegativeButtonText(negativeButtonText);
-                    }
+                    configurePromptAuthenticators(promptBuilder, allowDeviceCredential, negativeButtonText);
 
                     prompt.authenticate(promptBuilder.build(), new BiometricPrompt.CryptoObject(cipher));
                 });
@@ -346,8 +359,10 @@ public class SecureAuthPlugin extends Plugin {
             }
         }
 
-        // API 24-29 without strong biometric: fall back to OS ConfirmDeviceCredential + AndroidKeyStore device wrap key
-        KeyguardManager km = (KeyguardManager) getContext().getSystemService(Context.KEYGUARD_SERVICE);
+        // API 24-29 without strong biometric: fall back to OS ConfirmDeviceCredential only when OS credential lock is requested
+        KeyguardManager km = allowDeviceCredential
+            ? (KeyguardManager) getContext().getSystemService(Context.KEYGUARD_SERVICE)
+            : null;
         if (km != null && km.isDeviceSecure()) {
             @SuppressWarnings("deprecation")
             Intent intent = km.createConfirmDeviceCredentialIntent(title, subtitle);
@@ -390,6 +405,7 @@ public class SecureAuthPlugin extends Plugin {
                 .putString(PREF_BIO_IV, Base64.encodeToString(iv, Base64.NO_WRAP))
                 .putString(PREF_BIO_KEY_ALIAS, LEGACY_CRED_KEY_ALIAS)
                 .putString(PREF_BIO_MODE, "legacy_keyguard")
+                .putBoolean(PREF_BIO_ALLOW_DEVICE_CRED, true)
                 .putString(PREF_BIO_ENROLLED_AT, String.valueOf(System.currentTimeMillis()))
                 .apply();
 
@@ -418,12 +434,17 @@ public class SecureAuthPlugin extends Plugin {
             return;
         }
 
-        String title = call.getString("title", "생체인증 / 기기 잠금 해제");
-        String subtitle = call.getString("subtitle", "건강 데이터 접근을 위해 안드로이드 본인 인증이 필요합니다.");
-        String negativeButtonText = call.getString("negativeButtonText", "앱 PIN 입력");
+        String title = call.getString("title", "생체인증 잠금 해제");
+        String subtitle = call.getString("subtitle", "건강 데이터 접근을 위해 본인 인증이 필요합니다.");
+        String negativeButtonText = call.getString("negativeButtonText", "6자리 PIN 입력");
+        boolean allowDeviceCredential = Boolean.TRUE.equals(
+            call.getBoolean("allowDeviceCredential", prefs.getBoolean(PREF_BIO_ALLOW_DEVICE_CRED, false))
+        );
 
         if ("legacy_keyguard".equals(mode)) {
-            KeyguardManager km = (KeyguardManager) getContext().getSystemService(Context.KEYGUARD_SERVICE);
+            KeyguardManager km = allowDeviceCredential
+                ? (KeyguardManager) getContext().getSystemService(Context.KEYGUARD_SERVICE)
+                : null;
             if (km != null && km.isDeviceSecure()) {
                 @SuppressWarnings("deprecation")
                 Intent intent = km.createConfirmDeviceCredentialIntent(title, subtitle);
@@ -440,7 +461,7 @@ public class SecureAuthPlugin extends Plugin {
 
         try {
             String activeAlias = prefs.getString(PREF_BIO_KEY_ALIAS, BIO_KEY_ALIAS);
-            SecretKey key = getOrCreateBioKey(activeAlias, false);
+            SecretKey key = getOrCreateBioKey(activeAlias, false, allowDeviceCredential);
             byte[] iv = Base64.decode(ivB64, Base64.NO_WRAP);
             byte[] ct = Base64.decode(ctB64, Base64.NO_WRAP);
 
@@ -498,16 +519,7 @@ public class SecureAuthPlugin extends Plugin {
                     .setTitle(title)
                     .setSubtitle(subtitle);
 
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                    promptBuilder.setAllowedAuthenticators(
-                        BiometricManager.Authenticators.BIOMETRIC_STRONG
-                            | BiometricManager.Authenticators.DEVICE_CREDENTIAL
-                    );
-                } else {
-                    promptBuilder
-                        .setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG)
-                        .setNegativeButtonText(negativeButtonText);
-                }
+                configurePromptAuthenticators(promptBuilder, allowDeviceCredential, negativeButtonText);
 
                 prompt.authenticate(promptBuilder.build(), new BiometricPrompt.CryptoObject(cipher));
             });
