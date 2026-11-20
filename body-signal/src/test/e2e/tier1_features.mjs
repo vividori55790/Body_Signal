@@ -1041,4 +1041,19 @@ export const tier1Tests = [
       assert.match(settingsSrc, /<input[\s\S]*?disabled[\s\S]*?checked=\{settings\.localLlm\.enabled\}/);
     },
   },
+  {
+    id: 'T1.16.7',
+    feature: 'R6.1 Phase A Stability & Dead-Control Gate',
+    name: 'Settings security section exposes a single biometric activation toggle without duplicate OS-lock row',
+    run: async () => {
+      const settingsSrc = fs.readFileSync(path.join(SRC_DIR, 'pages/Settings.tsx'), 'utf8');
+      const secMatch = settingsSrc.match(/activeSection === 'security'[\s\S]*?DEPTH 2C: Medication Presets/);
+      assert.ok(secMatch, 'Security section block must exist in Settings.tsx');
+      const fingerprintIcons = secMatch[0].match(/<Fingerprint\b/g) || [];
+      assert.equal(fingerprintIcons.length, 1, 'Expected exactly one biometric activation control in security section');
+      assert.doesNotMatch(settingsSrc, /handleEnableOsCredentialDirect/);
+      const translationsSrc = fs.readFileSync(path.join(SRC_DIR, 'i18n/translations.ts'), 'utf8');
+      assert.match(translationsSrc, /biometricVerifyPinPrompt:\s*'보안을 위해 현재 설정된 6자리 PIN을 먼저 입력하세요\.'/);
+    },
+  },
 ];

@@ -155,7 +155,7 @@ export const translations = {
     tooManyAttempts: '입력 횟수를 초과했습니다. 잠시 후 다시 시도해 주세요.',
     biometricsSetting: '생체인식 (지문 / Face ID)',
     biometricsSettingDesc: '생체인증으로 PIN 입력 없이 안전하고 신속하게 잠금 해제',
-    biometricVerifyPinPrompt: '보안을 위해 현재 설정된 4자리 PIN을 먼저 입력하세요.',
+    biometricVerifyPinPrompt: '보안을 위해 현재 설정된 6자리 PIN을 먼저 입력하세요.',
 
     // Local LLM & Edge AI
     localLlmSection: '로컬 LLM (오프라인 프라이빗 AI)',

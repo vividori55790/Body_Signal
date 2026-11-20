@@ -96,7 +96,6 @@ export const SettingsPage: React.FC = () => {
     isBiometricAvailable,
     isBiometricEnabled,
     toggleBiometric,
-    setupOsCredentialLockWithRecovery,
     isTotpEnabled,
     enableTotp,
     disableTotp,
@@ -198,27 +197,6 @@ export const SettingsPage: React.FC = () => {
     }
     setPendingSecurityAction('toggleBiometric');
     setPinModalMode('unlock');
-  };
-
-  const handleEnableOsCredentialDirect = async () => {
-    triggerHaptic();
-    const res = await setupOsCredentialLockWithRecovery();
-    if (res.success) {
-      if (res.recoveryPin) {
-        setOsRecoveryPinModal(res.recoveryPin);
-      }
-      showToast(
-        isEn
-          ? 'Android Biometric / Device Lock enabled.'
-          : '안드로이드 지문·PIN·비밀번호 잠금이 활성화되었습니다.'
-      );
-    } else {
-      showToast(
-        isEn
-          ? 'Device lock setup cancelled or no OS screen lock configured.'
-          : '기기 잠금 등록이 취소되었거나 OS 잠금이 설정되어 있지 않습니다.'
-      );
-    }
   };
 
   const handleToggleTotp = () => {
@@ -878,29 +856,6 @@ export const SettingsPage: React.FC = () => {
             </button>
           )}
 
-          {isPinSet && !isOsCredentialOnly && isBiometricAvailable && (
-            <button
-              type="button"
-              onClick={handleEnableOsCredentialDirect}
-              className="w-full text-left p-3.5 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-800"
-            >
-              <div className="flex items-center gap-3">
-                <Fingerprint size={18} className="text-teal-600" />
-                <div>
-                  <span className="font-bold text-xs block">
-                    {isEn ? 'Enable Android Biometric / Device Lock' : '안드로이드 지문·기기 잠금 바로 사용'}
-                  </span>
-                  <span className="text-[10px] text-slate-400">
-                    {isEn
-                      ? 'Generates 16-digit recovery PIN sealed in AndroidKeyStore'
-                      : '16자리 랜덤 PIN 생성 + AndroidKeyStore 보호'}
-                  </span>
-                </div>
-              </div>
-              <ChevronRight size={16} className="text-slate-400" />
-            </button>
-          )}
-
           {isPinSet && isBiometricAvailable && (
             <div className="p-3.5 flex items-center justify-between">
               <div className="flex items-center gap-3">
@@ -908,7 +863,13 @@ export const SettingsPage: React.FC = () => {
                 <div>
                   <span className="font-bold text-xs block">{t('biometricsSetting')}</span>
                   <span className="text-[10px] text-slate-400">
-                    {isEn ? 'OS Fingerprint · PIN · Password Unlock' : 'OS 지문 · PIN · 비밀번호 잠금 해제'}
+                    {isOsCredentialOnly
+                      ? isEn
+                        ? 'OS Biometrics · Device Lock Unlock'
+                        : 'OS 생체인증 · 기기 잠금 해제'
+                      : isEn
+                      ? 'Unlock with biometrics (falls back to 6-digit App PIN)'
+                      : '생체인증으로 앱 잠금 해제 (미사용·실패 시 6자리 앱 PIN)'}
                   </span>
                 </div>
               </div>
@@ -1756,7 +1717,7 @@ export const SettingsPage: React.FC = () => {
         <div>
           <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-200/60 dark:bg-slate-800 text-[10px] font-bold text-slate-500">
             <Shield size={12} className="text-teal-600" />
-            Body Signal Mobile v2.1.1 (Encrypted)
+            Body Signal Mobile v2.1.2 (Encrypted)
           </span>
         </div>
       </div>
