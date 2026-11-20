@@ -1,13 +1,13 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { UserSettings, MedicationPreset, LogoVariant } from '../types/health';
 import { loadUserSettings, saveUserSettings, DEFAULT_SETTINGS } from '../utils/storage';
-import { translations, Language } from '../i18n/translations';
+import { translations, translate, Language, TranslationKey } from '../i18n/translations';
 import { cancelDailyReminder, triggerHaptic, setHapticsEnabled } from '../utils/native';
 
 interface SettingsContextValue {
   settings: UserSettings;
   isSettingsLoaded: boolean;
-  t: (key: keyof typeof translations['ko']) => string;
+  t: (key: TranslationKey, params?: Record<string, string | number>) => string;
   setLanguage: (lang: Language) => Promise<void>;
   setTheme: (theme: 'light' | 'dark' | 'system') => Promise<void>;
   setLogoVariant: (variant: LogoVariant) => Promise<void>;
@@ -113,9 +113,9 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
   };
 
-  const t = (key: keyof typeof translations['ko']): string => {
-    const lang = settings.language || 'ko';
-    return (translations[lang] as any)?.[key] || (translations['ko'] as any)?.[key] || key;
+  const t = (key: TranslationKey, params?: Record<string, string | number>): string => {
+    void translations;
+    return translate(settings.language || 'ko', key, params);
   };
 
   const setLanguage = async (language: Language) => {

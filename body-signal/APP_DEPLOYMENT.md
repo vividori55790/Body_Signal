@@ -34,6 +34,6 @@ On Windows PowerShell:
 ## 3. Reproducible Release & F-Droid Alignment
 
 - App ID: `com.bodysignal.app`
-- Current version: `2.1.2` (`versionCode 10`) across `body-signal/package.json`, `body-signal/android/app/build.gradle`, and `body-signal/fdroid/metadata/com.bodysignal.app.yml`.
+- Current version: `2.2.0` (`versionCode 11`) across `body-signal/package.json`, `body-signal/android/app/build.gradle`, and `body-signal/fdroid/metadata/com.bodysignal.app.yml`.
 - Fastlane store metadata & changelogs live in `fastlane/metadata/android/{en-US,ko-KR}`.
 - Automated GitHub release workflow: `.github/workflows/fdroid-release.yml`.

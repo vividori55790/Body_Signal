@@ -343,23 +343,36 @@ const HistoryItem: React.FC<HistoryItemProps> = ({
                 />
               </div>
 
-              <div className="flex justify-end gap-2 pt-1">
+              <div className="flex items-center justify-between gap-2 pt-1">
                 <button
                   type="button"
-                  onClick={() => setEditing(false)}
-                  className="px-3 py-1.5 rounded-lg text-slate-500 font-bold"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    triggerHaptic();
+                    navigate('/entry', { state: { editLogId: log.id } });
+                  }}
+                  className="text-[11px] font-bold text-teal-600 dark:text-teal-400 underline underline-offset-2"
                 >
-                  <X size={14} className="inline mr-1" />
-                  {t('cancel')}
+                  {t('editFullRecordHint')}
                 </button>
-                <button
-                  type="button"
-                  onClick={saveEdit}
-                  className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white font-bold"
-                >
-                  <Save size={14} className="inline mr-1" />
-                  {t('save')}
-                </button>
+                <div className="flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setEditing(false)}
+                    className="px-3 py-1.5 rounded-lg text-slate-500 font-bold"
+                  >
+                    <X size={14} className="inline mr-1" />
+                    {t('cancel')}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={saveEdit}
+                    className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white font-bold"
+                  >
+                    <Save size={14} className="inline mr-1" />
+                    {t('save')}
+                  </button>
+                </div>
               </div>
             </div>
           ) : (

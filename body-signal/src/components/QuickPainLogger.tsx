@@ -39,10 +39,12 @@ const QUICK_MED_EN_MAP: Record<string, string> = {
 
 export const QuickPainLogger: React.FC<{ onSaved?: () => void }> = ({ onSaved }) => {
   const { conditions, saveEntry } = useHealth();
-  const { settings } = useSettings();
+  const { settings, t } = useSettings();
   const isEn = settings.language === 'en';
   const [selectedIntensity, setSelectedIntensity] = useState<number>(5);
   const [selectedPart, setSelectedPart] = useState<string>('허리/요통');
+  const [selectedConditionId, setSelectedConditionId] = useState<string>('unassigned');
+  const [hasManualCondition, setHasManualCondition] = useState<boolean>(false);
   const [selectedMed, setSelectedMed] = useState<string>('');
   const [showAddMed, setShowAddMed] = useState<boolean>(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -55,7 +57,7 @@ export const QuickPainLogger: React.FC<{ onSaved?: () => void }> = ({ onSaved })
 
   const activeConditions = conditions.filter((c) => !c.isArchived);
 
-  // Auto-sync with patient's primary condition
+  // Auto-sync with patient's primary condition unless user explicitly picks a condition
   useEffect(() => {
     if (activeConditions.length > 0) {
       const primary = activeConditions[0];
@@ -68,6 +70,11 @@ export const QuickPainLogger: React.FC<{ onSaved?: () => void }> = ({ onSaved })
       if (match) {
         setSelectedPart(match);
       }
+      if (!hasManualCondition) {
+        setSelectedConditionId(primary.id);
+      }
+    } else {
+      setSelectedConditionId('unassigned');
     }
   }, [activeConditions.length]);
 
@@ -79,6 +86,33 @@ export const QuickPainLogger: React.FC<{ onSaved?: () => void }> = ({ onSaved })
   const handleSelectPart = (part: string) => {
     triggerHaptic();
     setSelectedPart(part);
+    if (!hasManualCondition) {
+      const match = activeConditions.find(
+        (c) =>
+          c.bodyPart.includes(part.split('/')[0]) ||
+          part.includes(c.bodyPart) ||
+          c.label.includes(part.split('/')[0])
+      );
+      setSelectedConditionId(match ? match.id : 'unassigned');
+    }
+  };
+
+  const handleSelectCondition = (condId: string) => {
+    triggerHaptic();
+    setHasManualCondition(true);
+    setSelectedConditionId(condId);
+    const chosen = activeConditions.find((c) => c.id === condId);
+    if (chosen) {
+      const match = QUICK_BODY_PARTS.find(
+        (p) =>
+          chosen.bodyPart.includes(p.split('/')[0]) ||
+          p.includes(chosen.bodyPart) ||
+          chosen.label.includes(p.split('/')[0])
+      );
+      if (match) {
+        setSelectedPart(match);
+      }
+    }
   };
 
   const handleToggleMed = (med: string) => {
@@ -91,13 +125,11 @@ export const QuickPainLogger: React.FC<{ onSaved?: () => void }> = ({ onSaved })
     triggerHaptic();
     setIsSubmitting(true);
 
-    // Find matching existing condition or create a new one
-    const matchingCond = activeConditions.find(
-      (c) =>
-        c.bodyPart.includes(selectedPart.split('/')[0]) ||
-        selectedPart.includes(c.bodyPart) ||
-        c.label.includes(selectedPart.split('/')[0])
-    );
+    // Honor explicit condition choice; fall back to matching body-part condition only if auto-synced
+    const matchingCond =
+      selectedConditionId && selectedConditionId !== 'unassigned'
+        ? activeConditions.find((c) => c.id === selectedConditionId)
+        : undefined;
 
     const payload = {
       isNewCondition: false,
@@ -162,6 +194,28 @@ export const QuickPainLogger: React.FC<{ onSaved?: () => void }> = ({ onSaved })
           {isEn ? '3 Taps' : '터치 3번으로 끝'}
         </span>
       </div>
+
+      {/* Step 0 (Optional): Target Condition Selection */}
+      {activeConditions.length > 0 && (
+        <div className="space-y-1">
+          <label className="block text-[10px] font-bold text-slate-400 uppercase">
+            {t('quickConditionStep')}
+          </label>
+          <select
+            aria-label={t('quickConditionStep')}
+            value={selectedConditionId}
+            onChange={(e) => handleSelectCondition(e.target.value)}
+            className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-xs font-bold text-slate-700 dark:text-slate-200"
+          >
+            {activeConditions.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.label} ({c.bodyPart})
+              </option>
+            ))}
+            <option value="unassigned">{t('quickConditionUnassigned')}</option>
+          </select>
+        </div>
+      )}
 
       {/* Step 1: Unified 1-Row NRS Touch Grid & Continuous Slider */}
       <div className="space-y-1.5">

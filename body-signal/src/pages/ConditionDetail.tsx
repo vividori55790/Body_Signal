@@ -41,6 +41,7 @@ export const ConditionDetailPage: React.FC = () => {
   const [isEditing, setIsEditing] = useState(false);
   const [editLabel, setEditLabel] = useState('');
   const [editBodyPart, setEditBodyPart] = useState('');
+  const [editOnsetDate, setEditOnsetDate] = useState('');
   const [editError, setEditError] = useState('');
   const [showDoctorSummary, setShowDoctorSummary] = useState(false);
   const [copiedSummary, setCopiedSummary] = useState(false);
@@ -238,7 +239,7 @@ export const ConditionDetailPage: React.FC = () => {
     : '0';
 
   const handleSaveEdit = async () => {
-    if (!editLabel.trim() || !editBodyPart.trim()) {
+    if (!editLabel.trim() || !editBodyPart.trim() || !editOnsetDate) {
       setEditError(t('fillAllConditionFields'));
       return;
     }
@@ -246,6 +247,7 @@ export const ConditionDetailPage: React.FC = () => {
     const success = await updateCondition(condition.id, {
       label: editLabel.trim(),
       bodyPart: editBodyPart.trim(),
+      onsetDate: editOnsetDate,
     });
     if (success) {
       setIsEditing(false);
@@ -290,6 +292,8 @@ export const ConditionDetailPage: React.FC = () => {
               triggerHaptic();
               setEditLabel(condition.label);
               setEditBodyPart(condition.bodyPart);
+              setEditOnsetDate(condition.onsetDate || '');
+              setEditError('');
               setIsEditing(true);
             }}
             className="p-1.5 text-slate-400 hover:text-emerald-500"
@@ -331,6 +335,15 @@ export const ConditionDetailPage: React.FC = () => {
                   type="text"
                   value={editBodyPart}
                   onChange={(e) => setEditBodyPart(e.target.value)}
+                  className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 p-2.5 font-bold"
+                />
+              </div>
+              <div>
+                <label className="block text-slate-400 font-bold mb-1 uppercase">{t('onsetDate')}</label>
+                <input
+                  type="date"
+                  value={editOnsetDate}
+                  onChange={(e) => setEditOnsetDate(e.target.value)}
                   className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 p-2.5 font-bold"
                 />
               </div>
