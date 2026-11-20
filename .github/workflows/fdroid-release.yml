@@ -26,11 +26,11 @@ jobs:
       - name: Install JavaScript dependencies
         run: npm ci
 
-      - name: Run data integrity tests
-        run: npm run test:data
-
-      - name: Lint source
-        run: npm run lint
+      - name: Typecheck, lint & run data integrity tests
+        run: |
+          npx tsc --noEmit
+          npm run lint
+          npm run test:data
 
       - name: Build web assets
         run: npm run build
@@ -44,11 +44,18 @@ jobs:
           distribution: temurin
           java-version: "21"
 
-      - name: Build unsigned release APK
+      - name: Build debug & unsigned release APKs
         run: |
           cd android
           chmod +x gradlew
-          ./gradlew assembleRelease --no-daemon
+          ./gradlew assembleDebug assembleRelease --no-daemon
+
+      - name: Run E2E & security hardening tests against built APK
+        run: |
+          npm test
+          node test/security_hardening_test.mjs
+          node test/v2_1_0_features_test.mjs
+          node test/run-feedback-tests.mjs
 
       - name: Upload unsigned APK
         uses: actions/upload-artifact@v4

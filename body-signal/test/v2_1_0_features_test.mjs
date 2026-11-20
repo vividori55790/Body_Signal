@@ -23,7 +23,7 @@ const tests = [
       const settingsSrc = read('src/pages/Settings.tsx');
       assert.doesNotMatch(settingsSrc, /\/\/\s*setQuickSos/);
       assert.match(settingsSrc, /setQuickSos\(!settings\.quickSosEnabled\)/);
-      assert.match(settingsSrc, /Body Signal Mobile v2\.1\.\d+/);
+      assert.match(settingsSrc, /Body Signal Mobile v2\.\d+\.\d+/);
     },
   },
   {
@@ -146,7 +146,7 @@ const tests = [
       assert.match(toLocalYmd('2026-11-18T12:00:00.000Z'), /^\d{4}-\d{2}-\d{2}$/);
 
       const pkg = JSON.parse(read('package.json'));
-      assert.match(pkg.version, /^2\.1\.\d+$/);
+      assert.match(pkg.version, /^2\.\d+\.\d+$/);
       const gradle = read('android/app/build.gradle');
       const gradleCode = gradle.match(/\bversionCode\s+(\d+)/)?.[1];
       const gradleName = gradle.match(/\bversionName\s+["']([^"']+)["']/)?.[1];

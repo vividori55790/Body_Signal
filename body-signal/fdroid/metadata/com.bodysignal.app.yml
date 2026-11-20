@@ -103,7 +103,20 @@ Builds:
       - popd
     output: build/outputs/apk/release/app-release-unsigned.apk
 
+  - versionName: 2.2.0
+    versionCode: 11
+    commit: v2.2.0
+    subdir: body-signal/android/app
+    gradle: yes
+    prebuild:
+      - pushd ../..
+      - npm ci
+      - npm run build
+      - npx cap sync android
+      - popd
+    output: build/outputs/apk/release/app-release-unsigned.apk
+
 AutoUpdateMode: Version v%v
 UpdateCheckMode: Tags
-CurrentVersion: 2.1.2
-CurrentVersionCode: 10
+CurrentVersion: 2.2.0
+CurrentVersionCode: 11

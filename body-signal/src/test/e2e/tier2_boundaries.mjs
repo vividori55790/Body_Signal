@@ -969,4 +969,48 @@ export const tier2Tests = [
       assert.match(diagSrc, /deleteEncryptedPhoto/);
     },
   },
+
+  // ==========================================
+  // Feature 17: R6.2 Phase B Onboarding, Reuse Edit & Standards (Boundary)
+  // ==========================================
+  {
+    id: 'T2.17.1',
+    feature: 'R6.2 Phase B Onboarding, Reuse Edit & Standards (Boundary)',
+    name: 'translations.ko and translations.en have identical non-empty key sets',
+    run: async () => {
+      const modUrl = new URL('../../i18n/translations.ts', import.meta.url);
+      // Verify file-level key parity and non-empty strings safely in Node ESM
+      const i18nSrc = fs.readFileSync(path.join(SRC_DIR, 'i18n/translations.ts'), 'utf8');
+      void modUrl;
+      const koBlock = i18nSrc.match(/const koTranslations = \{([\s\S]*?)\} as const;/)?.[1] || '';
+      const enBlock = i18nSrc.match(/const enTranslations: Record<TranslationKey, string> = \{([\s\S]*?)\n\};/)?.[1] || '';
+      const extractKeys = (block) =>
+        Array.from(block.matchAll(/^\s{2,6}([A-Za-z0-9_]+):/gm)).map((m) => m[1]);
+      const koKeys = extractKeys(koBlock);
+      const enKeys = extractKeys(enBlock);
+      assert.ok(koKeys.length >= 100, 'Expected substantial centralized dictionary keys');
+      assert.deepEqual(enKeys, koKeys, 'Korean and English translation keys must match identically');
+    },
+  },
+  {
+    id: 'T2.17.2',
+    feature: 'R6.2 Phase B Onboarding, Reuse Edit & Standards (Boundary)',
+    name: 'Template com.getcapacitor package removed and Fastlane changelogs stay within 500 chars',
+    run: async () => {
+      assert.equal(fs.existsSync(path.join(ANDROID_DIR, 'app/src/test/java/com/getcapacitor')), false);
+      assert.equal(fs.existsSync(path.join(ANDROID_DIR, 'app/src/androidTest/java/com/getcapacitor')), false);
+      assert.ok(
+        fs.existsSync(path.join(ANDROID_DIR, 'app/src/androidTest/java/com/bodysignal/app/ExampleInstrumentedTest.java'))
+      );
+      const gradleSrc = fs.readFileSync(path.join(ANDROID_DIR, 'app/build.gradle'), 'utf8');
+      const code = gradleSrc.match(/\bversionCode\s+(\d+)/)?.[1];
+      for (const locale of ['en-US', 'ko-KR']) {
+        const cl = fs.readFileSync(
+          path.join(REPO_ROOT, `fastlane/metadata/android/${locale}/changelogs/${code}.txt`),
+          'utf8'
+        );
+        assert.ok(cl.length > 0 && cl.length <= 500, `${locale} changelog exceeds 500 char limit (${cl.length})`);
+      }
+    },
+  },
 ];

@@ -1056,4 +1056,99 @@ export const tier1Tests = [
       assert.match(translationsSrc, /biometricVerifyPinPrompt:\s*'보안을 위해 현재 설정된 6자리 PIN을 먼저 입력하세요\.'/);
     },
   },
+
+  // ==========================================
+  // Feature 17: R6.2 Phase B Onboarding, Reuse Edit & Standards
+  // ==========================================
+  {
+    id: 'T1.17.1',
+    feature: 'R6.2 Phase B Onboarding, Reuse Edit & Standards',
+    name: 'App offers 1-step biometric opt-in after PIN setup and Settings warns of 2FA permanent lockout',
+    run: async () => {
+      const appSrc = fs.readFileSync(path.join(SRC_DIR, 'App.tsx'), 'utf8');
+      assert.match(appSrc, /pendingOnboardingPin/);
+      assert.match(appSrc, /onboardingBiometricTitle/);
+      assert.match(appSrc, /toggleBiometric\(true,\s*pendingOnboardingPin\)/);
+      const settingsSrc = fs.readFileSync(path.join(SRC_DIR, 'pages/Settings.tsx'), 'utf8');
+      assert.match(settingsSrc, /totpPermanentLockoutTitle/);
+      assert.match(settingsSrc, /totpPermanentLockoutWarning/);
+      assert.match(settingsSrc, /totpCopyRecoveryCodes/);
+    },
+  },
+  {
+    id: 'T1.17.2',
+    feature: 'R6.2 Phase B Onboarding, Reuse Edit & Standards',
+    name: 'DiagnosticsPage & History reuse EntryForm in edit mode connected to updateDiagnosticRecord & updateLog',
+    run: async () => {
+      const diagSrc = fs.readFileSync(path.join(SRC_DIR, 'pages/DiagnosticsPage.tsx'), 'utf8');
+      assert.match(diagSrc, /navigate\('\/entry',\s*\{\s*state:\s*\{\s*editDiagnosticId:\s*record\.id\s*\}\s*\}\)/);
+      const historySrc = fs.readFileSync(path.join(SRC_DIR, 'pages/History.tsx'), 'utf8');
+      assert.match(historySrc, /navigate\('\/entry',\s*\{\s*state:\s*\{\s*editLogId:\s*log\.id\s*\}\s*\}\)/);
+      const entrySrc = fs.readFileSync(path.join(SRC_DIR, 'pages/EntryForm.tsx'), 'utf8');
+      assert.match(entrySrc, /updateDiagnosticRecord/);
+      assert.match(entrySrc, /updateLog/);
+      assert.match(entrySrc, /loadEncryptedPhoto/);
+    },
+  },
+  {
+    id: 'T1.17.3',
+    feature: 'R6.2 Phase B Onboarding, Reuse Edit & Standards',
+    name: 'ConditionDetail allows editing onsetDate together with condition label and bodyPart',
+    run: async () => {
+      const condSrc = fs.readFileSync(path.join(SRC_DIR, 'pages/ConditionDetail.tsx'), 'utf8');
+      assert.match(condSrc, /editOnsetDate/);
+      assert.match(condSrc, /onsetDate:\s*editOnsetDate/);
+    },
+  },
+  {
+    id: 'T1.17.4',
+    feature: 'R6.2 Phase B Onboarding, Reuse Edit & Standards',
+    name: 'QuickPainLogger allows choosing active condition or unassigned mode',
+    run: async () => {
+      const quickSrc = fs.readFileSync(path.join(SRC_DIR, 'components/QuickPainLogger.tsx'), 'utf8');
+      assert.match(quickSrc, /selectedConditionId/);
+      assert.match(quickSrc, /quickConditionStep/);
+      assert.match(quickSrc, /quickConditionUnassigned/);
+    },
+  },
+  {
+    id: 'T1.17.5',
+    feature: 'R6.2 Phase B Onboarding, Reuse Edit & Standards',
+    name: 'Centralized i18n enforces strict ko/en TranslationKey parity and template interpolation',
+    run: async () => {
+      const i18nSrc = fs.readFileSync(path.join(SRC_DIR, 'i18n/translations.ts'), 'utf8');
+      assert.match(i18nSrc, /export type TranslationKey = keyof typeof koTranslations/);
+      assert.match(i18nSrc, /Record<TranslationKey,\s*string>/);
+      assert.match(i18nSrc, /export function translate/);
+      const settingsCtxSrc = fs.readFileSync(path.join(SRC_DIR, 'context/SettingsContext.tsx'), 'utf8');
+      assert.match(settingsCtxSrc, /translate\(settings\.language \|\| 'ko',\s*key,\s*params\)/);
+    },
+  },
+  {
+    id: 'T1.17.6',
+    feature: 'R6.2 Phase B Onboarding, Reuse Edit & Standards',
+    name: 'Android manifest backup rules, DayNight theme, en strings, localized SecurityCheck, and CI gates exist',
+    run: async () => {
+      const manifest = fs.readFileSync(path.join(ANDROID_DIR, 'app/src/main/AndroidManifest.xml'), 'utf8');
+      assert.match(manifest, /android:dataExtractionRules="@xml\/data_extraction_rules"/);
+      assert.match(manifest, /android:fullBackupContent="@xml\/backup_rules"/);
+      assert.ok(fs.existsSync(path.join(ANDROID_DIR, 'app/src/main/res/xml/data_extraction_rules.xml')));
+      assert.ok(fs.existsSync(path.join(ANDROID_DIR, 'app/src/main/res/xml/backup_rules.xml')));
+      const styles = fs.readFileSync(path.join(ANDROID_DIR, 'app/src/main/res/values/styles.xml'), 'utf8');
+      assert.match(styles, /Theme\.AppCompat\.DayNight\.DarkActionBar/);
+      assert.ok(fs.existsSync(path.join(ANDROID_DIR, 'app/src/main/res/values-en/strings.xml')));
+      const secCheck = fs.readFileSync(
+        path.join(ANDROID_DIR, 'app/src/main/java/com/bodysignal/app/SecurityCheck.java'),
+        'utf8'
+      );
+      assert.match(secCheck, /Locale\.getDefault\(\)\.getLanguage\(\)\.startsWith\("ko"\)/);
+      assert.match(secCheck, /test-keys/);
+      const androidBuildYml = fs.readFileSync(path.join(REPO_ROOT, '.github/workflows/android-build.yml'), 'utf8');
+      assert.match(androidBuildYml, /npx tsc --noEmit/);
+      assert.match(androidBuildYml, /npm test/);
+      const fdroidYml = fs.readFileSync(path.join(REPO_ROOT, '.github/workflows/fdroid-release.yml'), 'utf8');
+      assert.match(fdroidYml, /npx tsc --noEmit/);
+      assert.match(fdroidYml, /npm test/);
+    },
+  },
 ];

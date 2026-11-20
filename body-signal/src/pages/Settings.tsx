@@ -1420,13 +1420,34 @@ export const SettingsPage: React.FC = () => {
               </div>
 
               <div className="space-y-1.5">
-                <p className="text-xs font-bold text-amber-600 dark:text-amber-400">
-                  {isEn ? '2. Save One-Time Recovery Codes' : '2. 일회용 복구 코드 보관'}
-                </p>
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs font-bold text-amber-600 dark:text-amber-400">
+                    {isEn ? '2. Save One-Time Recovery Codes' : '2. 일회용 복구 코드 보관'}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard?.writeText(totpRecoveryCodes.join('\n'));
+                      showToast(t('totpRecoveryCodesCopied'));
+                      setTimeout(() => {
+                        navigator.clipboard?.writeText('').catch(() => {});
+                      }, 60_000);
+                    }}
+                    className="px-2 py-1 rounded bg-amber-600 text-white text-[10px] font-bold flex items-center gap-1"
+                  >
+                    <Copy size={11} /> {t('totpCopyRecoveryCodes')}
+                  </button>
+                </div>
                 <div className="grid grid-cols-2 gap-1.5 p-2.5 rounded-xl bg-amber-50/70 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 font-mono text-[11px]">
                   {totpRecoveryCodes.map((code) => (
                     <div key={code}>{code}</div>
                   ))}
+                </div>
+                <div className="rounded-xl border border-rose-200 dark:border-rose-900 bg-rose-50/80 dark:bg-rose-950/40 p-2.5 text-[11px] text-rose-700 dark:text-rose-300 space-y-0.5">
+                  <p className="font-extrabold flex items-center gap-1">
+                    <AlertCircle size={13} /> {t('totpPermanentLockoutTitle')}
+                  </p>
+                  <p className="leading-relaxed">{t('totpPermanentLockoutWarning')}</p>
                 </div>
               </div>
 
@@ -1717,7 +1738,7 @@ export const SettingsPage: React.FC = () => {
         <div>
           <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-200/60 dark:bg-slate-800 text-[10px] font-bold text-slate-500">
             <Shield size={12} className="text-teal-600" />
-            Body Signal Mobile v2.1.2 (Encrypted)
+            Body Signal Mobile v2.2.0 (Encrypted)
           </span>
         </div>
       </div>

@@ -1,0 +1,14 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Body Signal</string>
+    <string name="title_activity_main">Body Signal</string>
+    <string name="package_name">com.bodysignal.app</string>
+    <string name="custom_url_scheme">com.bodysignal.app</string>
+    <string name="shortcut_acute_short">1s Pain Log</string>
+    <string name="shortcut_acute_long">🚨 1-Sec Acute Pain Log</string>
+    <string name="shortcut_briefing_short">Clinical View</string>
+    <string name="shortcut_briefing_long">🩺 Doctor Clinical Briefing</string>
+    <string name="shortcut_briefing_disabled">In Development (v4)</string>
+    <string name="shortcut_med_short">Log Meds</string>
+    <string name="shortcut_med_long">💊 Quick Medication Log</string>
+</resources>

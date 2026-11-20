@@ -10,11 +10,17 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
 import java.io.InputStreamReader;
+import java.util.Locale;
 
 /**
  * Runtime device integrity assessment: detects rooted devices, Magisk/su binaries,
  * hooking frameworks (Frida/Xposed/LSPosed/Substrate), active debuggers, and debuggable
  * repackaging of release builds.
+ *
+ * Custom ROM / F-Droid policy: F-Droid official APKs run with standard release signing on
+ * unmodified OS builds (`release-keys`), whereas AOSP emulator or unsigned development ROMs
+ * report `Build.TAGS` containing `test-keys` and are intentionally rejected for sensitive
+ * on-device medical records.
  */
 public final class SecurityCheck {
     private SecurityCheck() {}
@@ -79,14 +85,39 @@ public final class SecurityCheck {
             || Debug.waitingForDebugger()
             || isTamperedDebuggableRelease(context);
 
+        boolean isKo = Locale.getDefault().getLanguage().startsWith("ko");
         if (rooted) {
-            return new Result(false, true, hooked, debugger, "루팅(Rooting)된 기기가 감지되어 실행이 차단되었습니다.");
+            return new Result(
+                false,
+                true,
+                hooked,
+                debugger,
+                isKo
+                    ? "루팅(Rooting) 또는 비공식(test-keys) 빌드가 감지되어 실행이 차단되었습니다."
+                    : "Rooted environment or unofficial test-keys ROM detected. Launch blocked."
+            );
         }
         if (hooked) {
-            return new Result(false, false, true, debugger, "런타임 후킹/변조 프레임워크가 감지되어 실행이 차단되었습니다.");
+            return new Result(
+                false,
+                false,
+                true,
+                debugger,
+                isKo
+                    ? "런타임 후킹/변조 프레임워크가 감지되어 실행이 차단되었습니다."
+                    : "Runtime hooking or tampering framework detected. Launch blocked."
+            );
         }
         if (debugger) {
-            return new Result(false, false, false, true, "디버거 연결 또는 변조된 빌드가 감지되어 실행이 차단되었습니다.");
+            return new Result(
+                false,
+                false,
+                false,
+                true,
+                isKo
+                    ? "디버거 연결 또는 변조된 빌드가 감지되어 실행이 차단되었습니다."
+                    : "Attached debugger or tampered build detected. Launch blocked."
+            );
         }
         return new Result(true, false, false, false, "");
     }

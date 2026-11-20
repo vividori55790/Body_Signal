@@ -1,0 +1,5 @@
+v2.2.0
+- Added a 1-step biometric opt-in screen right after 6-digit PIN setup and strengthened 2FA lockout recovery warnings
+- Enabled editing diagnostic/claim records and full symptom logs via EntryForm, plus editing condition onset dates
+- Added condition selection to Quick Pain Logger and centralized ko/en i18n keys
+- Standardized Android 12+ dataExtractionRules, DayNight theme, en strings, localized SecurityCheck, and CI test gates

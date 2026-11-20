@@ -1,7 +1,6 @@
 export type Language = 'ko' | 'en';
 
-export const translations = {
-  ko: {
+const koTranslations = {
     // Common
     appName: '바디 시그널',
     save: '저장',
@@ -45,9 +44,14 @@ export const translations = {
     filterAll: '전체',
     filterCritical: '주의(7+)',
     filterImproved: '호전됨',
+    quickConditionStep: '0. 연결 질병 (선택 · 미분류 가능)',
+    quickConditionUnassigned: '원인 미상 (미분류 · 나중에 묶기)',
 
     // Entry Form
     entryTitle: '새 증상/통증 기록',
+    editDiagnosticTitle: '진단 · 실손 기록 수정',
+    editPainLogTitle: '증상 · 통증 기록 수정',
+    saveChangesBtn: '수정 내용 저장',
     conditionContext: '질환 및 부위 선택',
     followUpMode: '기존 질환 추적',
     newConditionMode: '새 질환 등록',
@@ -81,6 +85,7 @@ export const translations = {
     improved: '호전',
     stable: '유지',
     editRecord: '기록 수정',
+    editFullRecordHint: '전체 항목(PQRST · 부위) 수정',
     deleteRecord: '기록 삭제',
     treatment: '복용/치료',
 
@@ -144,7 +149,17 @@ export const translations = {
     resetAppDesc: '기기 내 모든 건강 기록 및 설정 영구 삭제',
     resetConfirmPrompt: '정말로 모든 데이터를 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.',
 
-    // Security & Pin
+    // Onboarding & Security & Pin
+    onboardingBiometricTitle: '지문(생체인증)을 함께 켜고 시작할까요?',
+    onboardingBiometricDesc: '잠금 해제와 삭제 본인 확인 시 지문을 사용할 수 있습니다. 생체 센서를 사용할 수 없거나 지문이 변경되어도 방금 설정한 6자리 PIN으로 언제든 안전하게 복호화할 수 있습니다.',
+    onboardingBiometricPinNote: '6자리 앱 PIN은 항상 기본 암호화 키로 유지됩니다.',
+    onboardingEnableBiometricBtn: '생체인증 함께 켜고 시작',
+    onboardingPinOnlyBtn: '6자리 PIN만 사용할게요 (나중에 설정 가능)',
+    onboardingBiometricFailed: '생체인증 등록이 취소되었거나 실패했습니다. 다시 시도하거나 6자리 PIN으로 시작할 수 있습니다.',
+    totpPermanentLockoutTitle: '분실 시 영구 잠금 주의',
+    totpPermanentLockoutWarning: '인증 앱(OTP 시크릿)과 일회용 복구 코드를 모두 분실하면 데이터를 복호화하거나 앱 잠금을 해제할 수 없습니다. 복구 코드를 반드시 오프라인으로 안전하게 백업하세요.',
+    totpCopyRecoveryCodes: '복구 코드 복사',
+    totpRecoveryCodesCopied: '일회용 복구 코드가 복사되었습니다. (60초 후 자동 비움)',
     enterPin: 'PIN 입력',
     setNewPin: '새 6자리 PIN 설정',
     confirmNewPin: 'PIN 확인 (한 번 더 입력)',
@@ -183,15 +198,18 @@ export const translations = {
     conditionNotFound: '해당 질환 정보를 찾을 수 없습니다.',
     goHome: '홈으로 이동',
     editConditionInfo: '질환 정보 수정',
-    fillAllConditionFields: '질환명과 부위를 모두 입력해 주세요.',
+    fillAllConditionFields: '질환명, 발생 부위, 발병일을 모두 입력해 주세요.',
     currentPainLevel: '현재 통증 강도',
     cumulativeAvgPain: '누적 평균 통증',
     painTrendChart: '통증 추이 그래프',
     logHistoryTitle: '질환별 기록 내역',
     addLogForCondition: '이 질환 새 기록 추가',
     backExitPrompt: '뒤로가기 버튼을 한 번 더 누르면 앱이 종료됩니다.',
-  },
-  en: {
+} as const;
+
+export type TranslationKey = keyof typeof koTranslations;
+
+const enTranslations: Record<TranslationKey, string> = {
     // Common
     appName: 'Body Signal',
     save: 'Save',
@@ -235,9 +253,14 @@ export const translations = {
     filterAll: 'All',
     filterCritical: 'Critical (7+)',
     filterImproved: 'Improved',
+    quickConditionStep: '0. Condition Link (Optional)',
+    quickConditionUnassigned: 'Unassigned Symptom (Group Later)',
 
     // Entry Form
     entryTitle: 'New Clinical Entry',
+    editDiagnosticTitle: 'Edit Diagnostic & Claim Record',
+    editPainLogTitle: 'Edit Symptom & Pain Entry',
+    saveChangesBtn: 'Save Changes',
     conditionContext: 'Condition Context',
     followUpMode: 'Follow-up',
     newConditionMode: 'New Condition',
@@ -271,6 +294,7 @@ export const translations = {
     improved: 'Improved',
     stable: 'Stable',
     editRecord: 'Edit Record',
+    editFullRecordHint: 'Edit full details (PQRST · Body Part)',
     deleteRecord: 'Delete Record',
     treatment: 'Treatment',
 
@@ -334,7 +358,17 @@ export const translations = {
     resetAppDesc: 'Permanently erase all local health data',
     resetConfirmPrompt: 'Are you sure you want to delete all local data? This cannot be undone.',
 
-    // Security & Pin
+    // Onboarding & Security & Pin
+    onboardingBiometricTitle: 'Enable Biometric Unlock Too?',
+    onboardingBiometricDesc: 'Use your fingerprint or biometrics for quick unlocking and delete confirmation. Your 6-digit PIN remains active so you can always decrypt safely if biometrics fail or change.',
+    onboardingBiometricPinNote: 'Your 6-digit App PIN always remains the primary recovery key.',
+    onboardingEnableBiometricBtn: 'Enable Biometrics & Continue',
+    onboardingPinOnlyBtn: 'Use 6-Digit PIN Only (Set later)',
+    onboardingBiometricFailed: 'Biometric setup was cancelled or unavailable. You can retry or continue with your 6-digit PIN.',
+    totpPermanentLockoutTitle: 'Permanent Lockout Risk if Lost',
+    totpPermanentLockoutWarning: 'If you lose both your authenticator app secret and your one-time recovery codes, you will be permanently unable to unlock or decrypt local data. Back up your recovery codes offline before enabling.',
+    totpCopyRecoveryCodes: 'Copy Recovery Codes',
+    totpRecoveryCodesCopied: 'Recovery codes copied (clipboard clears in 60s).',
     enterPin: 'Enter PIN',
     setNewPin: 'Set New 6-digit PIN',
     confirmNewPin: 'Confirm New PIN',
@@ -373,12 +407,34 @@ export const translations = {
     conditionNotFound: 'Condition information not found.',
     goHome: 'Back to Home',
     editConditionInfo: 'Edit Condition Info',
-    fillAllConditionFields: 'Please enter both condition name and body part.',
+    fillAllConditionFields: 'Please enter condition name, affected body part, and onset date.',
     currentPainLevel: 'Current Pain Intensity',
     cumulativeAvgPain: 'Cumulative Average Pain',
     painTrendChart: 'Pain Trend Chart',
     logHistoryTitle: 'Condition Log History',
     addLogForCondition: 'Add Log for this Condition',
     backExitPrompt: 'Press back again to exit the app.',
-  },
 };
+
+export const translations: Record<Language, Record<TranslationKey, string>> = {
+  ko: koTranslations,
+  en: enTranslations,
+};
+
+/**
+ * Centralized translation resolver with template token interpolation (`{name}`).
+ */
+export function translate(
+  language: Language | undefined,
+  key: TranslationKey,
+  params?: Record<string, string | number>
+): string {
+  const lang: Language = language === 'en' ? 'en' : 'ko';
+  let text = translations[lang][key] ?? translations.ko[key] ?? key;
+  if (params) {
+    for (const [token, val] of Object.entries(params)) {
+      text = text.replace(new RegExp(`\\{${token}\\}`, 'g'), String(val));
+    }
+  }
+  return text;
+}

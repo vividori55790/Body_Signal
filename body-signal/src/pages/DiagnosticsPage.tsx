@@ -1,9 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Camera,
   ChevronLeft,
   ChevronRight,
+  Edit3,
   Image as ImageIcon,
   LayoutGrid,
   List as ListIcon,
@@ -37,6 +38,7 @@ import { triggerHaptic } from '../utils/native';
 
 export const DiagnosticsPage: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
   const location = useLocation();
+  const navigate = useNavigate();
   const { conditions, diagnosticRecords, addDiagnosticRecord, updateDiagnosticRecord, deleteDiagnosticRecord } = useHealth();
   const { activeSessionPin, isUnlocked } = useAuth();
   const { settings } = useSettings();
@@ -519,14 +521,27 @@ export const DiagnosticsPage: React.FC<{ embedded?: boolean }> = ({ embedded = f
                         ? 'Mark Claimed'
                         : '청구완료 처리'}
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => handleDelete(record)}
-                      aria-label={isEn ? 'Delete diagnostic record' : '진단 기록 삭제'}
-                      className="text-slate-400 hover:text-rose-500"
-                    >
-                      <Trash2 size={13} />
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          triggerHaptic();
+                          navigate('/entry', { state: { editDiagnosticId: record.id } });
+                        }}
+                        aria-label={isEn ? 'Edit diagnostic record' : '진단 기록 수정'}
+                        className="text-slate-400 hover:text-emerald-600"
+                      >
+                        <Edit3 size={13} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDelete(record)}
+                        aria-label={isEn ? 'Delete diagnostic record' : '진단 기록 삭제'}
+                        className="text-slate-400 hover:text-rose-500"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -578,14 +593,27 @@ export const DiagnosticsPage: React.FC<{ embedded?: boolean }> = ({ embedded = f
                   </div>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => handleDelete(record)}
-                  aria-label={isEn ? 'Delete diagnostic record' : '진단 기록 삭제'}
-                  className="p-1.5 text-slate-400 hover:text-rose-500"
-                >
-                  <Trash2 size={15} />
-                </button>
+                <div className="flex items-center gap-1 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      triggerHaptic();
+                      navigate('/entry', { state: { editDiagnosticId: record.id } });
+                    }}
+                    aria-label={isEn ? 'Edit diagnostic record' : '진단 기록 수정'}
+                    className="p-1.5 text-slate-400 hover:text-emerald-600"
+                  >
+                    <Edit3 size={15} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleDelete(record)}
+                    aria-label={isEn ? 'Delete diagnostic record' : '진단 기록 삭제'}
+                    className="p-1.5 text-slate-400 hover:text-rose-500"
+                  >
+                    <Trash2 size={15} />
+                  </button>
+                </div>
               </div>
 
               {/* Insurance Deadline Box */}

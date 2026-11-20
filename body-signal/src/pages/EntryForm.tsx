@@ -16,11 +16,17 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useHealth } from '../context/HealthContext';
 import { useAuth } from '../context/AuthContext';
 import { useSettings } from '../context/SettingsContext';
+import { UNASSIGNED_CONDITION_ID } from '../types/health';
 import BodyMap, { parseMultiRegionParts, formatMultiRegionParts } from '../components/BodyMap';
 import DefaultClosedSuggestion from '../components/DefaultClosedSuggestion';
 import { triggerHaptic } from '../utils/native';
 import { formatMedicationPreset } from '../utils/medication';
-import { compressAndStripExif, encryptDraftPhotos, deleteEncryptedPhoto } from '../utils/mediaStorage';
+import {
+  compressAndStripExif,
+  encryptDraftPhotos,
+  loadEncryptedPhoto,
+  deleteEncryptedPhoto,
+} from '../utils/mediaStorage';
 import { toLocalYmd, toLocalDateTimeInput } from '../utils/dateUtils';
 import { focusInvalidElement } from '../utils/formFocus';
 import AddMedicationInline from '../components/AddMedicationInline';
@@ -82,27 +88,47 @@ const EN_CHIP_MAP: Record<string, string> = {
 export const EntryFormPage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { conditions, saveEntry } = useHealth();
+  const { conditions, logs, diagnosticRecords, saveEntry, updateLog, updateDiagnosticRecord } = useHealth();
   const { activeSessionPin } = useAuth();
   const { settings, t, setDefaultBodyMapOpen, recordCollapsibleDismissal } = useSettings();
   const isEn = settings.language === 'en';
   const labelOf = (val: string) => (isEn ? EN_CHIP_MAP[val] || val : val);
 
+  const navState = location.state as {
+    selectedConditionId?: string;
+    includeDiagnostic?: boolean;
+    editDiagnosticId?: string;
+    editLogId?: string;
+  } | null;
+
+  const editingDiagnostic = navState?.editDiagnosticId
+    ? diagnosticRecords.find((d) => d.id === navState.editDiagnosticId)
+    : undefined;
+  const editingLog =
+    !editingDiagnostic && navState?.editLogId ? logs.find((l) => l.id === navState.editLogId) : undefined;
+  const isEditingDiagnostic = Boolean(editingDiagnostic);
+  const isEditingLog = Boolean(editingLog);
+
   const activeConditions = conditions.filter((c) => !c.isArchived);
-  const initialIncludeDiagnostic = Boolean(location.state?.includeDiagnostic);
+  const initialIncludeDiagnostic = Boolean(navState?.includeDiagnostic) || isEditingDiagnostic;
 
   // Mode: existing vs unassigned (unknown cause) vs new
-  const [mode, setMode] = useState<'existing' | 'unassigned' | 'new'>(
-    location.state?.selectedConditionId
-      ? 'existing'
-      : activeConditions.length === 0
-      ? 'unassigned'
-      : 'existing'
-  );
-  const [selectedConditionId, setSelectedConditionId] = useState<string>(
-    location.state?.selectedConditionId || activeConditions[0]?.id || ''
-  );
-  const [unassignedBodyPart, setUnassignedBodyPart] = useState('');
+  const [mode, setMode] = useState<'existing' | 'unassigned' | 'new'>(() => {
+    if (editingDiagnostic) {
+      return editingDiagnostic.conditionId ? 'existing' : 'unassigned';
+    }
+    if (editingLog) {
+      return editingLog.conditionId === UNASSIGNED_CONDITION_ID ? 'unassigned' : 'existing';
+    }
+    if (navState?.selectedConditionId) return 'existing';
+    return activeConditions.length === 0 ? 'unassigned' : 'existing';
+  });
+  const [selectedConditionId, setSelectedConditionId] = useState<string>(() => {
+    if (editingDiagnostic?.conditionId) return editingDiagnostic.conditionId;
+    if (editingLog && editingLog.conditionId !== UNASSIGNED_CONDITION_ID) return editingLog.conditionId;
+    return navState?.selectedConditionId || activeConditions[0]?.id || '';
+  });
+  const [unassignedBodyPart, setUnassignedBodyPart] = useState(() => editingLog?.bodyPartOverride || '');
 
   // New Condition Fields
   const [newLabel, setNewLabel] = useState('');
@@ -152,11 +178,13 @@ export const EntryFormPage: React.FC = () => {
   };
 
   // Clinical Observation Fields
-  const [date, setDate] = useState(() => toLocalDateTimeInput(new Date()));
-  const [intensity, setIntensity] = useState<number>(5);
-  const [medication, setMedication] = useState('');
+  const [date, setDate] = useState(() =>
+    editingLog ? toLocalDateTimeInput(editingLog.date) : toLocalDateTimeInput(new Date())
+  );
+  const [intensity, setIntensity] = useState<number>(() => (editingLog ? editingLog.intensity : 5));
+  const [medication, setMedication] = useState(() => editingLog?.medication || '');
   const [showAddMed, setShowAddMed] = useState(false);
-  const [notes, setNotes] = useState('');
+  const [notes, setNotes] = useState(() => editingDiagnostic?.notes || editingLog?.notes || '');
   const [error, setError] = useState('');
   const [invalidField, setInvalidField] = useState<
     'selectedCondition' | 'unassignedBodyPart' | 'newLabel' | 'newBodyPart' | 'newOnsetDate' | 'diagnosisName' | null
@@ -171,23 +199,65 @@ export const EntryFormPage: React.FC = () => {
   const invalidHighlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Clinical PQRST & Red Flag States
-  const [selectedQualities, setSelectedQualities] = useState<string[]>([]);
-  const [selectedRadiation, setSelectedRadiation] = useState<string>('');
-  const [selectedTriggers, setSelectedTriggers] = useState<string[]>([]);
-  const [selectedReliefs, setSelectedReliefs] = useState<string[]>([]);
-  const [selectedRedFlags, setSelectedRedFlags] = useState<string[]>([]);
+  const [selectedQualities, setSelectedQualities] = useState<string[]>(() => editingLog?.painQuality || []);
+  const [selectedRadiation, setSelectedRadiation] = useState<string>(() => editingLog?.radiation || '');
+  const [selectedTriggers, setSelectedTriggers] = useState<string[]>(() => editingLog?.triggers || []);
+  const [selectedReliefs, setSelectedReliefs] = useState<string[]>(() => editingLog?.reliefFactors || []);
+  const [selectedRedFlags, setSelectedRedFlags] = useState<string[]>(() => editingLog?.redFlags || []);
 
   // Integrated Diagnostic / Visit / Checkup Section (Optional, or standalone when diagnosticOnly is enabled)
   const [includeDiagnostic, setIncludeDiagnostic] = useState(initialIncludeDiagnostic);
   const [diagnosticOnly, setDiagnosticOnly] = useState(initialIncludeDiagnostic);
-  const [diagnosisDate, setDiagnosisDate] = useState(() => toLocalYmd(new Date()));
-  const [diagnosisName, setDiagnosisName] = useState('');
-  const [hospitalName, setHospitalName] = useState('');
-  const [department, setDepartment] = useState('');
-  const [amountKrw, setAmountKrw] = useState('');
-  const [claimDeadlineYears, setClaimDeadlineYears] = useState(3);
+  const [diagnosisDate, setDiagnosisDate] = useState(() =>
+    editingDiagnostic?.diagnosisDate || toLocalYmd(new Date())
+  );
+  const [diagnosisName, setDiagnosisName] = useState(() => editingDiagnostic?.diagnosisName || '');
+  const [hospitalName, setHospitalName] = useState(() => editingDiagnostic?.hospitalName || '');
+  const [department, setDepartment] = useState(() => editingDiagnostic?.department || '');
+  const [amountKrw, setAmountKrw] = useState(() =>
+    editingDiagnostic?.amountKrw !== undefined ? String(editingDiagnostic.amountKrw) : ''
+  );
+  const [claimDeadlineYears, setClaimDeadlineYears] = useState(() => editingDiagnostic?.claimDeadlineYears || 3);
   const [draftPhotos, setDraftPhotos] = useState<string[]>([]);
+  const existingPhotoIdsByDataUrlRef = useRef<Map<string, string[]>>(new Map());
+  const undecryptedPhotoIdsRef = useRef<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Pre-load decrypted encrypted photos when editing an existing diagnostic record
+  useEffect(() => {
+    if (!editingDiagnostic?.photoIds?.length) return;
+    let active = true;
+    const loadExisting = async () => {
+      const idMap = new Map<string, string[]>();
+      const loadedDrafts: string[] = [];
+      const undecryptedIds: string[] = [];
+
+      for (const pid of editingDiagnostic.photoIds || []) {
+        try {
+          const dataUrl = await loadEncryptedPhoto(pid, activeSessionPin || undefined);
+          if (dataUrl) {
+            loadedDrafts.push(dataUrl);
+            const list = idMap.get(dataUrl) || [];
+            list.push(pid);
+            idMap.set(dataUrl, list);
+          } else {
+            undecryptedIds.push(pid);
+          }
+        } catch {
+          undecryptedIds.push(pid);
+        }
+      }
+
+      if (!active) return;
+      existingPhotoIdsByDataUrlRef.current = idMap;
+      undecryptedPhotoIdsRef.current = undecryptedIds;
+      setDraftPhotos(loadedDrafts);
+    };
+    void loadExisting();
+    return () => {
+      active = false;
+    };
+  }, [editingDiagnostic?.id, activeSessionPin]);
 
   // Quick Date Helpers
   const setQuickTime = (type: 'now' | '1h' | 'yesterday') => {
@@ -329,10 +399,87 @@ export const EntryFormPage: React.FC = () => {
     setIsSubmitting(true);
     let createdPhotoIds: string[] = [];
     try {
+      const parsedAmount = amountKrw.trim() ? Number(amountKrw.replace(/,/g, '')) : undefined;
+      const normalizedAmount = parsedAmount && !Number.isNaN(parsedAmount) ? parsedAmount : undefined;
+
+      if (editingDiagnostic) {
+        // Reuse existing encrypted photo IDs for unchanged images; encrypt only newly added images
+        const remainingMap = new Map<string, string[]>();
+        existingPhotoIdsByDataUrlRef.current.forEach((ids, dataUrl) => {
+          remainingMap.set(dataUrl, [...ids]);
+        });
+        const reusedIds: string[] = [];
+        const newDrafts: string[] = [];
+        for (const draft of draftPhotos) {
+          const matchingIds = remainingMap.get(draft);
+          if (matchingIds && matchingIds.length > 0) {
+            reusedIds.push(matchingIds.shift()!);
+          } else {
+            newDrafts.push(draft);
+          }
+        }
+        const newlyEncrypted = await encryptDraftPhotos(newDrafts, activeSessionPin || undefined);
+        createdPhotoIds = newlyEncrypted;
+        const finalPhotoIds = [...undecryptedPhotoIdsRef.current, ...reusedIds, ...newlyEncrypted];
+
+        const success = await updateDiagnosticRecord(editingDiagnostic.id, {
+          conditionId: mode === 'existing' && selectedConditionId ? selectedConditionId : undefined,
+          diagnosisDate,
+          diagnosisName: diagnosisName.trim(),
+          hospitalName: hospitalName.trim(),
+          department: department.trim(),
+          amountKrw: normalizedAmount,
+          notes: notes.trim(),
+          photoIds: finalPhotoIds,
+          claimDeadlineYears,
+        });
+
+        if (success) {
+          const keptSet = new Set(finalPhotoIds);
+          const removedIds = (editingDiagnostic.photoIds || []).filter((pid) => !keptSet.has(pid));
+          if (removedIds.length) {
+            await Promise.all(removedIds.map((pid) => deleteEncryptedPhoto(pid).catch(() => {})));
+          }
+          triggerHaptic();
+          navigate(-1);
+        } else {
+          if (createdPhotoIds.length) {
+            await Promise.all(createdPhotoIds.map((pid) => deleteEncryptedPhoto(pid).catch(() => {})));
+          }
+          setError(
+            isEn ? 'Failed to update record. Please check your inputs.' : '기록 수정에 실패했습니다. 입력값을 확인해 주세요.'
+          );
+        }
+        return;
+      }
+
+      if (editingLog) {
+        const success = await updateLog(editingLog.id, {
+          conditionId: mode === 'unassigned' ? UNASSIGNED_CONDITION_ID : selectedConditionId,
+          bodyPartOverride: mode === 'unassigned' ? unassignedBodyPart.trim() : undefined,
+          date: new Date(date).toISOString(),
+          intensity,
+          medication,
+          notes,
+          painQuality: selectedQualities,
+          radiation: selectedRadiation,
+          triggers: selectedTriggers,
+          reliefFactors: selectedReliefs,
+          redFlags: selectedRedFlags,
+        });
+        if (success) {
+          triggerHaptic();
+          navigate(-1);
+        } else {
+          setError(
+            isEn ? 'Failed to update record. Please check your inputs.' : '기록 수정에 실패했습니다. 입력값을 확인해 주세요.'
+          );
+        }
+        return;
+      }
+
       const photoIds = await encryptDraftPhotos(draftPhotos, activeSessionPin || undefined);
       createdPhotoIds = photoIds;
-
-      const parsedAmount = amountKrw.trim() ? Number(amountKrw.replace(/,/g, '')) : undefined;
 
       const payload = {
         isNewCondition: mode === 'new',
@@ -366,7 +513,7 @@ export const EntryFormPage: React.FC = () => {
               diagnosisName: diagnosisName.trim(),
               hospitalName: hospitalName.trim(),
               department: department.trim(),
-              amountKrw: parsedAmount && !Number.isNaN(parsedAmount) ? parsedAmount : undefined,
+              amountKrw: normalizedAmount,
               notes: notes.trim(),
               photoIds,
               claimDeadlineYears,
@@ -423,7 +570,13 @@ export const EntryFormPage: React.FC = () => {
           >
             <ArrowLeft size={22} />
           </button>
-          <h1 className="text-base font-bold">{t('entryTitle')}</h1>
+          <h1 className="text-base font-bold">
+            {isEditingDiagnostic
+              ? t('editDiagnosticTitle')
+              : isEditingLog
+              ? t('editPainLogTitle')
+              : t('entryTitle')}
+          </h1>
         </div>
       </header>
 
@@ -476,6 +629,7 @@ export const EntryFormPage: React.FC = () => {
             </button>
             <button
               type="button"
+              disabled={isEditingDiagnostic || isEditingLog}
               onClick={() => {
                 triggerHaptic();
                 setMode('new');
@@ -483,7 +637,7 @@ export const EntryFormPage: React.FC = () => {
               className={`py-2 text-xs font-bold rounded-lg transition-all ${
                 mode === 'new'
                   ? 'bg-white dark:bg-slate-900 text-slate-800 dark:text-white shadow-sm'
-                  : 'text-slate-500'
+                  : 'text-slate-500 disabled:opacity-40'
               }`}
             >
               {t('newConditionMode')}
@@ -712,13 +866,14 @@ export const EntryFormPage: React.FC = () => {
             </h2>
             <button
               type="button"
+              disabled={isEditingDiagnostic || isEditingLog}
               onClick={() => {
                 triggerHaptic();
                 const next = !diagnosticOnly;
                 setDiagnosticOnly(next);
                 if (next) setIncludeDiagnostic(true);
               }}
-              className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all border ${
+              className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all border disabled:opacity-40 ${
                 diagnosticOnly
                   ? 'bg-teal-700 border-teal-700 text-white'
                   : 'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300'
@@ -1166,7 +1321,13 @@ export const EntryFormPage: React.FC = () => {
           className="w-full py-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-base shadow-lg shadow-emerald-600/30 active:scale-98 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
         >
           <Save size={18} />
-          {isSubmitting ? (isEn ? 'Saving...' : '저장 중...') : t('saveRecordBtn')}
+          {isSubmitting
+            ? isEn
+              ? 'Saving...'
+              : '저장 중...'
+            : isEditingDiagnostic || isEditingLog
+            ? t('saveChangesBtn')
+            : t('saveRecordBtn')}
         </button>
       </form>
     </div>
