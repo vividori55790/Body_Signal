@@ -1,4 +1,6 @@
 export type Language = 'ko' | 'en';
+export type LocaleId = string;
+export type LanguagePreference = 'system' | LocaleId;
 
 const koTranslations = {
     // Common
@@ -119,6 +121,7 @@ const koTranslations = {
     localProfileDesc: '외부 서버 전송 없이 내 기기에만 안전하게 보관됩니다',
     generalSection: '일반 설정',
     languageSetting: '언어 (Language)',
+    languageSystem: '시스템 자동',
     themeSetting: '테마',
     themeLight: '라이트',
     themeDark: '다크',
@@ -328,6 +331,7 @@ const enTranslations: Record<TranslationKey, string> = {
     localProfileDesc: 'Your health records stay encrypted on this device',
     generalSection: 'General',
     languageSetting: 'Language',
+    languageSystem: 'System (Auto)',
     themeSetting: 'Theme',
     themeLight: 'Light',
     themeDark: 'Dark',
@@ -421,20 +425,178 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
   en: enTranslations,
 };
 
+export type LocalePack = Partial<Record<TranslationKey, string>>;
+
+const dynamicLocaleRegistry: Record<string, LocalePack> = {
+  ko: koTranslations,
+  en: enTranslations,
+};
+
+// Optional lazy-loaded locale packs (drop-in ./locales/<locale>.json scales to 100+ languages)
+type LocaleLoader = () => Promise<{ default?: LocalePack } & LocalePack>;
+const localeModules: Record<string, LocaleLoader> =
+  typeof (import.meta as unknown as { glob?: unknown }).glob === 'function'
+    ? ((import.meta as unknown as { glob: (p: string) => Record<string, LocaleLoader> }).glob(
+        './locales/*.json'
+      ) || {})
+    : {};
+
+const RTL_LANG_PREFIXES = new Set(['ar', 'he', 'fa', 'ur', 'ps', 'ku', 'sd', 'yi']);
+
 /**
- * Centralized translation resolver with template token interpolation (`{name}`).
+ * Registers or merges a runtime locale pack (supports partial translations with fallback).
+ */
+export function registerLocalePack(locale: string, pack: LocalePack): void {
+  const norm = normalizeLocaleTag(locale);
+  if (!norm) return;
+  dynamicLocaleRegistry[norm] = { ...(dynamicLocaleRegistry[norm] || {}), ...pack };
+}
+
+export function normalizeLocaleTag(tag?: string | null): string {
+  const cleaned = (tag || '').trim().replace(/_/g, '-');
+  if (!cleaned) return '';
+  const parts = cleaned.split('-');
+  if (parts.length === 1) return parts[0].toLowerCase();
+  return `${parts[0].toLowerCase()}-${parts.slice(1).join('-')}`;
+}
+
+export function getSupportedLocales(): string[] {
+  const keys = new Set<string>(Object.keys(dynamicLocaleRegistry));
+  for (const pathKey of Object.keys(localeModules)) {
+    const match = pathKey.match(/\/([^/]+)\.json$/);
+    if (match?.[1]) keys.add(normalizeLocaleTag(match[1]));
+  }
+  return Array.from(keys);
+}
+
+export function getLocaleDirection(locale: string): 'ltr' | 'rtl' {
+  const base = normalizeLocaleTag(locale).split('-')[0];
+  return RTL_LANG_PREFIXES.has(base) ? 'rtl' : 'ltr';
+}
+
+/**
+ * Resolves the active OS/browser locale against registered/available locale packs.
+ * Falls back cleanly along subtag chain (`zh-TW` -> `zh` -> `en`).
+ */
+export function resolveSystemLocale(navigatorLocales?: readonly string[]): string {
+  const candidates: string[] = [];
+  if (Array.isArray(navigatorLocales) && navigatorLocales.length > 0) {
+    candidates.push(...navigatorLocales);
+  } else if (typeof navigator !== 'undefined') {
+    if (Array.isArray(navigator.languages) && navigator.languages.length > 0) {
+      candidates.push(...navigator.languages);
+    } else if (navigator.language) {
+      candidates.push(navigator.language);
+    }
+  }
+
+  const supported = new Set(getSupportedLocales());
+  for (const raw of candidates) {
+    const norm = normalizeLocaleTag(raw);
+    if (!norm) continue;
+    if (supported.has(norm)) return norm;
+    const base = norm.split('-')[0];
+    if (supported.has(base)) return base;
+  }
+  return 'en';
+}
+
+export function resolveActiveLocale(preference?: string | null): string {
+  const pref = normalizeLocaleTag(preference);
+  if (!pref || pref === 'system') {
+    return resolveSystemLocale();
+  }
+  const supported = new Set(getSupportedLocales());
+  if (supported.has(pref)) return pref;
+  const base = pref.split('-')[0];
+  if (supported.has(base)) return base;
+  return 'en';
+}
+
+export async function loadLocalePack(locale: string): Promise<boolean> {
+  const norm = normalizeLocaleTag(locale);
+  if (!norm) return false;
+  if (dynamicLocaleRegistry[norm] && Object.keys(dynamicLocaleRegistry[norm]).length >= Object.keys(enTranslations).length) {
+    return true;
+  }
+  const base = norm.split('-')[0];
+  const loaderEntry = Object.entries(localeModules).find(([p]) => {
+    const fileCode = normalizeLocaleTag(p.match(/\/([^/]+)\.json$/)?.[1] || '');
+    return fileCode === norm || fileCode === base;
+  });
+  if (!loaderEntry) return false;
+  try {
+    const mod = await loaderEntry[1]();
+    const pack = (mod?.default || mod) as LocalePack;
+    if (pack && typeof pack === 'object') {
+      registerLocalePack(norm, pack);
+      return true;
+    }
+  } catch {
+    // fallback chain remains active
+  }
+  return false;
+}
+
+/**
+ * Centralized translation resolver with multi-step fallback chain and `{token}` interpolation.
+ * Fallback chain: exact locale -> base language subtag -> English -> Korean -> key.
  */
 export function translate(
-  language: Language | undefined,
+  language: string | undefined,
   key: TranslationKey,
   params?: Record<string, string | number>
 ): string {
-  const lang: Language = language === 'en' ? 'en' : 'ko';
-  let text = translations[lang][key] ?? translations.ko[key] ?? key;
+  const norm = normalizeLocaleTag(language) || 'ko';
+  const base = norm.split('-')[0];
+  let text =
+    dynamicLocaleRegistry[norm]?.[key] ??
+    dynamicLocaleRegistry[base]?.[key] ??
+    enTranslations[key] ??
+    koTranslations[key] ??
+    key;
   if (params) {
     for (const [token, val] of Object.entries(params)) {
       text = text.replace(new RegExp(`\\{${token}\\}`, 'g'), String(val));
     }
   }
   return text;
+}
+
+export function formatLocalizedDate(
+  dateInput: Date | string | number,
+  locale: string = 'ko',
+  options: Intl.DateTimeFormatOptions = { year: 'numeric', month: 'short', day: 'numeric' }
+): string {
+  const dt = dateInput instanceof Date ? dateInput : new Date(dateInput);
+  if (Number.isNaN(dt.getTime())) return String(dateInput || '');
+  try {
+    return new Intl.DateTimeFormat(locale, options).format(dt);
+  } catch {
+    return new Intl.DateTimeFormat('en', options).format(dt);
+  }
+}
+
+export function formatLocalizedNumber(
+  value: number,
+  locale: string = 'ko',
+  options?: Intl.NumberFormatOptions
+): string {
+  try {
+    return new Intl.NumberFormat(locale, options).format(value);
+  } catch {
+    return new Intl.NumberFormat('en', options).format(value);
+  }
+}
+
+export function formatLocalizedCurrency(amount: number, locale: string = 'ko', currency = 'KRW'): string {
+  try {
+    return new Intl.NumberFormat(locale, {
+      style: 'currency',
+      currency,
+      maximumFractionDigits: 0,
+    }).format(amount);
+  } catch {
+    return `${amount} ${currency}`;
+  }
 }

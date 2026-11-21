@@ -21,9 +21,9 @@ export function calculateInsuranceClaimStatus(
   claimStatus: 'pending' | 'claimed' | 'not_applicable' = 'pending',
   years: number = 3,
   referenceDate: Date = new Date(),
-  lang: 'ko' | 'en' = 'ko'
+  lang: string = 'ko'
 ): InsuranceDeadlineInfo {
-  const isEn = lang === 'en';
+  const isEn = lang.toLowerCase().startsWith('en');
   const parsed = parseISO(diagnosisDateStr);
   const safeBase = isValid(parsed) ? parsed : referenceDate;
   const deadline = addYears(safeBase, Math.max(1, years));

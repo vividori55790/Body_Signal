@@ -315,11 +315,11 @@ export const tier1Tests = [
   {
     id: 'T1.5.2',
     feature: 'R2.2 Web App Manifest Shortcuts',
-    name: 'Web App Manifest includes 1초 급성 통증 기록 shortcut with ./?mode=acute and relative start_url',
+    name: 'Web App Manifest includes acute pain shortcut with ./?mode=acute and relative start_url',
     run: async () => {
       const viteConfig = fs.readFileSync(path.join(PROJECT_DIR, 'vite.config.js'), 'utf8');
       assert.match(viteConfig, /start_url:\s*['"]\.\/['"]/);
-      assert.match(viteConfig, /name:\s*['"]1초 급성 통증 기록['"]/);
+      assert.match(viteConfig, /name:\s*["']1-Sec Acute Pain Log["']/);
       assert.match(viteConfig, /url:\s*['"]\.\/\?mode=acute['"]/);
     },
   },
@@ -338,10 +338,10 @@ export const tier1Tests = [
   {
     id: 'T1.5.4',
     feature: 'R2.2 Web App Manifest Shortcuts',
-    name: 'Web App Manifest includes 빠른 복약 기록 shortcut with ./entry',
+    name: 'Web App Manifest includes quick medication shortcut with ./entry',
     run: async () => {
       const viteConfig = fs.readFileSync(path.join(PROJECT_DIR, 'vite.config.js'), 'utf8');
-      assert.match(viteConfig, /name:\s*['"]빠른 복약 기록['"]/);
+      assert.match(viteConfig, /name:\s*["']Quick Medication Log["']/);
       assert.match(viteConfig, /url:\s*['"]\.\/entry['"]/);
     },
   },
@@ -1121,7 +1121,7 @@ export const tier1Tests = [
       assert.match(i18nSrc, /Record<TranslationKey,\s*string>/);
       assert.match(i18nSrc, /export function translate/);
       const settingsCtxSrc = fs.readFileSync(path.join(SRC_DIR, 'context/SettingsContext.tsx'), 'utf8');
-      assert.match(settingsCtxSrc, /translate\(settings\.language \|\| 'ko',\s*key,\s*params\)/);
+      assert.match(settingsCtxSrc, /translate\(resolvedLanguage(?:\s*\|\|\s*'ko')?,\s*key,\s*params\)/);
     },
   },
   {

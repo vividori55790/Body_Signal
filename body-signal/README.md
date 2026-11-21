@@ -1,6 +1,6 @@
 # Body Signal (`body-signal`)
 
-Frontend React/TypeScript web app and Capacitor Android project for **Body Signal (Bignal)** (`com.bodysignal.app`, `v2.0.2`).
+Frontend React/TypeScript web app and Capacitor Android project for **Body Signal (Bignal)** (`com.bodysignal.app`, `v2.2.1`).
 
 See the root [README.md](../README.md) for the full project overview, security architecture, and F-Droid metadata links.
 

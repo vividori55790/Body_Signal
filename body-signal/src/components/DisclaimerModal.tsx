@@ -217,11 +217,11 @@ export const DisclaimerModal: React.FC<DisclaimerModalProps> = ({
   onAccept,
   onClose,
 }) => {
-  const { settings, setLanguage } = useSettings();
+  const { resolvedLanguage, setLanguage } = useSettings();
   const [step, setStep] = useState<'welcome' | 'terms'>(mode === 'gate' ? 'welcome' : 'terms');
   const [checked, setChecked] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const isEn = settings.language === 'en';
+  const isEn = resolvedLanguage === 'en';
 
   useEffect(() => {
     const prev = document.body.style.overflow;
@@ -311,7 +311,7 @@ export const DisclaimerModal: React.FC<DisclaimerModalProps> = ({
                 onClose();
               }}
               className="p-1.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-slate-700 dark:hover:text-slate-200"
-              aria-label="닫기"
+              aria-label={isEn ? 'Close' : '닫기'}
             >
               <X size={18} />
             </button>

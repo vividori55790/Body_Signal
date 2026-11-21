@@ -1,0 +1,23 @@
+{
+  "appName": "Body Signal",
+  "languageSystem": "System (Auto)",
+  "save": "Save",
+  "cancel": "Cancel",
+  "delete": "Delete",
+  "edit": "Edit",
+  "confirm": "Confirm",
+  "back": "Back",
+  "close": "Close",
+  "copy": "Copy",
+  "copied": "Copied to clipboard!",
+  "loading": "Loading...",
+  "error": "Error",
+  "success": "Success",
+  "navDash": "Dashboard",
+  "navCalendar": "Calendar",
+  "navDiagnostics": "Claims",
+  "navHistory": "History",
+  "navBriefing": "Doctor View",
+  "navSettings": "Settings",
+  "backExitPrompt": "Press back again to exit the app."
+}

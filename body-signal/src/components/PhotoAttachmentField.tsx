@@ -22,8 +22,8 @@ export const PhotoAttachmentField: React.FC<PhotoAttachmentFieldProps> = ({
   processFile = compressAndStripExif,
 }) => {
   const { beginExternalPickerGrace } = useAuth();
-  const { settings } = useSettings();
-  const isEn = settings.language === 'en';
+  const { resolvedLanguage } = useSettings();
+  const isEn = resolvedLanguage === 'en';
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
 
   const handlePhotoFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {

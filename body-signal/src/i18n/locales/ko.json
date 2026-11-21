@@ -1,0 +1,23 @@
+{
+  "appName": "바디 시그널",
+  "languageSystem": "시스템 언어 자동",
+  "save": "저장",
+  "cancel": "취소",
+  "delete": "삭제",
+  "edit": "수정",
+  "confirm": "확인",
+  "back": "뒤로",
+  "close": "닫기",
+  "copy": "복사",
+  "copied": "복사되었습니다!",
+  "loading": "로딩 중...",
+  "error": "오류",
+  "success": "성공",
+  "navDash": "대시보드",
+  "navCalendar": "캘린더",
+  "navDiagnostics": "진단·실손",
+  "navHistory": "기록내역",
+  "navBriefing": "진료브리핑",
+  "navSettings": "설정",
+  "backExitPrompt": "뒤로가기 버튼을 한 번 더 누르면 앱이 종료됩니다."
+}

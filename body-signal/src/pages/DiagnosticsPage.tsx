@@ -41,9 +41,9 @@ export const DiagnosticsPage: React.FC<{ embedded?: boolean }> = ({ embedded = f
   const navigate = useNavigate();
   const { conditions, diagnosticRecords, addDiagnosticRecord, updateDiagnosticRecord, deleteDiagnosticRecord } = useHealth();
   const { activeSessionPin, isUnlocked } = useAuth();
-  const { settings } = useSettings();
+  const { resolvedLanguage } = useSettings();
   const { requestAuthorizedDelete, authModal: deleteAuthModal } = useAuthorizedDelete();
-  const isEn = settings.language === 'en';
+  const isEn = resolvedLanguage === 'en';
 
   const [viewMode, setViewMode] = useState<'feed' | 'grid'>('feed');
   const [sortBy, setSortBy] = useState<'deadline' | 'date'>('deadline');
@@ -159,7 +159,7 @@ export const DiagnosticsPage: React.FC<{ embedded?: boolean }> = ({ embedded = f
         rec.claimStatus,
         rec.claimDeadlineYears || 3,
         new Date(),
-        settings.language
+        resolvedLanguage
       ),
     }));
 
@@ -175,7 +175,7 @@ export const DiagnosticsPage: React.FC<{ embedded?: boolean }> = ({ embedded = f
       }
       return b.record.diagnosisDate.localeCompare(a.record.diagnosisDate);
     });
-  }, [diagnosticRecords, sortBy, filterPendingOnly, settings.language]);
+  }, [diagnosticRecords, sortBy, filterPendingOnly, resolvedLanguage]);
 
   const pendingStats = useMemo(() => {
     const pending = enrichedRecords.filter((i) => i.record.claimStatus === 'pending');

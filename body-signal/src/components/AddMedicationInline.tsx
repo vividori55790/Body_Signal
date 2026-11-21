@@ -18,8 +18,8 @@ export const AddMedicationInline: React.FC<AddMedicationInlineProps> = ({
   onAdded,
   placeholder,
 }) => {
-  const { settings, addMedicationPreset } = useSettings();
-  const isEn = settings.language === 'en';
+  const { resolvedLanguage, addMedicationPreset } = useSettings();
+  const isEn = resolvedLanguage === 'en';
   const resolvedPlaceholder =
     placeholder || (isEn ? 'Medication name (e.g., Ibuprofen, Tylenol)' : '약 이름 (예: 타이레놀, 세레브렉스)');
   const [name, setName] = useState('');
@@ -43,7 +43,7 @@ export const AddMedicationInline: React.FC<AddMedicationInlineProps> = ({
     e?.stopPropagation();
     triggerHaptic();
 
-    const validation = validateMedicationInput(name, dosage, settings.language);
+    const validation = validateMedicationInput(name, dosage, resolvedLanguage);
     if (!validation.valid) {
       setError(
         validation.error || (isEn ? 'Please check the medication name.' : '약 이름을 확인해 주세요.')
@@ -55,7 +55,7 @@ export const AddMedicationInline: React.FC<AddMedicationInlineProps> = ({
     try {
       const preset = await addMedicationPreset(validation.cleanName!, validation.cleanDosage);
       if (preset) {
-        const formatted = formatMedicationPreset(preset, settings.language);
+        const formatted = formatMedicationPreset(preset, resolvedLanguage);
         setName('');
         setDosage('');
         setError(null);

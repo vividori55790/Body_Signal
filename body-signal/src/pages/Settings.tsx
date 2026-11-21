@@ -74,6 +74,7 @@ export const SettingsPage: React.FC = () => {
 
   const {
     settings,
+    resolvedLanguage,
     t,
     setLanguage,
     setTheme,
@@ -157,7 +158,7 @@ export const SettingsPage: React.FC = () => {
     };
   }, [totpModalOpen, backupModalMode, totpDisableModalOpen, osRecoveryPinModal, csvWarningModalOpen]);
 
-  const isEn = settings.language === 'en';
+  const isEn = resolvedLanguage === 'en';
   const showToast = (msg: string) => {
     setFeedbackMsg(msg);
     setTimeout(() => setFeedbackMsg(''), 3000);
@@ -572,6 +573,17 @@ export const SettingsPage: React.FC = () => {
               <span className="font-bold text-xs">{t('languageSetting')}</span>
             </div>
             <div className="flex rounded-lg bg-slate-100 dark:bg-slate-800 p-1 text-xs">
+              <button
+                type="button"
+                onClick={() => setLanguage('system')}
+                className={`px-2.5 py-1 rounded-md font-bold ${
+                  settings.language === 'system'
+                    ? 'bg-white dark:bg-slate-900 text-slate-800 dark:text-white shadow-sm'
+                    : 'text-slate-400'
+                }`}
+              >
+                {t('languageSystem')}
+              </button>
               <button
                 type="button"
                 onClick={() => setLanguage('ko')}
@@ -992,7 +1004,7 @@ export const SettingsPage: React.FC = () => {
                 key={preset.id}
                 className="flex items-center gap-1.5 rounded-full bg-blue-50 dark:bg-blue-950/60 border border-blue-100 dark:border-blue-900 px-3 py-1 text-xs font-bold text-blue-700 dark:text-blue-300"
               >
-                {formatMedicationPreset(preset, settings.language)}
+                {formatMedicationPreset(preset, resolvedLanguage)}
                 <button
                   type="button"
                   onClick={() => removeMedicationPreset(preset.id)}

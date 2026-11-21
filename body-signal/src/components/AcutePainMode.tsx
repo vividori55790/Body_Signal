@@ -19,14 +19,14 @@ const ACUTE_BODY_PARTS = [
 
 export const AcutePainMode: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const { conditions, saveEntry } = useHealth();
-  const { settings } = useSettings();
-  const isEn = settings.language === 'en';
+  const { settings, resolvedLanguage } = useSettings();
+  const isEn = resolvedLanguage === 'en';
   const partDisplayName = (name: string) =>
     isEn ? ACUTE_BODY_PARTS.find((p) => p.name === name)?.nameEn || name : name;
 
   const effectiveMeds =
     settings?.medicationPresets && settings.medicationPresets.length > 0
-      ? settings.medicationPresets.map((p) => formatMedicationPreset(p, settings.language))
+      ? settings.medicationPresets.map((p) => formatMedicationPreset(p, resolvedLanguage))
       : isEn
       ? ['Tylenol 500mg', 'Ibuprofen 400mg', 'NSAID', 'Rx Medication', 'Muscle Relaxant']
       : ['타이레놀 500mg', '이부프로펜 400mg', '소염진통제', '병원 처방약', '근육이완제'];

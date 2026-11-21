@@ -6,7 +6,6 @@ import EntryFormPage from './pages/EntryForm';
 import SettingsPage from './pages/Settings';
 import HistoryPage from './pages/History';
 import DiagnosticsPage from './pages/DiagnosticsPage';
-import ClinicalBriefingPage from './pages/ClinicalBriefing';
 import ConditionDetailPage from './pages/ConditionDetail';
 import BrandSplash from './components/BrandSplash';
 import LockScreen from './components/LockScreen';
@@ -36,8 +35,8 @@ const AppContent: React.FC = () => {
     setupNewPin,
     toggleBiometric,
   } = useAuth();
-  const { settings, isSettingsLoaded, acceptDisclaimer, t } = useSettings();
-  const isEn = settings.language === 'en';
+  const { settings, resolvedLanguage, isSettingsLoaded, acceptDisclaimer, t } = useSettings();
+  const isEn = resolvedLanguage === 'en';
   const [showIntroLogo, setShowIntroLogo] = useState(true);
   const [pendingOnboardingPin, setPendingOnboardingPin] = useState<string | null>(null);
   const [biometricPromptError, setBiometricPromptError] = useState('');
@@ -222,7 +221,7 @@ const AppContent: React.FC = () => {
             <Route path="/calendar" element={<HistoryPage initialTab="calendar" />} />
             <Route path="/diagnostics" element={<DiagnosticsPage />} />
             <Route path="/history" element={<HistoryPage />} />
-            <Route path="/briefing" element={<ClinicalBriefingPage />} />
+            <Route path="/briefing" element={<Navigate to="/" replace />} />
             <Route path="/entry" element={<EntryFormPage />} />
             <Route path="/condition/:id" element={<ConditionDetailPage />} />
             <Route path="/settings" element={<SettingsPage />} />

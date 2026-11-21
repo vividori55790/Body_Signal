@@ -1,15 +1,31 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { UserSettings, MedicationPreset, LogoVariant } from '../types/health';
+import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
+import {
+  UserSettings,
+  MedicationPreset,
+  LogoVariant,
+  ThemeAccentId,
+  LanguagePreference,
+} from '../types/health';
 import { loadUserSettings, saveUserSettings, DEFAULT_SETTINGS } from '../utils/storage';
-import { translations, translate, Language, TranslationKey } from '../i18n/translations';
+import {
+  translations,
+  translate,
+  LocaleId,
+  TranslationKey,
+  resolveActiveLocale,
+  getLocaleDirection,
+  loadLocalePack,
+} from '../i18n/translations';
 import { cancelDailyReminder, triggerHaptic, setHapticsEnabled } from '../utils/native';
 
 interface SettingsContextValue {
   settings: UserSettings;
+  resolvedLanguage: LocaleId;
   isSettingsLoaded: boolean;
   t: (key: TranslationKey, params?: Record<string, string | number>) => string;
-  setLanguage: (lang: Language) => Promise<void>;
+  setLanguage: (lang: LanguagePreference) => Promise<void>;
   setTheme: (theme: 'light' | 'dark' | 'system') => Promise<void>;
+  setThemeAccent: (accent: ThemeAccentId) => Promise<void>;
   setLogoVariant: (variant: LogoVariant) => Promise<void>;
   setHaptics: (enabled: boolean) => Promise<void>;
   setQuickSos: (enabled: boolean) => Promise<void>;
@@ -35,20 +51,10 @@ export const SettingsContext = createContext<SettingsContextValue | null>(null);
 export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [settings, setSettings] = useState<UserSettings>(DEFAULT_SETTINGS);
   const [isSettingsLoaded, setIsSettingsLoaded] = useState(false);
+  const [systemLocaleTick, setSystemLocaleTick] = useState(0);
+  const [localePackVersion, setLocalePackVersion] = useState(0);
 
-  useEffect(() => {
-    loadUserSettings()
-      .then((loaded) => {
-        setSettings(loaded);
-        applyTheme(loaded.theme);
-        setHapticsEnabled(loaded.hapticsEnabled);
-      })
-      .finally(() => {
-        setIsSettingsLoaded(true);
-      });
-  }, []);
-
-  const applyTheme = (theme: 'light' | 'dark' | 'system') => {
+  const applyTheme = (theme: 'light' | 'dark' | 'system', accent: ThemeAccentId = 'emerald') => {
     if (typeof document === 'undefined') return;
     const root = document.documentElement;
     let isDark = false;
@@ -68,14 +74,61 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     } else {
       root.classList.remove('dark');
     }
+    root.dataset.accent = accent || 'emerald';
   };
 
   useEffect(() => {
+    loadUserSettings()
+      .then((loaded) => {
+        setSettings(loaded);
+        applyTheme(loaded.theme, loaded.themeAccent);
+        setHapticsEnabled(loaded.hapticsEnabled);
+      })
+      .finally(() => {
+        setIsSettingsLoaded(true);
+      });
+  }, []);
+
+  // Real-time OS language change listener when settings.language === 'system'
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const handleLocaleChange = () => {
+      setSystemLocaleTick((v) => v + 1);
+    };
+    window.addEventListener('languagechange', handleLocaleChange);
+    return () => {
+      window.removeEventListener('languagechange', handleLocaleChange);
+    };
+  }, []);
+
+  const resolvedLanguage = useMemo(() => {
+    void systemLocaleTick;
+    return resolveActiveLocale(settings.language);
+  }, [settings.language, systemLocaleTick]);
+
+  // Lazy-load dynamic locale pack if an external/N-locale pack is selected
+  useEffect(() => {
+    let active = true;
+    loadLocalePack(resolvedLanguage).then((loaded) => {
+      if (active && loaded) {
+        setLocalePackVersion((v) => v + 1);
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, [resolvedLanguage]);
+
+  useEffect(() => {
     if (typeof document === 'undefined') return;
-    const lang = settings.language || 'ko';
-    document.documentElement.lang = lang;
-    document.documentElement.dataset.lang = lang;
-  }, [settings.language]);
+    document.documentElement.lang = resolvedLanguage;
+    document.documentElement.dataset.lang = resolvedLanguage;
+    document.documentElement.dir = getLocaleDirection(resolvedLanguage);
+  }, [resolvedLanguage]);
+
+  useEffect(() => {
+    applyTheme(settings.theme, settings.themeAccent);
+  }, [settings.theme, settings.themeAccent]);
 
   // Real-time dynamic theme sync with OS preference changes (F4)
   useEffect(() => {
@@ -115,16 +168,22 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const t = (key: TranslationKey, params?: Record<string, string | number>): string => {
     void translations;
-    return translate(settings.language || 'ko', key, params);
+    void localePackVersion;
+    return translate(resolvedLanguage, key, params);
   };
 
-  const setLanguage = async (language: Language) => {
+  const setLanguage = async (language: LanguagePreference) => {
     await updateAndSave((prev) => ({ ...prev, language }));
   };
 
   const setTheme = async (theme: 'light' | 'dark' | 'system') => {
-    applyTheme(theme);
+    applyTheme(theme, settings.themeAccent);
     await updateAndSave((prev) => ({ ...prev, theme }));
+  };
+
+  const setThemeAccent = async (themeAccent: ThemeAccentId) => {
+    applyTheme(settings.theme, themeAccent);
+    await updateAndSave((prev) => ({ ...prev, themeAccent }));
   };
 
   const setLogoVariant = async (logoVariant: LogoVariant) => {
@@ -283,10 +342,12 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     <SettingsContext.Provider
       value={{
         settings,
+        resolvedLanguage,
         isSettingsLoaded,
         t,
         setLanguage,
         setTheme,
+        setThemeAccent,
         setLogoVariant,
         setHaptics,
         setQuickSos,

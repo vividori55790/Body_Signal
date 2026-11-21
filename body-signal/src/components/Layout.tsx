@@ -8,7 +8,8 @@ import { UNASSIGNED_CONDITION_ID } from '../types/health';
 import { triggerHaptic } from '../utils/native';
 
 export const Layout: React.FC = () => {
-  const { settings, t } = useSettings();
+  const { settings, resolvedLanguage, t } = useSettings();
+  const isEn = resolvedLanguage === 'en';
   const { logs } = useHealth();
   const { openAcute } = useAcutePain();
   const unassignedCount = logs.filter((l) => l.conditionId === UNASSIGNED_CONDITION_ID).length;
@@ -41,7 +42,7 @@ export const Layout: React.FC = () => {
             aria-label="지금 너무 아파요 1초 급성 통증 기록"
             className="flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-rose-700 hover:bg-rose-600 text-white font-bold text-xs shadow-lg ring-1 ring-rose-400/50 active:scale-95 transition-all"
           >
-            <span>{settings.language === 'en' ? '1-Sec SOS' : '1초 긴급 기록'}</span>
+            <span>{isEn ? '1-Sec SOS' : '1초 긴급 기록'}</span>
           </button>
         </aside>
       )}
@@ -69,7 +70,7 @@ export const Layout: React.FC = () => {
                 {path === '/history' && unassignedCount > 0 && (
                   <span
                     title={
-                      settings.language === 'en'
+                      isEn
                         ? `${unassignedCount} unassigned symptoms`
                         : `미분류 증상 ${unassignedCount}건`
                     }

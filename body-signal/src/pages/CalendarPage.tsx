@@ -37,8 +37,8 @@ export const CalendarPage: React.FC<{ embedded?: boolean }> = ({ embedded = fals
   const navigate = useNavigate();
   const location = useLocation();
   const { logs, conditions, diagnosticRecords, diaryEntries, saveDiaryEntry } = useHealth();
-  const { settings, t } = useSettings();
-  const isEn = settings.language === 'en';
+  const { resolvedLanguage, t } = useSettings();
+  const isEn = resolvedLanguage === 'en';
 
   const initialNavDate = parseLocalDate(
     (location.state as { selectedDate?: string } | null)?.selectedDate

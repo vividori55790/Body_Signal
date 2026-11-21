@@ -39,8 +39,8 @@ const QUICK_MED_EN_MAP: Record<string, string> = {
 
 export const QuickPainLogger: React.FC<{ onSaved?: () => void }> = ({ onSaved }) => {
   const { conditions, saveEntry } = useHealth();
-  const { settings, t } = useSettings();
-  const isEn = settings.language === 'en';
+  const { settings, resolvedLanguage, t } = useSettings();
+  const isEn = resolvedLanguage === 'en';
   const [selectedIntensity, setSelectedIntensity] = useState<number>(5);
   const [selectedPart, setSelectedPart] = useState<string>('허리/요통');
   const [selectedConditionId, setSelectedConditionId] = useState<string>('unassigned');
@@ -52,7 +52,7 @@ export const QuickPainLogger: React.FC<{ onSaved?: () => void }> = ({ onSaved })
 
   const availableMeds =
     settings?.medicationPresets && settings.medicationPresets.length > 0
-      ? settings.medicationPresets.map((p) => formatMedicationPreset(p, settings.language))
+      ? settings.medicationPresets.map((p) => formatMedicationPreset(p, resolvedLanguage))
       : isEn
       ? QUICK_MEDS.map((m) => QUICK_MED_EN_MAP[m] || m)
       : QUICK_MEDS;

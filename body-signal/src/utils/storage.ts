@@ -1,5 +1,6 @@
 import { openDB, DBSchema, IDBPDatabase } from 'idb';
 import {
+  DEFAULT_USER_SETTINGS,
   CURRENT_SCHEMA_VERSION,
   Condition,
   ConditionSchema,
@@ -15,6 +16,10 @@ import {
   UserSettings,
   UserSettingsSchema,
 } from '../types/health';
+import {
+  resolveBodyPartIds,
+  resolvePqrstCodes,
+} from './clinicalTaxonomy';
 import {
   EncryptedPackage,
   SESSION_KEY_TOKEN,
@@ -71,39 +76,7 @@ export function getDB(): Promise<IDBPDatabase<BignalDBSchema>> {
   return dbPromise;
 }
 
-export const DEFAULT_SETTINGS: UserSettings = {
-  language: 'ko',
-  theme: 'system',
-  logoVariant: 'cube-3d',
-  hapticsEnabled: true,
-  reminderEnabled: false,
-  reminderTime: '21:00',
-  pinEnabled: false,
-  quickSosEnabled: false,
-  showDiagnosticsTab: false,
-  defaultQuickLoggerOpen: true,
-  defaultBodyMapOpen: true,
-  quickLoggerUnusedCloseCount: 0,
-  bodyMapUnusedCloseCount: 0,
-  emrFormat: 'standard',
-  localLlm: {
-    enabled: false,
-    endpoint: 'http://localhost:11434/v1',
-    model: 'llama3.2',
-    apiKey: '',
-    temperature: 0.3,
-    maxTokens: 1024,
-  },
-  medicationPresets: [
-    { id: '1', name: '타이레놀 500mg' },
-    { id: '2', name: '이부프로펜 400mg' },
-    { id: '3', name: '소염진통제' },
-    { id: '4', name: '위장약' },
-  ],
-  symptomPresets: [
-    '욱신거림', '찌르는 듯한 통증', '뻐근함', '타는 듯한 느낌', '저림', '두통', '관절통'
-  ],
-};
+export const DEFAULT_SETTINGS: UserSettings = DEFAULT_USER_SETTINGS;
 
 const EMPTY_HEALTH_DATA: HealthDataPayload = {
   schemaVersion: CURRENT_SCHEMA_VERSION,
@@ -241,6 +214,46 @@ function normalizeDiagnosticCandidate(raw: any): DiagnosticRecord | null {
  * Validates and normalizes a decoded HealthDataPayload with record-level safeParse recovery.
  * Never locks out valid user records due to 1 malformed entry.
  */
+function enrichConditionTaxonomy(c: Condition): { item: Condition; changed: boolean } {
+  if (c.bodyPartIds && c.bodyPartIds.length > 0) return { item: c, changed: false };
+  const inferred = resolveBodyPartIds(c.bodyPart);
+  if (inferred.length === 0) return { item: c, changed: false };
+  return { item: { ...c, bodyPartIds: inferred }, changed: true };
+}
+
+function enrichPainLogTaxonomy(l: PainLog): { item: PainLog; changed: boolean } {
+  let changed = false;
+  const next: PainLog = { ...l };
+  if ((!next.bodyPartOverrideIds || next.bodyPartOverrideIds.length === 0) && next.bodyPartOverride) {
+    const ids = resolveBodyPartIds(next.bodyPartOverride);
+    if (ids.length > 0) {
+      next.bodyPartOverrideIds = ids;
+      changed = true;
+    }
+  }
+  if ((!next.painQualityCodes || next.painQualityCodes.length === 0) && next.painQuality?.length) {
+    next.painQualityCodes = resolvePqrstCodes('quality', next.painQuality);
+    changed = true;
+  }
+  if ((!next.radiationCodes || next.radiationCodes.length === 0) && next.radiation) {
+    next.radiationCodes = resolvePqrstCodes('radiation', [next.radiation]);
+    changed = true;
+  }
+  if ((!next.triggerCodes || next.triggerCodes.length === 0) && next.triggers?.length) {
+    next.triggerCodes = resolvePqrstCodes('triggers', next.triggers);
+    changed = true;
+  }
+  if ((!next.reliefFactorCodes || next.reliefFactorCodes.length === 0) && next.reliefFactors?.length) {
+    next.reliefFactorCodes = resolvePqrstCodes('reliefFactors', next.reliefFactors);
+    changed = true;
+  }
+  if ((!next.redFlagCodes || next.redFlagCodes.length === 0) && next.redFlags?.length) {
+    next.redFlagCodes = resolvePqrstCodes('redFlags', next.redFlags);
+    changed = true;
+  }
+  return { item: changed ? next : l, changed };
+}
+
 export function recoverAndNormalizeHealthPayload(raw: unknown): PayloadRecoveryResult {
   const warnings: string[] = [];
   if (!raw || typeof raw !== 'object') {
@@ -254,17 +267,24 @@ export function recoverAndNormalizeHealthPayload(raw: unknown): PayloadRecoveryR
 
   const strictCheck = HealthDataPayloadSchema.safeParse(obj);
   if (strictCheck.success) {
-    // Normalize date conventions while preserving signed PainLog timestamps/fields verbatim
-    // so existing cryptographic signatures stay valid.
+    // Normalize date conventions & backfill canonical taxonomy IDs while preserving signed PainLog fields
     const normalizedConditions = strictCheck.data.conditions.map((c) => {
       const ymd = normalizeLocalYmd(c.onsetDate);
+      const dated = ymd === c.onsetDate ? c : { ...c, onsetDate: ymd };
       if (ymd !== c.onsetDate) didMigrate = true;
-      return ymd === c.onsetDate ? c : { ...c, onsetDate: ymd };
+      const enriched = enrichConditionTaxonomy(dated as Condition);
+      if (enriched.changed) didMigrate = true;
+      return enriched.item;
+    });
+    const normalizedLogs = (strictCheck.data.logs as PainLog[]).map((l) => {
+      const enriched = enrichPainLogTaxonomy(l);
+      if (enriched.changed) didMigrate = true;
+      return enriched.item;
     });
     const normalizedDiary = strictCheck.data.diaryEntries.map((d) => {
       const ymd = normalizeLocalYmd(d.date);
       if (ymd !== d.date) didMigrate = true;
-      return ymd === d.date ? d : { ...d, date: ymd };
+      return ymd === d.date ? (d as DiaryEntry) : ({ ...d, date: ymd } as DiaryEntry);
     });
     const normalizedDiagnostics = (strictCheck.data.diagnosticRecords || []).map((d) => {
       const ymd = normalizeLocalYmd(d.diagnosisDate);
@@ -276,7 +296,7 @@ export function recoverAndNormalizeHealthPayload(raw: unknown): PayloadRecoveryR
       payload: {
         schemaVersion: CURRENT_SCHEMA_VERSION,
         conditions: normalizedConditions,
-        logs: strictCheck.data.logs as PainLog[],
+        logs: normalizedLogs,
         diaryEntries: normalizedDiary,
         diagnosticRecords: normalizedDiagnostics,
         settings: strictCheck.data.settings,
@@ -296,11 +316,12 @@ export function recoverAndNormalizeHealthPayload(raw: unknown): PayloadRecoveryR
     const strict = ConditionSchema.safeParse(item);
     if (strict.success) {
       const ymd = normalizeLocalYmd(strict.data.onsetDate);
-      conditions.push(ymd === strict.data.onsetDate ? strict.data : { ...strict.data, onsetDate: ymd });
+      const dated = (ymd === strict.data.onsetDate ? strict.data : { ...strict.data, onsetDate: ymd }) as Condition;
+      conditions.push(enrichConditionTaxonomy(dated).item);
     } else {
       const salvaged = normalizeConditionCandidate(item);
       if (salvaged) {
-        conditions.push(salvaged);
+        conditions.push(enrichConditionTaxonomy(salvaged).item);
         warnings.push(`Normalized condition[${idx}]`);
       } else {
         warnings.push(`Skipped unparseable condition[${idx}]`);
@@ -313,11 +334,11 @@ export function recoverAndNormalizeHealthPayload(raw: unknown): PayloadRecoveryR
   rawLogs.forEach((item, idx) => {
     const strict = PainLogSchema.safeParse(item);
     if (strict.success) {
-      logs.push(strict.data as PainLog);
+      logs.push(enrichPainLogTaxonomy(strict.data as PainLog).item);
     } else {
       const salvaged = normalizePainLogCandidate(item);
       if (salvaged) {
-        logs.push(salvaged);
+        logs.push(enrichPainLogTaxonomy(salvaged).item);
         warnings.push(`Recovered painLog[${idx}]`);
       } else {
         warnings.push(`Skipped unparseable painLog[${idx}]`);
@@ -331,7 +352,7 @@ export function recoverAndNormalizeHealthPayload(raw: unknown): PayloadRecoveryR
     const strict = DiaryEntrySchema.safeParse(item);
     if (strict.success) {
       const ymd = normalizeLocalYmd(strict.data.date);
-      diaryEntries.push(ymd === strict.data.date ? strict.data : { ...strict.data, date: ymd });
+      diaryEntries.push((ymd === strict.data.date ? strict.data : { ...strict.data, date: ymd }) as DiaryEntry);
     } else {
       const salvaged = normalizeDiaryCandidate(item);
       if (salvaged) {
@@ -764,24 +785,12 @@ export async function savePinMeta(meta: PinMeta | null): Promise<void> {
  * Settings operations (AES-GCM 256 encrypted at rest with device master key)
  */
 export async function loadUserSettings(): Promise<UserSettings> {
+  if (typeof indexedDB === 'undefined') {
+    return DEFAULT_SETTINGS;
+  }
   const db = await getDB();
   const stored = await db.get('app_state', 'user_settings');
   if (!stored) {
-    if (typeof window !== 'undefined' && typeof navigator !== 'undefined' && navigator.language) {
-      const detectedLang = navigator.language.toLowerCase().startsWith('ko') ? 'ko' : 'en';
-      if (detectedLang === 'en') {
-        return {
-          ...DEFAULT_SETTINGS,
-          language: 'en',
-          medicationPresets: [
-            { id: '1', name: 'Tylenol 500mg' },
-            { id: '2', name: 'Ibuprofen 400mg' },
-            { id: '3', name: 'NSAID' },
-            { id: '4', name: 'GI Protectant' },
-          ],
-        };
-      }
-    }
     return DEFAULT_SETTINGS;
   }
 

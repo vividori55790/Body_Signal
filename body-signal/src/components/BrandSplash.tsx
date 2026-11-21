@@ -11,7 +11,7 @@ interface BrandSplashProps {
  */
 export const BrandSplash: React.FC<BrandSplashProps> = ({ statusText }) => {
   const settingsCtx = useContext(SettingsContext);
-  const isEn = settingsCtx?.settings.language === 'en';
+  const isEn = settingsCtx?.resolvedLanguage === 'en';
   return (
     <div
       data-testid="brand-splash"

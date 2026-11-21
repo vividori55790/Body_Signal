@@ -6,7 +6,7 @@ import { SettingsContext } from '../context/SettingsContext';
 
 export const TrustBadge: React.FC<{ compact?: boolean }> = ({ compact = false }) => {
   const settingsCtx = useContext(SettingsContext);
-  const isEn = settingsCtx?.settings.language === 'en';
+  const isEn = settingsCtx?.resolvedLanguage === 'en';
   const [isOpen, setIsOpen] = useState(false);
 
   // Lock background document scrolling while modal is open

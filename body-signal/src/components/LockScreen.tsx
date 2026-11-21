@@ -19,7 +19,7 @@ export const LockScreen: React.FC = () => {
     cancelTwoFactor,
   } = useAuth();
   const settingsCtx = useContext(SettingsContext);
-  const isEn = settingsCtx?.settings.language === 'en';
+  const isEn = settingsCtx?.resolvedLanguage === 'en';
   const targetLength = Math.max(4, Math.min(16, pinLengthHint || 6));
   const [pin, setPin] = useState('');
   const [errorMsg, setErrorMsg] = useState('');

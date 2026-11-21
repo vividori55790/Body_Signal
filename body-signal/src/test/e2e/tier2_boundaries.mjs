@@ -682,8 +682,9 @@ export const tier2Tests = [
     name: 'Resetting settings restores DEFAULT_SETTINGS including default LLM options',
     run: async () => {
       const storageSrc = fs.readFileSync(path.join(SRC_DIR, 'utils/storage.ts'), 'utf8');
-      assert.match(storageSrc, /DEFAULT_SETTINGS:\s*UserSettings/);
-      assert.match(storageSrc, /localLlm:\s*\{/);
+      const healthTypesSrc = fs.readFileSync(path.join(SRC_DIR, 'types/health.ts'), 'utf8');
+      assert.match(storageSrc, /DEFAULT_SETTINGS:\s*UserSettings\s*=\s*DEFAULT_USER_SETTINGS/);
+      assert.match(healthTypesSrc, /localLlm:\s*LocalLlmConfigSchema/);
     },
   },
 

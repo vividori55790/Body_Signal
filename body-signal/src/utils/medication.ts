@@ -1,4 +1,4 @@
-import { Language } from '../i18n/translations';
+import { LocaleId } from '../i18n/translations';
 
 const MEDICATION_KO_TO_EN: Record<string, string> = {
   '타이레놀 500mg': 'Tylenol 500mg',
@@ -28,10 +28,10 @@ const MEDICATION_EN_TO_KO: Record<string, string> = {
  * Localizes built-in medication preset names between Korean and English
  * while preserving custom user-entered medication names verbatim.
  */
-export function localizeMedicationName(name: string, language?: Language): string {
+export function localizeMedicationName(name: string, language?: LocaleId): string {
   const trimmed = (name || '').trim();
   if (!trimmed || !language) return trimmed;
-  if (language === 'en') {
+  if (!language.toLowerCase().startsWith('ko')) {
     return MEDICATION_KO_TO_EN[trimmed] || trimmed;
   }
   return MEDICATION_EN_TO_KO[trimmed.toLowerCase()] || trimmed;
@@ -43,7 +43,7 @@ export function localizeMedicationName(name: string, language?: Language): strin
  */
 export function formatMedicationPreset(
   preset: { name: string; dosage?: string },
-  language?: Language
+  language?: LocaleId
 ): string {
   const name = localizeMedicationName(preset.name || '', language);
   const dosage = preset.dosage ? preset.dosage.trim() : '';
@@ -61,14 +61,14 @@ export function formatMedicationPreset(
 export function validateMedicationInput(
   name: string,
   dosage?: string,
-  language?: Language
+  language?: LocaleId
 ): {
   valid: boolean;
   error?: string;
   cleanName?: string;
   cleanDosage?: string;
 } {
-  const isEn = language === 'en';
+  const isEn = Boolean(language && !language.toLowerCase().startsWith('ko'));
   const cleanName = (name || '').trim();
   if (!cleanName) {
     return {
