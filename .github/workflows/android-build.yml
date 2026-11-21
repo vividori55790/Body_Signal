@@ -62,6 +62,7 @@ jobs:
           node test/security_hardening_test.mjs
           node test/v2_1_0_features_test.mjs
           node test/v2_2_1_features_test.mjs
+          node test/v2_3_0_s6_schema_test.mjs
           node test/run-feedback-tests.mjs
 
       - name: Build release APK

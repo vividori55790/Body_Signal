@@ -1,5 +1,20 @@
 import { openDB, DBSchema, IDBPDatabase } from 'idb';
-import { HealthDataPayload, HealthDataPayloadSchema, UserSettings, UserSettingsSchema } from '../types/health';
+import {
+  CURRENT_SCHEMA_VERSION,
+  Condition,
+  ConditionSchema,
+  DiagnosticRecord,
+  DiagnosticRecordSchema,
+  DiaryEntry,
+  DiaryEntrySchema,
+  HealthDataPayload,
+  HealthDataPayloadSchema,
+  PainLog,
+  PainLogSchema,
+  UNASSIGNED_CONDITION_ID,
+  UserSettings,
+  UserSettingsSchema,
+} from '../types/health';
 import {
   EncryptedPackage,
   SESSION_KEY_TOKEN,
@@ -14,7 +29,7 @@ import {
   importKeyFromHex,
 } from './crypto';
 import SecureAuth, { isNativeAndroidSecureAuth } from './secureAuthBridge';
-import { toLocalYmd } from './dateUtils';
+import { normalizeIsoTimestamp, normalizeLocalYmd, toLocalYmd } from './dateUtils';
 
 const DB_NAME = 'bignal_mobile_db';
 const DB_VERSION = 3;
@@ -91,6 +106,7 @@ export const DEFAULT_SETTINGS: UserSettings = {
 };
 
 const EMPTY_HEALTH_DATA: HealthDataPayload = {
+  schemaVersion: CURRENT_SCHEMA_VERSION,
   conditions: [],
   logs: [],
   diaryEntries: [],
@@ -98,6 +114,277 @@ const EMPTY_HEALTH_DATA: HealthDataPayload = {
   settings: DEFAULT_SETTINGS,
   lastUpdated: new Date().toISOString(),
 };
+
+export interface PayloadRecoveryResult {
+  payload: HealthDataPayload;
+  recoveredWarnings: string[];
+  didMigrate: boolean;
+}
+
+/**
+ * Parses decrypted JSON text with emergency substring extraction fallback
+ * in case trailing/leading framing corruption occurred.
+ */
+export function extractHealthPayloadJson(rawText: string): unknown {
+  const trimmed = (rawText || '').trim();
+  try {
+    return JSON.parse(trimmed);
+  } catch (err) {
+    const firstBrace = trimmed.indexOf('{');
+    const lastBrace = trimmed.lastIndexOf('}');
+    if (firstBrace >= 0 && lastBrace > firstBrace) {
+      try {
+        return JSON.parse(trimmed.slice(firstBrace, lastBrace + 1));
+      } catch {
+        // fall through to original error
+      }
+    }
+    throw err;
+  }
+}
+
+function normalizeConditionCandidate(raw: any): Condition | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const candidate = {
+    ...raw,
+    id: typeof raw.id === 'string' && raw.id.trim() ? raw.id.trim() : crypto.randomUUID(),
+    label: typeof raw.label === 'string' && raw.label.trim() ? raw.label.trim() : '미지정',
+    bodyPart: typeof raw.bodyPart === 'string' && raw.bodyPart.trim() ? raw.bodyPart.trim() : '미지정',
+    onsetDate: normalizeLocalYmd(typeof raw.onsetDate === 'string' ? raw.onsetDate : undefined),
+    isArchived: Boolean(raw.isArchived),
+  };
+  const parsed = ConditionSchema.safeParse(candidate);
+  return parsed.success ? parsed.data : null;
+}
+
+function normalizePainLogCandidate(raw: any): PainLog | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const rawInt = Number(raw.intensity);
+  const clampedIntensity = Number.isFinite(rawInt)
+    ? Math.max(1, Math.min(10, Math.round(rawInt)))
+    : 5;
+  const rawPostInt =
+    raw.postMedIntensity !== undefined && raw.postMedIntensity !== null && raw.postMedIntensity !== ''
+      ? Number(raw.postMedIntensity)
+      : undefined;
+  const clampedPostMed =
+    rawPostInt !== undefined && Number.isFinite(rawPostInt)
+      ? Math.max(0, Math.min(10, Math.round(rawPostInt)))
+      : undefined;
+
+  const candidate = {
+    ...raw,
+    id: typeof raw.id === 'string' && raw.id.trim() ? raw.id.trim() : crypto.randomUUID(),
+    conditionId:
+      typeof raw.conditionId === 'string' && raw.conditionId.trim()
+        ? raw.conditionId.trim()
+        : UNASSIGNED_CONDITION_ID,
+    date: normalizeIsoTimestamp(typeof raw.date === 'string' ? raw.date : undefined),
+    intensity: clampedIntensity,
+    medication: typeof raw.medication === 'string' ? raw.medication.slice(0, 500) : '',
+    notes: typeof raw.notes === 'string' ? raw.notes.slice(0, 5000) : '',
+    postMedIntensity: clampedPostMed,
+    signedAt: typeof raw.signedAt === 'string' ? normalizeIsoTimestamp(raw.signedAt) : undefined,
+    deletedAt: typeof raw.deletedAt === 'string' ? normalizeIsoTimestamp(raw.deletedAt) : undefined,
+  };
+  const parsed = PainLogSchema.safeParse(candidate);
+  return parsed.success ? (parsed.data as PainLog) : null;
+}
+
+function normalizeDiaryCandidate(raw: any): DiaryEntry | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const candidate = {
+    ...raw,
+    date: normalizeLocalYmd(typeof raw.date === 'string' ? raw.date : undefined),
+    text: typeof raw.text === 'string' ? raw.text.slice(0, 5000) : '',
+    updatedAt: normalizeIsoTimestamp(typeof raw.updatedAt === 'string' ? raw.updatedAt : undefined),
+  };
+  const parsed = DiaryEntrySchema.safeParse(candidate);
+  return parsed.success ? parsed.data : null;
+}
+
+function normalizeDiagnosticCandidate(raw: any): DiagnosticRecord | null {
+  if (!raw || typeof raw !== 'object') return null;
+  if (typeof raw.diagnosisName !== 'string' || !raw.diagnosisName.trim()) return null;
+  const nowIso = new Date().toISOString();
+  const rawAmt =
+    raw.amountKrw !== undefined && raw.amountKrw !== null && raw.amountKrw !== ''
+      ? Number(raw.amountKrw)
+      : undefined;
+  const candidate = {
+    ...raw,
+    id: typeof raw.id === 'string' && raw.id.trim() ? raw.id.trim() : crypto.randomUUID(),
+    diagnosisDate: normalizeLocalYmd(
+      typeof raw.diagnosisDate === 'string' ? raw.diagnosisDate : undefined
+    ),
+    diagnosisName: raw.diagnosisName.trim(),
+    amountKrw: rawAmt !== undefined && Number.isFinite(rawAmt) && rawAmt >= 0 ? rawAmt : undefined,
+    photoIds: Array.isArray(raw.photoIds)
+      ? raw.photoIds.filter((p: unknown): p is string => typeof p === 'string')
+      : [],
+    createdAt: normalizeIsoTimestamp(
+      typeof raw.createdAt === 'string' ? raw.createdAt : undefined,
+      nowIso
+    ),
+    updatedAt: normalizeIsoTimestamp(
+      typeof raw.updatedAt === 'string' ? raw.updatedAt : undefined,
+      nowIso
+    ),
+    signedAt: typeof raw.signedAt === 'string' ? normalizeIsoTimestamp(raw.signedAt) : undefined,
+    deletedAt: typeof raw.deletedAt === 'string' ? normalizeIsoTimestamp(raw.deletedAt) : undefined,
+  };
+  const parsed = DiagnosticRecordSchema.safeParse(candidate);
+  return parsed.success ? (parsed.data as DiagnosticRecord) : null;
+}
+
+/**
+ * Validates and normalizes a decoded HealthDataPayload with record-level safeParse recovery.
+ * Never locks out valid user records due to 1 malformed entry.
+ */
+export function recoverAndNormalizeHealthPayload(raw: unknown): PayloadRecoveryResult {
+  const warnings: string[] = [];
+  if (!raw || typeof raw !== 'object') {
+    warnings.push('Empty or non-object payload recovered as empty vault.');
+    return { payload: { ...EMPTY_HEALTH_DATA }, recoveredWarnings: warnings, didMigrate: true };
+  }
+
+  const obj = raw as Record<string, any>;
+  const rawVersion = typeof obj.schemaVersion === 'number' ? obj.schemaVersion : 1;
+  let didMigrate = rawVersion < CURRENT_SCHEMA_VERSION;
+
+  const strictCheck = HealthDataPayloadSchema.safeParse(obj);
+  if (strictCheck.success) {
+    // Normalize date conventions while preserving signed PainLog timestamps/fields verbatim
+    // so existing cryptographic signatures stay valid.
+    const normalizedConditions = strictCheck.data.conditions.map((c) => {
+      const ymd = normalizeLocalYmd(c.onsetDate);
+      if (ymd !== c.onsetDate) didMigrate = true;
+      return ymd === c.onsetDate ? c : { ...c, onsetDate: ymd };
+    });
+    const normalizedDiary = strictCheck.data.diaryEntries.map((d) => {
+      const ymd = normalizeLocalYmd(d.date);
+      if (ymd !== d.date) didMigrate = true;
+      return ymd === d.date ? d : { ...d, date: ymd };
+    });
+    const normalizedDiagnostics = (strictCheck.data.diagnosticRecords || []).map((d) => {
+      const ymd = normalizeLocalYmd(d.diagnosisDate);
+      if (ymd !== d.diagnosisDate) didMigrate = true;
+      return ymd === d.diagnosisDate ? (d as DiagnosticRecord) : ({ ...d, diagnosisDate: ymd } as DiagnosticRecord);
+    });
+
+    return {
+      payload: {
+        schemaVersion: CURRENT_SCHEMA_VERSION,
+        conditions: normalizedConditions,
+        logs: strictCheck.data.logs as PainLog[],
+        diaryEntries: normalizedDiary,
+        diagnosticRecords: normalizedDiagnostics,
+        settings: strictCheck.data.settings,
+        lastUpdated: strictCheck.data.lastUpdated,
+      },
+      recoveredWarnings: warnings,
+      didMigrate,
+    };
+  }
+
+  didMigrate = true;
+  warnings.push('Full-payload strict validation fell back to per-record safeParse recovery.');
+
+  const rawConditions = Array.isArray(obj.conditions) ? obj.conditions : [];
+  const conditions: Condition[] = [];
+  rawConditions.forEach((item, idx) => {
+    const strict = ConditionSchema.safeParse(item);
+    if (strict.success) {
+      const ymd = normalizeLocalYmd(strict.data.onsetDate);
+      conditions.push(ymd === strict.data.onsetDate ? strict.data : { ...strict.data, onsetDate: ymd });
+    } else {
+      const salvaged = normalizeConditionCandidate(item);
+      if (salvaged) {
+        conditions.push(salvaged);
+        warnings.push(`Normalized condition[${idx}]`);
+      } else {
+        warnings.push(`Skipped unparseable condition[${idx}]`);
+      }
+    }
+  });
+
+  const rawLogs = Array.isArray(obj.logs) ? obj.logs : [];
+  const logs: PainLog[] = [];
+  rawLogs.forEach((item, idx) => {
+    const strict = PainLogSchema.safeParse(item);
+    if (strict.success) {
+      logs.push(strict.data as PainLog);
+    } else {
+      const salvaged = normalizePainLogCandidate(item);
+      if (salvaged) {
+        logs.push(salvaged);
+        warnings.push(`Recovered painLog[${idx}]`);
+      } else {
+        warnings.push(`Skipped unparseable painLog[${idx}]`);
+      }
+    }
+  });
+
+  const rawDiary = Array.isArray(obj.diaryEntries) ? obj.diaryEntries : [];
+  const diaryEntries: DiaryEntry[] = [];
+  rawDiary.forEach((item, idx) => {
+    const strict = DiaryEntrySchema.safeParse(item);
+    if (strict.success) {
+      const ymd = normalizeLocalYmd(strict.data.date);
+      diaryEntries.push(ymd === strict.data.date ? strict.data : { ...strict.data, date: ymd });
+    } else {
+      const salvaged = normalizeDiaryCandidate(item);
+      if (salvaged) {
+        diaryEntries.push(salvaged);
+        warnings.push(`Recovered diaryEntry[${idx}]`);
+      } else {
+        warnings.push(`Skipped unparseable diaryEntry[${idx}]`);
+      }
+    }
+  });
+
+  const rawDiagnostics = Array.isArray(obj.diagnosticRecords) ? obj.diagnosticRecords : [];
+  const diagnosticRecords: DiagnosticRecord[] = [];
+  rawDiagnostics.forEach((item, idx) => {
+    const strict = DiagnosticRecordSchema.safeParse(item);
+    if (strict.success) {
+      const ymd = normalizeLocalYmd(strict.data.diagnosisDate);
+      diagnosticRecords.push(
+        ymd === strict.data.diagnosisDate
+          ? (strict.data as DiagnosticRecord)
+          : ({ ...strict.data, diagnosisDate: ymd } as DiagnosticRecord)
+      );
+    } else {
+      const salvaged = normalizeDiagnosticCandidate(item);
+      if (salvaged) {
+        diagnosticRecords.push(salvaged);
+        warnings.push(`Recovered diagnosticRecord[${idx}]`);
+      } else {
+        warnings.push(`Skipped unparseable diagnosticRecord[${idx}]`);
+      }
+    }
+  });
+
+  let settings: UserSettings | undefined;
+  if (obj.settings && typeof obj.settings === 'object') {
+    const parsedSettings = UserSettingsSchema.safeParse(obj.settings);
+    settings = parsedSettings.success ? parsedSettings.data : { ...DEFAULT_SETTINGS, ...obj.settings };
+  }
+
+  return {
+    payload: {
+      schemaVersion: CURRENT_SCHEMA_VERSION,
+      conditions,
+      logs,
+      diaryEntries,
+      diagnosticRecords,
+      settings,
+      lastUpdated: typeof obj.lastUpdated === 'string' ? obj.lastUpdated : new Date().toISOString(),
+    },
+    recoveredWarnings: warnings,
+    didMigrate,
+  };
+}
 
 /**
  * Migrate legacy data from localStorage if present
@@ -230,6 +517,17 @@ export async function getOrCreateDeviceMasterKey(): Promise<CryptoKey> {
  * If user PIN is configured, decrypts with PIN key.
  * If no PIN is configured, transparently decrypts with persistent device master key.
  */
+function parseAndRecoverJson(
+  decryptedJson: string
+): { payload: HealthDataPayload; didMigrate: boolean } {
+  const parsed = extractHealthPayloadJson(decryptedJson);
+  const { payload, recoveredWarnings, didMigrate } = recoverAndNormalizeHealthPayload(parsed);
+  if (recoveredWarnings.length > 0) {
+    console.warn('Health payload recovery warnings:', recoveredWarnings);
+  }
+  return { payload, didMigrate };
+}
+
 export async function loadHealthData(pin?: string): Promise<{ data: HealthDataPayload; isEncrypted: boolean }> {
   const db = await getDB();
   const record = await db.get('app_state', 'health_data');
@@ -259,19 +557,20 @@ export async function loadHealthData(pin?: string): Promise<{ data: HealthDataPa
           pin === SESSION_KEY_TOKEN
             ? await decryptWithActiveSessionKey(pkg)
             : await decryptWithPin(pkg, pin);
-        const parsed = JSON.parse(decryptedJson);
-        const validated = HealthDataPayloadSchema.parse(parsed);
-        return { data: validated, isEncrypted: true };
+        const { payload, didMigrate } = parseAndRecoverJson(decryptedJson);
+        if (didMigrate) {
+          await saveHealthData(payload, pin).catch(() => {});
+        }
+        return { data: payload, isEncrypted: true };
       } catch (err) {
         // Transition support: if saved with device key before setting PIN
         if (pkg.mode === 'device') {
           try {
             const deviceKey = await getOrCreateDeviceMasterKey();
             const decryptedJson = await decryptWithDeviceKey(pkg, deviceKey);
-            const parsed = JSON.parse(decryptedJson);
-            const validated = HealthDataPayloadSchema.parse(parsed);
-            await saveHealthData(validated, pin);
-            return { data: validated, isEncrypted: true };
+            const { payload } = parseAndRecoverJson(decryptedJson);
+            await saveHealthData(payload, pin);
+            return { data: payload, isEncrypted: true };
           } catch {}
         }
         throw err;
@@ -282,28 +581,28 @@ export async function loadHealthData(pin?: string): Promise<{ data: HealthDataPa
     try {
       const deviceKey = await getOrCreateDeviceMasterKey();
       const decryptedJson = await decryptWithDeviceKey(pkg, deviceKey);
-      const parsed = JSON.parse(decryptedJson);
-      const validated = HealthDataPayloadSchema.parse(parsed);
-      return { data: validated, isEncrypted: true };
+      const { payload, didMigrate } = parseAndRecoverJson(decryptedJson);
+      if (didMigrate) {
+        await saveHealthData(payload, pin).catch(() => {});
+      }
+      return { data: payload, isEncrypted: true };
     } catch {
       if (pin) {
         const decryptedJson = await decryptWithPin(pkg, pin);
-        const parsed = JSON.parse(decryptedJson);
-        const validated = HealthDataPayloadSchema.parse(parsed);
-        return { data: validated, isEncrypted: true };
+        const { payload, didMigrate } = parseAndRecoverJson(decryptedJson);
+        if (didMigrate) {
+          await saveHealthData(payload, pin).catch(() => {});
+        }
+        return { data: payload, isEncrypted: true };
       }
       return { data: EMPTY_HEALTH_DATA, isEncrypted: true };
     }
   }
 
   // Plain record migration fallback (encrypt immediately at rest)
-  try {
-    const validated = HealthDataPayloadSchema.parse(record);
-    await saveHealthData(validated, pin);
-    return { data: validated, isEncrypted: false };
-  } catch {
-    return { data: record as HealthDataPayload, isEncrypted: false };
-  }
+  const { payload } = recoverAndNormalizeHealthPayload(record);
+  await saveHealthData(payload, pin).catch(() => {});
+  return { data: payload, isEncrypted: false };
 }
 
 /**
@@ -315,8 +614,9 @@ export async function loadHealthData(pin?: string): Promise<{ data: HealthDataPa
  */
 export async function saveHealthData(data: HealthDataPayload, pin?: string): Promise<void> {
   const db = await getDB();
-  const toSave = {
+  const toSave: HealthDataPayload = {
     ...data,
+    schemaVersion: CURRENT_SCHEMA_VERSION,
     lastUpdated: new Date().toISOString(),
   };
 
@@ -383,30 +683,30 @@ export async function reEncryptHealthData(newPin?: string, oldPin?: string): Pro
       if (oldPin === SESSION_KEY_TOKEN) {
         try {
           const json = await decryptWithActiveSessionKey(pkg);
-          payload = JSON.parse(json);
+          payload = parseAndRecoverJson(json).payload;
         } catch {}
       } else if (oldPin) {
         try {
           const json = await decryptWithPin(pkg, oldPin);
-          payload = JSON.parse(json);
+          payload = parseAndRecoverJson(json).payload;
         } catch {}
       }
       if (!payload && hasActiveSessionCryptoKey()) {
         try {
           const json = await decryptWithActiveSessionKey(pkg);
-          payload = JSON.parse(json);
+          payload = parseAndRecoverJson(json).payload;
         } catch {}
       }
       if (!payload) {
         try {
           const deviceKey = await getOrCreateDeviceMasterKey();
           const json = await decryptWithDeviceKey(pkg, deviceKey);
-          payload = JSON.parse(json);
+          payload = parseAndRecoverJson(json).payload;
         } catch {}
       }
     } else {
       try {
-        payload = HealthDataPayloadSchema.parse(record);
+        payload = recoverAndNormalizeHealthPayload(record).payload;
       } catch {}
     }
 

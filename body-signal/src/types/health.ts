@@ -1,24 +1,75 @@
 import { z } from 'zod';
 
 export const UNASSIGNED_CONDITION_ID = 'unassigned';
+export const CURRENT_SCHEMA_VERSION = 2;
+
+export const InputSourceSchema = z.enum(['manual', 'quick', 'ai_text', 'ai_voice', 'ai_vision']);
+export type InputSource = z.infer<typeof InputSourceSchema>;
+
+export const RevisionReasonSchema = z.enum([
+  'edit',
+  'reassign_condition',
+  'soft_delete',
+  'restore',
+  'post_med_eval',
+]);
+export type RevisionReason = z.infer<typeof RevisionReasonSchema>;
+
+export const PainLogSnapshotSchema = z
+  .object({
+    conditionId: z.string(),
+    date: z.string(),
+    intensity: z.number(),
+    medication: z.string().optional(),
+    notes: z.string().optional(),
+    bodyPartOverride: z.string().optional(),
+    painQuality: z.array(z.string()).optional(),
+    radiation: z.string().optional(),
+    painTiming: z
+      .enum(['morning', 'afternoon', 'evening', 'night', 'constant', 'intermittent'])
+      .optional(),
+    triggers: z.array(z.string()).optional(),
+    reliefFactors: z.array(z.string()).optional(),
+    redFlags: z.array(z.string()).optional(),
+    postMedIntensity: z.number().optional(),
+    postMedSideEffects: z.array(z.string()).optional(),
+    postMedEvaluatedAt: z.string().optional(),
+    deletedAt: z.string().optional(),
+    inputSource: InputSourceSchema.optional(),
+    chainIndex: z.number().int().nonnegative().optional(),
+    signature: z.string().optional(),
+    prevSignature: z.string().optional(),
+    signedAt: z.string().optional(),
+  })
+  .passthrough();
+
+export type PainLogSnapshot = z.infer<typeof PainLogSnapshotSchema>;
+
+export const PainLogRevisionSchema = z.object({
+  editedAt: z.string(),
+  reason: RevisionReasonSchema.default('edit'),
+  previous: PainLogSnapshotSchema,
+});
+
+export type PainLogRevision = z.infer<typeof PainLogRevisionSchema>;
 
 // Condition schema & type
 export const ConditionSchema = z.object({
   id: z.string().min(1),
   label: z.string().min(1),
   bodyPart: z.string().min(1),
-  onsetDate: z.string(), // ISO date or YYYY-MM-DD
+  onsetDate: z.string(), // YYYY-MM-DD (local date)
   isArchived: z.boolean().default(false),
   notes: z.string().optional(),
 });
 
 export type Condition = z.infer<typeof ConditionSchema>;
 
-// Pain Log schema & type (with PQRST clinical metrics)
+// Pain Log schema & type (with PQRST clinical metrics & revision audit trail)
 export const PainLogSchema = z.object({
   id: z.string().min(1),
   conditionId: z.string().min(1),
-  date: z.string(), // ISO string
+  date: z.string(), // ISO 8601 timestamp
   intensity: z.number().int().min(1).max(10),
   medication: z.string().max(500).optional().default(''),
   notes: z.string().max(5000).optional().default(''),
@@ -35,14 +86,19 @@ export const PainLogSchema = z.object({
   postMedSideEffects: z.array(z.string()).optional().default([]), // Side effects after medication (e.g. 속쓰림, 어지러움, 구역)
   postMedEvaluatedAt: z.string().optional(), // Medication response evaluated timestamp (ISO)
 
-  // Medical Audit Trail & Integrity Signatures
+  // Medical Audit Trail, Revisions, Soft Delete & AI-Ready Provenance
   signature: z.string().optional(),
   prevSignature: z.string().optional(),
   signedAt: z.string().optional(),
+  chainIndex: z.number().int().nonnegative().optional(),
+  revisions: z.array(PainLogRevisionSchema).optional().default([]),
+  deletedAt: z.string().optional(),
+  inputSource: InputSourceSchema.optional(),
 });
 
-export type PainLog = Omit<z.infer<typeof PainLogSchema>, 'postMedSideEffects'> & {
+export type PainLog = Omit<z.infer<typeof PainLogSchema>, 'postMedSideEffects' | 'revisions'> & {
   postMedSideEffects?: string[];
+  revisions?: PainLogRevision[];
 };
 
 // Diary Entry schema & type
@@ -53,6 +109,37 @@ export const DiaryEntrySchema = z.object({
 });
 
 export type DiaryEntry = z.infer<typeof DiaryEntrySchema>;
+
+export const DiagnosticSnapshotSchema = z
+  .object({
+    conditionId: z.string().optional(),
+    diagnosisDate: z.string(),
+    diagnosisName: z.string(),
+    hospitalName: z.string().optional(),
+    department: z.string().optional(),
+    amountKrw: z.number().optional(),
+    notes: z.string().optional(),
+    photoIds: z.array(z.string()).optional(),
+    claimStatus: z.enum(['pending', 'claimed', 'not_applicable']).optional(),
+    claimDeadlineYears: z.number().optional(),
+    claimedAt: z.string().optional(),
+    deletedAt: z.string().optional(),
+    inputSource: InputSourceSchema.optional(),
+    signature: z.string().optional(),
+    prevSignature: z.string().optional(),
+    signedAt: z.string().optional(),
+  })
+  .passthrough();
+
+export type DiagnosticSnapshot = z.infer<typeof DiagnosticSnapshotSchema>;
+
+export const DiagnosticRevisionSchema = z.object({
+  editedAt: z.string(),
+  reason: RevisionReasonSchema.default('edit'),
+  previous: DiagnosticSnapshotSchema,
+});
+
+export type DiagnosticRevision = z.infer<typeof DiagnosticRevisionSchema>;
 
 // Diagnostic Record & Encrypted Photo Vault schema
 export const DiagnosticRecordSchema = z.object({
@@ -70,9 +157,19 @@ export const DiagnosticRecordSchema = z.object({
   claimedAt: z.string().optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
+
+  // Optional Integrity, Revisions, Soft Delete & AI-Ready Provenance
+  signature: z.string().optional(),
+  prevSignature: z.string().optional(),
+  signedAt: z.string().optional(),
+  revisions: z.array(DiagnosticRevisionSchema).optional().default([]),
+  deletedAt: z.string().optional(),
+  inputSource: InputSourceSchema.optional(),
 });
 
-export type DiagnosticRecord = z.infer<typeof DiagnosticRecordSchema>;
+export type DiagnosticRecord = Omit<z.infer<typeof DiagnosticRecordSchema>, 'revisions'> & {
+  revisions?: DiagnosticRevision[];
+};
 
 // Presets for quick mobile logging
 export const MedicationPresetSchema = z.object({
@@ -139,15 +236,20 @@ export type UserSettings = z.infer<typeof UserSettingsSchema>;
 
 // Complete Health Data Payload
 export const HealthDataPayloadSchema = z.object({
+  schemaVersion: z.number().int().min(1).default(1),
   conditions: z.array(ConditionSchema),
-  logs: z.array(z.custom<PainLog>()),
+  logs: z.array(PainLogSchema),
   diaryEntries: z.array(DiaryEntrySchema),
   diagnosticRecords: z.array(DiagnosticRecordSchema).optional().default([]),
   settings: UserSettingsSchema.optional(),
   lastUpdated: z.string().optional(),
 });
 
-export type HealthDataPayload = z.infer<typeof HealthDataPayloadSchema>;
+export type HealthDataPayload = Omit<z.infer<typeof HealthDataPayloadSchema>, 'logs' | 'diagnosticRecords' | 'schemaVersion'> & {
+  schemaVersion?: number;
+  logs: PainLog[];
+  diagnosticRecords: DiagnosticRecord[];
+};
 
 // Clinical Briefing (For Doctors & Nurses)
 export interface ClinicalBriefing {

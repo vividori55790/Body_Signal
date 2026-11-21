@@ -1,20 +1,115 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import {
+  CURRENT_SCHEMA_VERSION,
   Condition,
   PainLog,
+  PainLogRevision,
+  PainLogSnapshot,
   DiaryEntry,
   DiagnosticRecord,
+  DiagnosticRevision,
+  DiagnosticSnapshot,
   HealthDataPayload,
   HealthDataPayloadSchema,
   ClinicalBriefing,
+  InputSource,
+  RevisionReason,
   UNASSIGNED_CONDITION_ID,
 } from '../types/health';
-import { loadHealthData, saveHealthData, resetAllData } from '../utils/storage';
-import { computeRecordSignature, verifyRecordSignature } from '../utils/crypto';
+import {
+  loadHealthData,
+  saveHealthData,
+  resetAllData,
+  recoverAndNormalizeHealthPayload,
+} from '../utils/storage';
+import {
+  AuditChainVerificationResult,
+  computeDiagnosticSignature,
+  computeRecordSignature,
+  getGenesisSignature,
+  verifyAuditChain,
+  verifyDiagnosticSignature,
+  verifyRecordSignature,
+} from '../utils/crypto';
 import { deleteEncryptedPhoto } from '../utils/mediaStorage';
-import { toLocalYmd } from '../utils/dateUtils';
+import { normalizeIsoTimestamp, normalizeLocalYmd, toLocalYmd } from '../utils/dateUtils';
 import { useAuth } from './AuthContext';
 import { format, differenceInDays } from 'date-fns';
+
+function buildPainLogSnapshot(log: PainLog): PainLogSnapshot {
+  return {
+    conditionId: log.conditionId,
+    date: log.date,
+    intensity: log.intensity,
+    medication: log.medication,
+    notes: log.notes,
+    bodyPartOverride: log.bodyPartOverride,
+    painQuality: log.painQuality,
+    radiation: log.radiation,
+    painTiming: log.painTiming,
+    triggers: log.triggers,
+    reliefFactors: log.reliefFactors,
+    redFlags: log.redFlags,
+    postMedIntensity: log.postMedIntensity,
+    postMedSideEffects: log.postMedSideEffects,
+    postMedEvaluatedAt: log.postMedEvaluatedAt,
+    deletedAt: log.deletedAt,
+    inputSource: log.inputSource,
+    chainIndex: log.chainIndex,
+    signature: log.signature,
+    prevSignature: log.prevSignature,
+    signedAt: log.signedAt,
+  };
+}
+
+function buildDiagnosticSnapshot(diag: DiagnosticRecord): DiagnosticSnapshot {
+  return {
+    conditionId: diag.conditionId,
+    diagnosisDate: diag.diagnosisDate,
+    diagnosisName: diag.diagnosisName,
+    hospitalName: diag.hospitalName,
+    department: diag.department,
+    amountKrw: diag.amountKrw,
+    notes: diag.notes,
+    photoIds: diag.photoIds,
+    claimStatus: diag.claimStatus,
+    claimDeadlineYears: diag.claimDeadlineYears,
+    claimedAt: diag.claimedAt,
+    deletedAt: diag.deletedAt,
+    inputSource: diag.inputSource,
+    signature: diag.signature,
+    prevSignature: diag.prevSignature,
+    signedAt: diag.signedAt,
+  };
+}
+
+function getLatestAuditChainTip(allLogs: PainLog[]): PainLog | undefined {
+  const signed = allLogs.filter((l) => Boolean(l.signature));
+  if (signed.length === 0) return allLogs[0];
+  return [...signed].sort((a, b) => {
+    const aHasIdx = typeof a.chainIndex === 'number';
+    const bHasIdx = typeof b.chainIndex === 'number';
+    if (aHasIdx && bHasIdx && a.chainIndex !== b.chainIndex) {
+      return (b.chainIndex as number) - (a.chainIndex as number);
+    }
+    if (aHasIdx !== bHasIdx) return aHasIdx ? -1 : 1;
+    const aOrig = a.revisions?.[0]?.previous?.signedAt || a.signedAt;
+    const bOrig = b.revisions?.[0]?.previous?.signedAt || b.signedAt;
+    const aTime = aOrig ? new Date(aOrig).getTime() : 0;
+    const bTime = bOrig ? new Date(bOrig).getTime() : 0;
+    return bTime - aTime;
+  })[0];
+}
+
+function getActiveLogsSorted(allLogs: PainLog[]): PainLog[] {
+  return allLogs
+    .filter((l) => !l.deletedAt)
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+}
+
+function getActiveDiagnostics(allDiagnostics: DiagnosticRecord[]): DiagnosticRecord[] {
+  return allDiagnostics.filter((d) => !d.deletedAt);
+}
 
 interface HealthContextValue {
   conditions: Condition[];
@@ -26,6 +121,7 @@ interface HealthContextValue {
     isNewCondition: boolean;
     isUnassigned?: boolean;
     skipPainLog?: boolean;
+    inputSource?: InputSource;
     conditionData: { id?: string; label?: string; bodyPart?: string; onsetDate?: string };
     logData: {
       date: string;
@@ -61,9 +157,11 @@ interface HealthContextValue {
   ) => Promise<string | null>;
   updateCondition: (id: string, updates: Partial<Condition>) => Promise<boolean>;
   archiveCondition: (id: string, isArchived: boolean) => Promise<boolean>;
-  updateLog: (id: string, updates: Partial<PainLog>) => Promise<boolean>;
+  updateLog: (id: string, updates: Partial<PainLog>, reason?: RevisionReason) => Promise<boolean>;
   deleteLog: (id: string) => Promise<boolean>;
   verifyLogIntegrity: (log: PainLog) => Promise<boolean>;
+  verifyAuditTrail: () => Promise<AuditChainVerificationResult>;
+  verifyDiagnosticIntegrity: (record: DiagnosticRecord) => Promise<boolean>;
   saveDiaryEntry: (date: string, text: string) => void;
   addDiagnosticRecord: (
     record: Omit<DiagnosticRecord, 'id' | 'createdAt' | 'updatedAt'>
@@ -118,17 +216,17 @@ export const HealthProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     loadHealthData(activeSessionPin || undefined)
       .then(({ data }) => {
         const nextConditions = data.conditions || [];
-        const nextLogs = data.logs || [];
+        const nextAllLogs = data.logs || [];
         const nextDiary = data.diaryEntries || [];
-        const nextDiagnostics = data.diagnosticRecords || [];
+        const nextAllDiagnostics = data.diagnosticRecords || [];
         conditionsRef.current = nextConditions;
-        logsRef.current = nextLogs;
+        logsRef.current = nextAllLogs;
         diaryEntriesRef.current = nextDiary;
-        diagnosticRecordsRef.current = nextDiagnostics;
+        diagnosticRecordsRef.current = nextAllDiagnostics;
         setConditions(nextConditions);
-        setLogs(nextLogs);
+        setLogs(getActiveLogsSorted(nextAllLogs));
         setDiaryEntries(nextDiary);
-        setDiagnosticRecords(nextDiagnostics);
+        setDiagnosticRecords(getActiveDiagnostics(nextAllDiagnostics));
       })
       .catch((err) => {
         console.error('Failed to load health data:', err);
@@ -156,6 +254,7 @@ export const HealthProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       );
     }
     const payload: HealthDataPayload = {
+      schemaVersion: CURRENT_SCHEMA_VERSION,
       conditions: nextConditions,
       logs: nextLogs,
       diaryEntries: nextDiary,
@@ -171,6 +270,7 @@ export const HealthProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     isNewCondition: boolean;
     isUnassigned?: boolean;
     skipPainLog?: boolean;
+    inputSource?: InputSource;
     conditionData: { id?: string; label?: string; bodyPart?: string; onsetDate?: string };
     logData: {
       date: string;
@@ -214,7 +314,7 @@ export const HealthProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         id: conditionId,
         label: payload.conditionData.label.trim(),
         bodyPart: payload.conditionData.bodyPart.trim(),
-        onsetDate: payload.conditionData.onsetDate || toLocalYmd(new Date()),
+        onsetDate: normalizeLocalYmd(payload.conditionData.onsetDate),
         isArchived: false,
       };
       nextConditions = [...nextConditions, newCond];
@@ -222,13 +322,17 @@ export const HealthProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     if (!conditionId) return false;
 
+    const nowIso = new Date().toISOString();
     let nextLogs = curLogs;
     if (!payload.skipPainLog) {
-      const prevSignature = curLogs.length > 0 && curLogs[0].signature ? curLogs[0].signature : '';
+      const tip = getLatestAuditChainTip(curLogs);
+      const prevSignature = tip ? getGenesisSignature(tip) : '';
+      const chainIndex =
+        typeof tip?.chainIndex === 'number' ? tip.chainIndex + 1 : curLogs.length;
       const newLog: PainLog = {
         id: crypto.randomUUID(),
         conditionId,
-        date: payload.logData.date || new Date().toISOString(),
+        date: normalizeIsoTimestamp(payload.logData.date, nowIso),
         intensity: Number(payload.logData.intensity),
         medication: payload.logData.medication?.trim() || '',
         notes: payload.logData.notes?.trim() || '',
@@ -241,7 +345,9 @@ export const HealthProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         redFlags: payload.logData.redFlags || [],
         postMedIntensity: payload.logData.postMedIntensity,
         prevSignature,
-        signedAt: new Date().toISOString(),
+        signedAt: nowIso,
+        chainIndex,
+        inputSource: payload.inputSource,
       };
 
       newLog.signature = await computeRecordSignature(newLog, prevSignature);
@@ -251,12 +357,11 @@ export const HealthProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     let nextDiagnostics = curDiagnostics;
     const diagName = payload.diagnosticData?.diagnosisName?.trim();
     if (diagName) {
-      const nowIso = new Date().toISOString();
+      const prevDiagSig = curDiagnostics.find((d) => Boolean(d.signature))?.signature || '';
       const newDiag: DiagnosticRecord = {
         id: crypto.randomUUID(),
         conditionId: payload.isUnassigned ? undefined : conditionId,
-        diagnosisDate:
-          payload.diagnosticData?.diagnosisDate || toLocalYmd(new Date()),
+        diagnosisDate: normalizeLocalYmd(payload.diagnosticData?.diagnosisDate),
         diagnosisName: diagName,
         hospitalName: payload.diagnosticData?.hospitalName?.trim() || '',
         department: payload.diagnosticData?.department?.trim() || '',
@@ -267,7 +372,11 @@ export const HealthProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         claimDeadlineYears: payload.diagnosticData?.claimDeadlineYears || 3,
         createdAt: nowIso,
         updatedAt: nowIso,
+        prevSignature: prevDiagSig,
+        signedAt: nowIso,
+        inputSource: payload.inputSource,
       };
+      newDiag.signature = await computeDiagnosticSignature(newDiag, prevDiagSig);
       nextDiagnostics = [newDiag, ...curDiagnostics];
     }
 
@@ -278,11 +387,11 @@ export const HealthProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
     if (nextLogs !== curLogs) {
       logsRef.current = nextLogs;
-      setLogs(nextLogs);
+      setLogs(getActiveLogsSorted(nextLogs));
     }
     if (nextDiagnostics !== curDiagnostics) {
       diagnosticRecordsRef.current = nextDiagnostics;
-      setDiagnosticRecords(nextDiagnostics);
+      setDiagnosticRecords(getActiveDiagnostics(nextDiagnostics));
     }
     return true;
   };
@@ -315,7 +424,7 @@ export const HealthProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           id: targetId,
           label,
           bodyPart,
-          onsetDate: target.newCondition.onsetDate || toLocalYmd(new Date()),
+          onsetDate: normalizeLocalYmd(target.newCondition.onsetDate),
           isArchived: false,
         },
       ];
@@ -324,13 +433,20 @@ export const HealthProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     if (!targetId) return null;
 
     const idSet = new Set(logIds);
+    const nowIso = new Date().toISOString();
     const nextLogs = await Promise.all(
       curLogs.map(async (log) => {
-        if (!idSet.has(log.id)) return log;
+        if (!idSet.has(log.id) || log.deletedAt) return log;
+        const revision: PainLogRevision = {
+          editedAt: nowIso,
+          reason: 'reassign_condition',
+          previous: buildPainLogSnapshot(log),
+        };
         const updated: PainLog = {
           ...log,
           conditionId: targetId!,
-          signedAt: new Date().toISOString(),
+          signedAt: nowIso,
+          revisions: [...(log.revisions || []), revision],
         };
         updated.signature = await computeRecordSignature(updated, updated.prevSignature || '');
         return updated;
@@ -341,7 +457,7 @@ export const HealthProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     conditionsRef.current = nextConditions;
     logsRef.current = nextLogs;
     setConditions(nextConditions);
-    setLogs(nextLogs);
+    setLogs(getActiveLogsSorted(nextLogs));
     return targetId;
   };
 
@@ -357,31 +473,68 @@ export const HealthProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     return updateCondition(id, { isArchived });
   };
 
-  const updateLog = async (id: string, updates: Partial<PainLog>): Promise<boolean> => {
+  const updateLog = async (
+    id: string,
+    updates: Partial<PainLog>,
+    reason: RevisionReason = 'edit'
+  ): Promise<boolean> => {
     const curLogs = logsRef.current;
     const logToUpdate = curLogs.find((l) => l.id === id);
-    if (!logToUpdate) return false;
+    if (!logToUpdate || logToUpdate.deletedAt) return false;
+
+    const nowIso = new Date().toISOString();
+    const resolvedReason: RevisionReason =
+      updates.postMedIntensity !== undefined && reason === 'edit' ? 'post_med_eval' : reason;
+    const revision: PainLogRevision = {
+      editedAt: nowIso,
+      reason: resolvedReason,
+      previous: buildPainLogSnapshot(logToUpdate),
+    };
 
     const updatedLog: PainLog = {
       ...logToUpdate,
       ...updates,
+      prevSignature: logToUpdate.prevSignature || '',
+      chainIndex: logToUpdate.chainIndex,
+      signedAt: nowIso,
+      revisions: [...(logToUpdate.revisions || []), revision],
     };
-    const prevSig = updatedLog.prevSignature || '';
-    updatedLog.signedAt = new Date().toISOString();
-    updatedLog.signature = await computeRecordSignature(updatedLog, prevSig);
+    updatedLog.signature = await computeRecordSignature(updatedLog, updatedLog.prevSignature || '');
 
     const next = curLogs.map((l) => (l.id === id ? updatedLog : l));
     await persist(conditionsRef.current, next, diaryEntriesRef.current, diagnosticRecordsRef.current);
     logsRef.current = next;
-    setLogs(next);
+    setLogs(getActiveLogsSorted(next));
     return true;
   };
 
   const deleteLog = async (id: string): Promise<boolean> => {
-    const next = logsRef.current.filter((l) => l.id !== id);
+    const curLogs = logsRef.current;
+    const logToDelete = curLogs.find((l) => l.id === id);
+    if (!logToDelete || logToDelete.deletedAt) return false;
+
+    // Soft-delete preserves the node in the SHA-256 audit chain so downstream prevSignature links remain unbroken.
+    const nowIso = new Date().toISOString();
+    const revision: PainLogRevision = {
+      editedAt: nowIso,
+      reason: 'soft_delete',
+      previous: buildPainLogSnapshot(logToDelete),
+    };
+    const softDeleted: PainLog = {
+      ...logToDelete,
+      deletedAt: nowIso,
+      signedAt: nowIso,
+      revisions: [...(logToDelete.revisions || []), revision],
+    };
+    softDeleted.signature = await computeRecordSignature(
+      softDeleted,
+      softDeleted.prevSignature || ''
+    );
+
+    const next = curLogs.map((l) => (l.id === id ? softDeleted : l));
     await persist(conditionsRef.current, next, diaryEntriesRef.current, diagnosticRecordsRef.current);
     logsRef.current = next;
-    setLogs(next);
+    setLogs(getActiveLogsSorted(next));
     return true;
   };
 
@@ -772,16 +925,22 @@ export const HealthProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     record: Omit<DiagnosticRecord, 'id' | 'createdAt' | 'updatedAt'>
   ): Promise<DiagnosticRecord> => {
     const now = new Date().toISOString();
+    const prevDiagSig =
+      diagnosticRecordsRef.current.find((d) => Boolean(d.signature))?.signature || '';
     const created: DiagnosticRecord = {
       ...record,
+      diagnosisDate: normalizeLocalYmd(record.diagnosisDate),
       id: crypto.randomUUID(),
       createdAt: now,
       updatedAt: now,
+      prevSignature: prevDiagSig,
+      signedAt: now,
     };
+    created.signature = await computeDiagnosticSignature(created, prevDiagSig);
     const nextDiagnostics = [created, ...diagnosticRecordsRef.current];
     await persist(conditionsRef.current, logsRef.current, diaryEntriesRef.current, nextDiagnostics);
     diagnosticRecordsRef.current = nextDiagnostics;
-    setDiagnosticRecords(nextDiagnostics);
+    setDiagnosticRecords(getActiveDiagnostics(nextDiagnostics));
     return created;
   };
 
@@ -789,30 +948,71 @@ export const HealthProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     id: string,
     updates: Partial<DiagnosticRecord>
   ): Promise<boolean> => {
-    const nextDiagnostics = diagnosticRecordsRef.current.map((d) =>
-      d.id === id ? { ...d, ...updates, updatedAt: new Date().toISOString() } : d
-    );
+    const curDiagnostics = diagnosticRecordsRef.current;
+    const target = curDiagnostics.find((d) => d.id === id);
+    if (!target || target.deletedAt) return false;
+
+    const now = new Date().toISOString();
+    const revision: DiagnosticRevision = {
+      editedAt: now,
+      reason: 'edit',
+      previous: buildDiagnosticSnapshot(target),
+    };
+    const updated: DiagnosticRecord = {
+      ...target,
+      ...updates,
+      diagnosisDate: normalizeLocalYmd(updates.diagnosisDate ?? target.diagnosisDate),
+      updatedAt: now,
+      signedAt: now,
+      prevSignature: target.prevSignature || '',
+      revisions: [...(target.revisions || []), revision],
+    };
+    updated.signature = await computeDiagnosticSignature(updated, updated.prevSignature || '');
+
+    const nextDiagnostics = curDiagnostics.map((d) => (d.id === id ? updated : d));
     await persist(conditionsRef.current, logsRef.current, diaryEntriesRef.current, nextDiagnostics);
     diagnosticRecordsRef.current = nextDiagnostics;
-    setDiagnosticRecords(nextDiagnostics);
+    setDiagnosticRecords(getActiveDiagnostics(nextDiagnostics));
     return true;
   };
 
   const deleteDiagnosticRecord = async (id: string): Promise<boolean> => {
     const curDiagnostics = diagnosticRecordsRef.current;
     const target = curDiagnostics.find((d) => d.id === id);
-    const nextDiagnostics = curDiagnostics.filter((d) => d.id !== id);
+    if (!target || target.deletedAt) return false;
+
+    const now = new Date().toISOString();
+    const revision: DiagnosticRevision = {
+      editedAt: now,
+      reason: 'soft_delete',
+      previous: buildDiagnosticSnapshot(target),
+    };
+    const softDeleted: DiagnosticRecord = {
+      ...target,
+      deletedAt: now,
+      updatedAt: now,
+      signedAt: now,
+      prevSignature: target.prevSignature || '',
+      revisions: [...(target.revisions || []), revision],
+    };
+    softDeleted.signature = await computeDiagnosticSignature(
+      softDeleted,
+      softDeleted.prevSignature || ''
+    );
+
+    const nextDiagnostics = curDiagnostics.map((d) => (d.id === id ? softDeleted : d));
     await persist(conditionsRef.current, logsRef.current, diaryEntriesRef.current, nextDiagnostics);
-    if (target?.photoIds?.length) {
+    if (target.photoIds?.length) {
       await Promise.all(target.photoIds.map((pid) => deleteEncryptedPhoto(pid)));
     }
     diagnosticRecordsRef.current = nextDiagnostics;
-    setDiagnosticRecords(nextDiagnostics);
+    setDiagnosticRecords(getActiveDiagnostics(nextDiagnostics));
     return true;
   };
 
   const exportBackupJson = (): string => {
     const payload: HealthDataPayload = {
+      schemaVersion: CURRENT_SCHEMA_VERSION,
       conditions: conditionsRef.current,
       logs: logsRef.current,
       diaryEntries: diaryEntriesRef.current,
@@ -826,13 +1026,30 @@ export const HealthProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const parsed = JSON.parse(jsonStr);
     const raw = parsed?.data || parsed;
     if (raw && Array.isArray(raw.conditions) && Array.isArray(raw.logs)) {
-      const validated = HealthDataPayloadSchema.parse({
-        conditions: raw.conditions,
-        logs: raw.logs,
+      const candidate = {
+        ...raw,
         diaryEntries: Array.isArray(raw.diaryEntries) ? raw.diaryEntries : [],
         diagnosticRecords: Array.isArray(raw.diagnosticRecords) ? raw.diagnosticRecords : [],
         lastUpdated: typeof raw.lastUpdated === 'string' ? raw.lastUpdated : new Date().toISOString(),
-      });
+      };
+      const strictCheck = HealthDataPayloadSchema.safeParse(candidate);
+      let validated: HealthDataPayload;
+      if (strictCheck.success) {
+        validated = recoverAndNormalizeHealthPayload(strictCheck.data).payload;
+      } else {
+        const { payload, recoveredWarnings } = recoverAndNormalizeHealthPayload(candidate);
+        if (
+          raw.conditions.length + raw.logs.length > 0 &&
+          payload.conditions.length + payload.logs.length === 0
+        ) {
+          validated = HealthDataPayloadSchema.parse(candidate) as HealthDataPayload;
+        } else {
+          if (recoveredWarnings.length > 0) {
+            console.warn('Imported backup recovery warnings:', recoveredWarnings);
+          }
+          validated = payload;
+        }
+      }
       await persist(
         validated.conditions,
         validated.logs,
@@ -844,9 +1061,9 @@ export const HealthProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       diaryEntriesRef.current = validated.diaryEntries;
       diagnosticRecordsRef.current = validated.diagnosticRecords;
       setConditions(validated.conditions);
-      setLogs(validated.logs);
+      setLogs(getActiveLogsSorted(validated.logs));
       setDiaryEntries(validated.diaryEntries);
-      setDiagnosticRecords(validated.diagnosticRecords);
+      setDiagnosticRecords(getActiveDiagnostics(validated.diagnosticRecords));
     } else {
       const isEn = typeof document !== 'undefined' && document.documentElement?.dataset?.lang === 'en';
       throw new Error(isEn ? 'Invalid backup file format.' : '올바른 백업 파일 형식이 아닙니다.');
@@ -869,6 +1086,8 @@ export const HealthProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     setDiagnosticRecords([]);
   };
 
+  const verifyAuditTrail = () => verifyAuditChain(logsRef.current);
+
   return (
     <HealthContext.Provider
       value={{
@@ -884,6 +1103,8 @@ export const HealthProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         updateLog,
         deleteLog,
         verifyLogIntegrity: verifyRecordSignature,
+        verifyAuditTrail,
+        verifyDiagnosticIntegrity: verifyDiagnosticSignature,
         saveDiaryEntry,
         addDiagnosticRecord,
         updateDiagnosticRecord,
