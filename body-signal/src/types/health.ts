@@ -123,6 +123,7 @@ export const ConditionSchema = z.object({
   baselineIntensity: z.number().min(0).max(10).optional(),
   targetIntensity: z.number().min(0).max(10).optional(),
   goalNote: z.string().max(500).optional(),
+  consultNotes: z.string().max(5000).optional(),
   mergedIntoConditionId: z.string().optional(),
 });
 
@@ -218,9 +219,13 @@ export type DiaryEntry = Omit<z.infer<typeof DiaryEntrySchema>, 'conditionIds'> 
   conditionIds?: string[];
 };
 
+export const DiagnosticRecordTypeSchema = z.enum(['diagnosis', 'exam', 'visit']);
+export type DiagnosticRecordType = z.infer<typeof DiagnosticRecordTypeSchema>;
+
 export const DiagnosticSnapshotSchema = z
   .object({
     conditionId: z.string().optional(),
+    recordType: DiagnosticRecordTypeSchema.optional().default('diagnosis'),
     diagnosisDate: z.string(),
     diagnosisName: z.string(),
     hospitalName: z.string().optional(),
@@ -228,6 +233,7 @@ export const DiagnosticSnapshotSchema = z
     departmentId: DepartmentIdSchema.optional(),
     amountKrw: z.number().optional(),
     notes: z.string().optional(),
+    consultNotes: z.string().max(5000).optional(),
     photoIds: z.array(z.string()).optional(),
     claimStatus: z.enum(['pending', 'claimed', 'not_applicable']).optional(),
     claimDeadlineYears: z.number().optional(),
@@ -254,6 +260,7 @@ export type DiagnosticRevision = z.infer<typeof DiagnosticRevisionSchema>;
 export const DiagnosticRecordSchema = z.object({
   id: z.string().min(1),
   conditionId: z.string().optional(), // Associated disease/condition ID (optional)
+  recordType: DiagnosticRecordTypeSchema.optional().default('diagnosis'),
   diagnosisDate: z.string(), // YYYY-MM-DD
   diagnosisName: z.string().min(1),
   hospitalName: z.string().optional().default(''),
@@ -261,6 +268,7 @@ export const DiagnosticRecordSchema = z.object({
   departmentId: DepartmentIdSchema.optional(),
   amountKrw: z.number().nonnegative().optional(),
   notes: z.string().max(5000).optional().default(''),
+  consultNotes: z.string().max(5000).optional(),
   photoIds: z.array(z.string()).default([]),
   claimStatus: z.enum(['pending', 'claimed', 'not_applicable']).default('pending'),
   claimDeadlineYears: z.number().int().min(1).max(10).default(3),
@@ -277,8 +285,40 @@ export const DiagnosticRecordSchema = z.object({
   inputSource: InputSourceSchema.optional(),
 });
 
-export type DiagnosticRecord = Omit<z.infer<typeof DiagnosticRecordSchema>, 'revisions'> & {
+export type DiagnosticRecord = Omit<z.infer<typeof DiagnosticRecordSchema>, 'recordType' | 'revisions'> & {
+  recordType?: DiagnosticRecordType;
   revisions?: DiagnosticRevision[];
+};
+
+export const FilterSortBySchema = z.enum([
+  'date_desc',
+  'date_asc',
+  'intensity_desc',
+  'intensity_asc',
+  'amount_desc',
+  'deadline_asc',
+]);
+export type FilterSortBy = z.infer<typeof FilterSortBySchema>;
+
+export const FilterPresetSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1).max(80),
+  conditionIds: z.array(z.string()).optional(),
+  includeUnassigned: z.boolean().optional(),
+  entryTypes: z.array(z.enum(['pain', 'diagnostic', 'diary'])).optional(),
+  recordTypes: z.array(DiagnosticRecordTypeSchema).optional(),
+  claimStatuses: z.array(z.enum(['pending', 'claimed', 'not_applicable'])).optional(),
+  minIntensity: z.number().int().min(1).max(10).optional(),
+  maxIntensity: z.number().int().min(1).max(10).optional(),
+  hasRedFlags: z.boolean().optional(),
+  hasMedication: z.boolean().optional(),
+  hasPhotos: z.boolean().optional(),
+  searchQuery: z.string().max(120).optional(),
+  sortBy: FilterSortBySchema.optional().default('date_desc'),
+  createdAt: z.string().optional(),
+});
+export type FilterPreset = Omit<z.infer<typeof FilterPresetSchema>, 'sortBy'> & {
+  sortBy?: FilterSortBy;
 };
 
 export const MedicationScheduleSlotSchema = z.enum(['morning', 'afternoon', 'evening', 'bedtime']);
@@ -371,11 +411,16 @@ export const UserSettingsSchema = z.object({
   localLlm: LocalLlmConfigSchema.default(DEFAULT_LOCAL_LLM_CONFIG),
   medicationPresets: z.array(MedicationPresetSchema).default(DEFAULT_MEDICATION_PRESETS),
   symptomPresets: z.array(z.string()).default(DEFAULT_SYMPTOM_PRESETS),
+  filterPresets: z.array(FilterPresetSchema).optional().default([]),
   disclaimerAcceptedAt: z.string().optional(),
 });
 
-export type UserSettings = Omit<z.infer<typeof UserSettingsSchema>, 'medicationPresets'> & {
+export type UserSettings = Omit<
+  z.infer<typeof UserSettingsSchema>,
+  'medicationPresets' | 'filterPresets'
+> & {
   medicationPresets: MedicationPreset[];
+  filterPresets?: FilterPreset[];
 };
 
 export const DEFAULT_USER_SETTINGS: UserSettings = UserSettingsSchema.parse({});

@@ -191,7 +191,8 @@ export const tier4Tests = [
 
       // 5. Attacker attempts raw file tampering
       const genuine = await encryptWithPin('의료 기록', validPin);
-      const tampered = { ...genuine, ct: genuine.ct.slice(0, 8) + 'X' + genuine.ct.slice(9) };
+      const flipChar = genuine.ct[8] === 'X' ? 'Y' : 'X';
+      const tampered = { ...genuine, ct: genuine.ct.slice(0, 8) + flipChar + genuine.ct.slice(9) };
 
       await assert.rejects(
         async () => {

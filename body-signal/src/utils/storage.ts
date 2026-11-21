@@ -838,6 +838,65 @@ export async function loadUserSettings(): Promise<UserSettings> {
   }
 }
 
+export interface StoragePersistenceReport {
+  persisted: boolean;
+  supported: boolean;
+  usageBytes?: number;
+  quotaBytes?: number;
+  usageRatio?: number;
+  isLowSpace: boolean;
+}
+
+/**
+ * Requests durable IndexedDB persistence (`navigator.storage.persist`) and checks
+ * remaining storage quota (`estimate()`) to defend against WebView storage eviction.
+ */
+export async function ensurePersistentStorage(): Promise<StoragePersistenceReport> {
+  const storageApi = typeof navigator !== 'undefined' ? navigator.storage : undefined;
+  if (!storageApi) {
+    return { persisted: false, supported: false, isLowSpace: false };
+  }
+  let persisted = false;
+  try {
+    if (typeof storageApi.persisted === 'function') {
+      persisted = await storageApi.persisted();
+    }
+    if (!persisted && typeof storageApi.persist === 'function') {
+      persisted = await storageApi.persist();
+    }
+  } catch {
+    // Non-fatal in sandboxed WebViews
+  }
+
+  let usageBytes: number | undefined;
+  let quotaBytes: number | undefined;
+  let usageRatio: number | undefined;
+  let isLowSpace = false;
+  try {
+    if (typeof storageApi.estimate === 'function') {
+      const est = await storageApi.estimate();
+      usageBytes = typeof est.usage === 'number' ? est.usage : undefined;
+      quotaBytes = typeof est.quota === 'number' ? est.quota : undefined;
+      if (usageBytes !== undefined && quotaBytes !== undefined && quotaBytes > 0) {
+        usageRatio = Number((usageBytes / quotaBytes).toFixed(4));
+        const remainingBytes = quotaBytes - usageBytes;
+        isLowSpace = usageRatio >= 0.85 || remainingBytes < 50 * 1024 * 1024;
+      }
+    }
+  } catch {
+    // Non-fatal
+  }
+
+  return {
+    persisted,
+    supported: true,
+    usageBytes,
+    quotaBytes,
+    usageRatio,
+    isLowSpace,
+  };
+}
+
 export async function saveUserSettings(settings: UserSettings): Promise<void> {
   const db = await getDB();
   const deviceKey = await getOrCreateDeviceMasterKey();
