@@ -4,7 +4,7 @@
   <p><strong>Offline-first, hardware-hardened personal pain, symptom &amp; encrypted medical record vault for Android and the Web.</strong></p>
   <p>
     <a href="./LICENSE"><img src="https://img.shields.io/badge/License-GPL--3.0--only-0d9488.svg" alt="License: GPL-3.0-only" /></a>
-    <a href="./fastlane/metadata/android/en-US/changelogs/12.txt"><img src="https://img.shields.io/badge/Version-v2.2.1-0f172a.svg" alt="Version v2.2.1" /></a>
+    <a href="./fastlane/metadata/android/en-US/changelogs/13.txt"><img src="https://img.shields.io/badge/Version-v2.3.0-0f172a.svg" alt="Version v2.3.0" /></a>
     <a href="#installation"><img src="https://img.shields.io/badge/Platform-Android%20%7C%20Web%20PWA-14b8a6.svg" alt="Platform: Android | Web PWA" /></a>
     <a href="#bilingual-support"><img src="https://img.shields.io/badge/Languages-English%20%7C%20%ED%95%9C%EA%B5%AD%EC%96%B4-334155.svg" alt="Languages: English | 한국어" /></a>
   </p>

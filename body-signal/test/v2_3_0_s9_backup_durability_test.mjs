@@ -217,6 +217,8 @@ try {
         assert.match(settingsSrc, /format:\s*'v2'/);
         assert.match(settingsSrc, /reloadSettings\(\)/);
         assert.match(settingsSrc, /overwrites existing local records/);
+        assert.match(healthSrc, /resolveDiagnosticDepartmentId/);
+        assert.match(healthSrc, /painQualityCodes:/);
       },
     },
   ];

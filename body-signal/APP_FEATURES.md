@@ -1,4 +1,4 @@
-# Body Signal — Implemented Features (`v2.2.1` / `v2.3.0-dev`)
+# Body Signal — Implemented Features (`v2.3.0`)
 
 ## 1. Pain & Symptom Logging
 - **1-Second Acute Pain Mode**: Rapid oversized SOS severity capture with quick body region chips and unassigned symptom triage.

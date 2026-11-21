@@ -45,6 +45,7 @@ import {
 } from '../utils/mediaStorage';
 import { normalizeIsoTimestamp, normalizeLocalYmd, toLocalYmd } from '../utils/dateUtils';
 import { resolveBodyPartIds, resolvePqrstCodes } from '../utils/clinicalTaxonomy';
+import { resolveDiagnosticDepartmentId } from '../utils/clinicalDepartments';
 import { useAuth } from './AuthContext';
 import { format, differenceInDays } from 'date-fns';
 
@@ -405,13 +406,16 @@ export const HealthProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const diagName = payload.diagnosticData?.diagnosisName?.trim();
     if (diagName) {
       const prevDiagSig = curDiagnostics.find((d) => Boolean(d.signature))?.signature || '';
+      const diagDeptText = payload.diagnosticData?.department?.trim() || '';
+      const linkedCondition = nextConditions.find((c) => c.id === conditionId);
       const newDiag: DiagnosticRecord = {
         id: crypto.randomUUID(),
         conditionId: payload.isUnassigned ? undefined : conditionId,
         diagnosisDate: normalizeLocalYmd(payload.diagnosticData?.diagnosisDate),
         diagnosisName: diagName,
         hospitalName: payload.diagnosticData?.hospitalName?.trim() || '',
-        department: payload.diagnosticData?.department?.trim() || '',
+        department: diagDeptText,
+        departmentId: resolveDiagnosticDepartmentId(diagDeptText, linkedCondition?.bodyPartIds),
         amountKrw: payload.diagnosticData?.amountKrw,
         notes: payload.diagnosticData?.notes?.trim() || '',
         photoIds: payload.diagnosticData?.photoIds || [],
@@ -549,9 +553,43 @@ export const HealthProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       previous: buildPainLogSnapshot(logToUpdate),
     };
 
+    const nextPainQuality = updates.painQuality ?? logToUpdate.painQuality;
+    const nextRadiation = updates.radiation !== undefined ? updates.radiation : logToUpdate.radiation;
+    const nextTriggers = updates.triggers ?? logToUpdate.triggers;
+    const nextReliefFactors = updates.reliefFactors ?? logToUpdate.reliefFactors;
+    const nextRedFlags = updates.redFlags ?? logToUpdate.redFlags;
+    const nextBodyPartOverride =
+      updates.bodyPartOverride !== undefined ? updates.bodyPartOverride : logToUpdate.bodyPartOverride;
+
     const updatedLog: PainLog = {
       ...logToUpdate,
       ...updates,
+      bodyPartOverrideIds:
+        updates.bodyPartOverride !== undefined && updates.bodyPartOverrideIds === undefined
+          ? resolveBodyPartIds(nextBodyPartOverride)
+          : updates.bodyPartOverrideIds ?? logToUpdate.bodyPartOverrideIds,
+      painQualityCodes:
+        updates.painQuality !== undefined && updates.painQualityCodes === undefined
+          ? resolvePqrstCodes('quality', nextPainQuality || [])
+          : updates.painQualityCodes ?? logToUpdate.painQualityCodes,
+      radiationCodes:
+        updates.radiation !== undefined && updates.radiationCodes === undefined
+          ? nextRadiation?.trim()
+            ? resolvePqrstCodes('radiation', [nextRadiation.trim()])
+            : []
+          : updates.radiationCodes ?? logToUpdate.radiationCodes,
+      triggerCodes:
+        updates.triggers !== undefined && updates.triggerCodes === undefined
+          ? resolvePqrstCodes('triggers', nextTriggers || [])
+          : updates.triggerCodes ?? logToUpdate.triggerCodes,
+      reliefFactorCodes:
+        updates.reliefFactors !== undefined && updates.reliefFactorCodes === undefined
+          ? resolvePqrstCodes('reliefFactors', nextReliefFactors || [])
+          : updates.reliefFactorCodes ?? logToUpdate.reliefFactorCodes,
+      redFlagCodes:
+        updates.redFlags !== undefined && updates.redFlagCodes === undefined
+          ? resolvePqrstCodes('redFlags', nextRedFlags || [])
+          : updates.redFlagCodes ?? logToUpdate.redFlagCodes,
       prevSignature: logToUpdate.prevSignature || '',
       chainIndex: logToUpdate.chainIndex,
       signedAt: nowIso,
@@ -985,8 +1023,11 @@ export const HealthProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const now = new Date().toISOString();
     const prevDiagSig =
       diagnosticRecordsRef.current.find((d) => Boolean(d.signature))?.signature || '';
+    const linkedCond = conditionsRef.current.find((c) => c.id === record.conditionId);
     const created: DiagnosticRecord = {
       ...record,
+      departmentId:
+        record.departmentId || resolveDiagnosticDepartmentId(record.department, linkedCond?.bodyPartIds),
       diagnosisDate: normalizeLocalYmd(record.diagnosisDate),
       id: crypto.randomUUID(),
       createdAt: now,

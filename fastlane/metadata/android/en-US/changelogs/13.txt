@@ -1,0 +1,5 @@
+v2.3.0
+- Added schemaVersion, per-record safeParse recovery, tamper-evident Revision audit trail, and KDF metadata
+- Launched canonical BodyMap IDs (bodyPartIds), PQRST codes, OS-auto language mode (system), scalable N-locale i18n, and semantic color tokens
+- Added non-pain/diversified symptom slots, condition-linked medications with stock tracking, recordType, and filterPresets schemas
+- Added durable storage request, orphan media GC, and chunked v2 encrypted backups with rollback protection

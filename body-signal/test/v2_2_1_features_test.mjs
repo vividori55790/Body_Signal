@@ -77,15 +77,16 @@ const tests = [
     },
   },
   {
-    name: '6. Version bumped consistently to v2.2.1 (versionCode 12)',
+    name: '6. Version bumped consistently (>= v2.2.1 / versionCode >= 12) and matches Android + Settings',
     fn: () => {
       const pkg = JSON.parse(read('package.json'));
-      assert.equal(pkg.version, '2.2.1');
+      assert.match(pkg.version, /^2\.[2-9]\.\d+$/);
       const gradle = read('android/app/build.gradle');
-      assert.match(gradle, /\bversionCode\s+12\b/);
-      assert.match(gradle, /\bversionName\s+"2\.2\.1"/);
+      const code = Number(gradle.match(/\bversionCode\s+(\d+)/)?.[1] || 0);
+      assert.ok(code >= 12, `Expected versionCode >= 12, got ${code}`);
+      assert.match(gradle, new RegExp(`\\bversionName\\s+"${pkg.version.replaceAll('.', '\\.')}"`));
       const settingsSrc = read('src/pages/Settings.tsx');
-      assert.match(settingsSrc, /Body Signal Mobile v2\.2\.1/);
+      assert.ok(settingsSrc.includes(`Body Signal Mobile v${pkg.version}`));
     },
   },
 ];
