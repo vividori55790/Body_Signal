@@ -72,7 +72,7 @@ const tests = [
         'src/components/AddMedicationInline.tsx',
       ]) {
         const src = read(file);
-        assert.match(src, /formatMedicationPreset\([^)]*settings\.language/, `${file} must pass settings.language to formatMedicationPreset`);
+        assert.match(src, /formatMedicationPreset\([^)]*(?:settings\.language|resolvedLanguage)/, `${file} must pass settings.language or resolvedLanguage to formatMedicationPreset`);
       }
     },
   },

@@ -21,8 +21,8 @@ export function useAuthorizedDelete() {
     verifySensitiveActionPin,
     verifySensitiveActionBiometric,
   } = useAuth();
-  const { settings } = useSettings();
-  const isEn = settings.language === 'en';
+  const { resolvedLanguage } = useSettings();
+  const isEn = resolvedLanguage === 'en';
 
   const [pendingRequest, setPendingRequest] = useState<DeleteAuthRequest | null>(null);
   const [showPinPrompt, setShowPinPrompt] = useState(false);

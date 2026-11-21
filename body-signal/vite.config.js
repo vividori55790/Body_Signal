@@ -36,24 +36,24 @@ export default defineConfig({
         background_color: "#ffffff",
         shortcuts: [
           {
-            name: "1초 급성 통증 기록",
-            short_name: "긴급 통증",
-            description: "아플 때 1초 만에 바로 기록합니다",
+            name: "1-Sec Acute Pain Log",
+            short_name: "Acute Pain",
+            description: "Capture severe pain in 1 second when discomfort strikes",
             url: "./?mode=acute",
             icons: [{ src: "pwa-icon.svg", sizes: "192x192" }]
           },
-          // 개발중 (v4.0.0 재개 예정): 미연결 브리핑 바로가기 일시 비활성화
+          // In Development (scheduled for v4.0.0): Clinical Briefing shortcut paused
           // {
-          //   name: "의료진 진료 브리핑",
-          //   short_name: "진료 브리핑",
-          //   description: "의사·간호사용 30초 진료 요약 및 EMR 복사",
+          //   name: "Doctor Clinical Briefing",
+          //   short_name: "Clinical View",
+          //   description: "30-second consultation summary and EMR copy",
           //   url: "./briefing",
           //   icons: [{ src: "pwa-icon.svg", sizes: "192x192" }]
           // },
           {
-            name: "빠른 복약 기록",
-            short_name: "복약 기록",
-            description: "약 복용 여부 및 효과 기록",
+            name: "Quick Medication Log",
+            short_name: "Log Meds",
+            description: "Record medication intake and effectiveness",
             url: "./entry",
             icons: [{ src: "pwa-icon.svg", sizes: "192x192" }]
           }

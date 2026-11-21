@@ -16,8 +16,8 @@ export const DefaultClosedSuggestion: React.FC<DefaultClosedSuggestionProps> = (
   onConfirmDefaultClosed,
   onKeepOpen,
 }) => {
-  const { settings } = useSettings();
-  const isEn = settings.language === 'en';
+  const { resolvedLanguage } = useSettings();
+  const isEn = resolvedLanguage === 'en';
   return (
     <div className="rounded-xl border border-teal-200 dark:border-teal-800/80 bg-teal-50/90 dark:bg-teal-950/40 px-3 py-2.5 text-xs space-y-2 animate-in fade-in">
       <p className="font-bold text-teal-900 dark:text-teal-200 leading-snug">

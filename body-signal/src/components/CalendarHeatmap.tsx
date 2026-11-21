@@ -26,7 +26,7 @@ export const CalendarHeatmap: React.FC<CalendarHeatmapProps> = ({
   onDateClick,
 }) => {
   const settingsCtx = useContext(SettingsContext);
-  const isEn = settingsCtx?.settings.language === 'en';
+  const isEn = settingsCtx?.resolvedLanguage === 'en';
   const getColor = (intensity: number, hasDiagnostic: boolean) => {
     const diagRing = hasDiagnostic
       ? 'ring-1 ring-inset ring-teal-700/80 dark:ring-cyan-300/90'

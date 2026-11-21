@@ -29,70 +29,33 @@ import {
 } from '../utils/mediaStorage';
 import { toLocalYmd, toLocalDateTimeInput } from '../utils/dateUtils';
 import { focusInvalidElement } from '../utils/formFocus';
+import { PQRST_CATALOG, getPqrstLabel, resolvePqrstCode } from '../utils/clinicalTaxonomy';
 import AddMedicationInline from '../components/AddMedicationInline';
 import PainLevelSelector from '../components/PainLevelSelector';
 import PhotoAttachmentField from '../components/PhotoAttachmentField';
 
-const PAIN_QUALITIES = [
-  '욱신거림',
-  '찌르는 듯함',
-  '타는 듯함',
-  '뻐근/묵직함',
-  '조이는 느낌',
-  '저림/전기',
-  '쥐남/경련',
-];
-
-const RADIATIONS = ['하지(다리) 방사', '상지(팔) 방사', '등/견갑골 방사', '골반으로 뻗침'];
-
-const TRIGGERS = ['보행 시', '오래 앉을 때', '아침 기상 시', '기침/재채기', '스트레스', '날씨/추위'];
-
-const RELIEF_FACTORS = ['누워서 휴식', '온찜질', '냉찜질', '스트레칭', '약 복용 후'];
-
-const RED_FLAGS = [
-  '마비/감각 저하',
-  '다리/팔 근력 약화',
-  '38도 이상 고열 동반',
-  '대소변 장애',
-];
-
-const EN_CHIP_MAP: Record<string, string> = {
-  욱신거림: 'Throbbing',
-  '찌르는 듯함': 'Sharp / Stabbing',
-  '타는 듯함': 'Burning',
-  '뻐근/묵직함': 'Aching / Heavy',
-  '조이는 느낌': 'Tight / Squeezing',
-  '저림/전기': 'Tingling / Electric',
-  '쥐남/경련': 'Cramping / Spasm',
-  '하지(다리) 방사': 'To Leg(s)',
-  '상지(팔) 방사': 'To Arm(s)',
-  '등/견갑골 방사': 'To Back / Scapula',
-  '골반으로 뻗침': 'To Pelvis',
-  '보행 시': 'Walking',
-  '오래 앉을 때': 'Prolonged Sitting',
-  '아침 기상 시': 'Morning Stiffness',
-  '기침/재채기': 'Cough / Sneeze',
-  스트레스: 'Stress',
-  '날씨/추위': 'Cold / Weather',
-  '누워서 휴식': 'Lying Rest',
-  온찜질: 'Heat Pack',
-  냉찜질: 'Ice Pack',
-  스트레칭: 'Stretching',
-  '약 복용 후': 'After Meds',
-  '마비/감각 저하': 'Numbness / Sensory Loss',
-  '다리/팔 근력 약화': 'Limb Weakness',
-  '38도 이상 고열 동반': 'High Fever (>=38°C)',
-  '대소변 장애': 'Bowel / Bladder Loss',
-};
+const PAIN_QUALITIES = PQRST_CATALOG.quality.map((item) => item.ko);
+const RADIATIONS = PQRST_CATALOG.radiation.map((item) => item.ko);
+const TRIGGERS = PQRST_CATALOG.triggers.map((item) => item.ko);
+const RELIEF_FACTORS = PQRST_CATALOG.reliefFactors.map((item) => item.ko);
+const RED_FLAGS = PQRST_CATALOG.redFlags.map((item) => item.ko);
 
 export const EntryFormPage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { conditions, logs, diagnosticRecords, saveEntry, updateLog, updateDiagnosticRecord } = useHealth();
   const { activeSessionPin } = useAuth();
-  const { settings, t, setDefaultBodyMapOpen, recordCollapsibleDismissal } = useSettings();
-  const isEn = settings.language === 'en';
-  const labelOf = (val: string) => (isEn ? EN_CHIP_MAP[val] || val : val);
+  const { settings, resolvedLanguage, t, setDefaultBodyMapOpen, recordCollapsibleDismissal } = useSettings();
+  const isEn = resolvedLanguage === 'en';
+  const labelOf = (val: string) => {
+    for (const cat of ['quality', 'radiation', 'triggers', 'reliefFactors', 'redFlags'] as const) {
+      const code = resolvePqrstCode(cat, val);
+      if (code !== val) {
+        return getPqrstLabel(cat, code, resolvedLanguage);
+      }
+    }
+    return val;
+  };
 
   const navState = location.state as {
     selectedConditionId?: string;
@@ -1117,7 +1080,7 @@ export const EntryFormPage: React.FC = () => {
             </span>
             <div className="flex flex-wrap gap-1.5">
               {settings.medicationPresets.map((preset) => {
-                const formattedName = formatMedicationPreset(preset, settings.language);
+                const formattedName = formatMedicationPreset(preset, resolvedLanguage);
                 return (
                   <button
                     key={preset.id}

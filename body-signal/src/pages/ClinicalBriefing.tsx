@@ -49,8 +49,8 @@ import {
 export const ClinicalBriefingPage: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
   const navigate = useNavigate();
   const { conditions, logs, getClinicalBriefing, generateEMRSummaryText } = useHealth();
-  const { settings, t } = useSettings();
-  const isEn = settings.language === 'en';
+  const { settings, resolvedLanguage, t } = useSettings();
+  const isEn = resolvedLanguage === 'en';
 
   // Selected Department Filter ('all' or specific DepartmentType)
   const [selectedDeptFilter, setSelectedDeptFilter] = useState<string>('all');

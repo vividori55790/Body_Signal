@@ -30,6 +30,7 @@ import { useHealth } from '../context/HealthContext';
 import { useSettings } from '../context/SettingsContext';
 import { PainLog, Condition, UNASSIGNED_CONDITION_ID } from '../types/health';
 import { triggerHaptic } from '../utils/native';
+import { getPqrstLabel } from '../utils/clinicalTaxonomy';
 import { toLocalDateTimeInput } from '../utils/dateUtils';
 import CalendarPage from './CalendarPage';
 import DiagnosticsPage from './DiagnosticsPage';
@@ -61,8 +62,8 @@ const HistoryItem: React.FC<HistoryItemProps> = ({
   onUpdate,
 }) => {
   const navigate = useNavigate();
-  const { settings, t } = useSettings();
-  const isEn = settings.language === 'en';
+  const { settings, resolvedLanguage, t } = useSettings();
+  const isEn = resolvedLanguage === 'en';
   const [expanded, setExpanded] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editDate, setEditDate] = useState('');
@@ -236,7 +237,7 @@ const HistoryItem: React.FC<HistoryItemProps> = ({
                         key={q}
                         className="px-1.5 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-[10px] font-semibold text-slate-600 dark:text-slate-300"
                       >
-                        {q}
+                        {getPqrstLabel('quality', q, resolvedLanguage)}
                       </span>
                     ))}
                     {log.medication && (
@@ -244,14 +245,17 @@ const HistoryItem: React.FC<HistoryItemProps> = ({
                         <Pill size={10} /> {log.medication}
                       </span>
                     )}
-                    {log.triggers?.slice(0, 2).map((tr) => (
-                      <span
-                        key={tr}
-                        className="px-1.5 py-0.5 rounded-md bg-amber-50 dark:bg-amber-950/50 text-[10px] font-semibold text-amber-700 dark:text-amber-300"
-                      >
-                        {isEn ? `Trigger: ${tr}` : `유발: ${tr}`}
-                      </span>
-                    ))}
+                    {log.triggers?.slice(0, 2).map((tr) => {
+                      const trLabel = getPqrstLabel('triggers', tr, resolvedLanguage);
+                      return (
+                        <span
+                          key={tr}
+                          className="px-1.5 py-0.5 rounded-md bg-amber-50 dark:bg-amber-950/50 text-[10px] font-semibold text-amber-700 dark:text-amber-300"
+                        >
+                          {isEn ? `Trigger: ${trLabel}` : `유발: ${trLabel}`}
+                        </span>
+                      );
+                    })}
                   </div>
                 )}
                 {log.notes && (
@@ -399,13 +403,17 @@ const HistoryItem: React.FC<HistoryItemProps> = ({
               {hasQuality && (
                 <div>
                   <span className="font-bold text-slate-500 mr-1.5">{isEn ? 'Quality:' : '양상:'}</span>
-                  <span className="text-slate-700 dark:text-slate-200">{log.painQuality?.join(', ')}</span>
+                  <span className="text-slate-700 dark:text-slate-200">
+                    {log.painQuality?.map((q) => getPqrstLabel('quality', q, resolvedLanguage)).join(', ')}
+                  </span>
                 </div>
               )}
               {log.radiation && (
                 <div>
                   <span className="font-bold text-slate-500 mr-1.5">{isEn ? 'Radiation:' : '방사통:'}</span>
-                  <span className="text-slate-700 dark:text-slate-200">{log.radiation}</span>
+                  <span className="text-slate-700 dark:text-slate-200">
+                    {getPqrstLabel('radiation', log.radiation, resolvedLanguage)}
+                  </span>
                 </div>
               )}
               {hasTriggers && (
@@ -413,7 +421,9 @@ const HistoryItem: React.FC<HistoryItemProps> = ({
                   <span className="font-bold text-amber-600 dark:text-amber-400 mr-1.5">
                     {isEn ? 'Triggers:' : '악화/유발:'}
                   </span>
-                  <span className="text-slate-700 dark:text-slate-200">{log.triggers?.join(', ')}</span>
+                  <span className="text-slate-700 dark:text-slate-200">
+                    {log.triggers?.map((tr) => getPqrstLabel('triggers', tr, resolvedLanguage)).join(', ')}
+                  </span>
                 </div>
               )}
               {hasRelief && (
@@ -421,7 +431,9 @@ const HistoryItem: React.FC<HistoryItemProps> = ({
                   <span className="font-bold text-emerald-600 dark:text-emerald-400 mr-1.5">
                     {isEn ? 'Relief:' : '완화 요인:'}
                   </span>
-                  <span className="text-slate-700 dark:text-slate-200">{log.reliefFactors?.join(', ')}</span>
+                  <span className="text-slate-700 dark:text-slate-200">
+                    {log.reliefFactors?.map((rf) => getPqrstLabel('reliefFactors', rf, resolvedLanguage)).join(', ')}
+                  </span>
                 </div>
               )}
               {hasRedFlags && (
@@ -429,7 +441,9 @@ const HistoryItem: React.FC<HistoryItemProps> = ({
                   <span className="font-bold text-rose-600 dark:text-rose-400 mr-1.5">
                     {isEn ? 'Red Flags:' : '위험 징후:'}
                   </span>
-                  <span className="text-rose-700 dark:text-rose-300 font-semibold">{log.redFlags?.join(', ')}</span>
+                  <span className="text-rose-700 dark:text-rose-300 font-semibold">
+                    {log.redFlags?.map((flag) => getPqrstLabel('redFlags', flag, resolvedLanguage)).join(', ')}
+                  </span>
                 </div>
               )}
             </div>
@@ -508,9 +522,9 @@ export const HistoryPage: React.FC<{ initialTab?: 'list' | 'calendar' | 'diagnos
 }) => {
   const navigate = useNavigate();
   const { logs, conditions, deleteLog, updateLog, assignLogsToCondition } = useHealth();
-  const { settings, t } = useSettings();
+  const { resolvedLanguage, t } = useSettings();
   const { requestAuthorizedDelete, authModal: deleteAuthModal } = useAuthorizedDelete();
-  const isEn = settings.language === 'en';
+  const isEn = resolvedLanguage === 'en';
   const [searchParams, setSearchParams] = useSearchParams();
   const paramTab = searchParams.get('tab');
   const paramGroup = searchParams.get('group');
@@ -735,7 +749,7 @@ export const HistoryPage: React.FC<{ initialTab?: 'list' | 'calendar' | 'diagnos
     ).join(', ');
     setTargetMode(activeConditions.length > 0 ? 'existing' : 'new');
     setTargetCondId(activeConditions[0]?.id || '');
-    setNewBodyPart(inferredParts || '허리/요통');
+    setNewBodyPart(inferredParts || (isEn ? 'Lower Back' : '허리/요통'));
     setNewLabel('');
     setOverwriteConfirmed(false);
     setAssignError('');

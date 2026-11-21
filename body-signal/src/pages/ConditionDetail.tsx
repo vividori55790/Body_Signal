@@ -27,8 +27,8 @@ export const ConditionDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { conditions, logs, diagnosticRecords, updateCondition } = useHealth();
-  const { settings, t } = useSettings();
-  const isEn = settings.language === 'en';
+  const { resolvedLanguage, t } = useSettings();
+  const isEn = resolvedLanguage === 'en';
 
   const condition = conditions.find((c) => c.id === id);
 
@@ -802,7 +802,7 @@ export const ConditionDetailPage: React.FC = () => {
                   rec.claimStatus,
                   rec.claimDeadlineYears || 3,
                   new Date(),
-                  settings.language
+                  resolvedLanguage
                 );
                 return (
                   <div

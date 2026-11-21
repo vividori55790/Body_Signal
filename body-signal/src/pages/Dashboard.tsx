@@ -37,8 +37,8 @@ const DetailedConditionCard: React.FC<{
 }> = ({ condition, logs, diagnostics = [], isArchived = false }) => {
   const navigate = useNavigate();
   const { updateCondition } = useHealth();
-  const { settings, t } = useSettings();
-  const isEn = settings.language === 'en';
+  const { t, resolvedLanguage } = useSettings();
+  const isEn = resolvedLanguage === 'en';
   const [isExpanded, setIsExpanded] = useState(false);
 
   const conditionLogs = logs
@@ -246,6 +246,7 @@ export const DashboardPage: React.FC = () => {
   // const { openAcute } = useAcutePain();
   const {
     settings,
+    resolvedLanguage,
     t,
     setDefaultQuickLoggerOpen,
     recordCollapsibleDismissal,
@@ -314,7 +315,7 @@ export const DashboardPage: React.FC = () => {
   const elapsedMinutes = recentMedLog
     ? Math.max(0, Math.floor((Date.now() - new Date(recentMedLog.date).getTime()) / (1000 * 60)))
     : 0;
-  const isEn = settings.language === 'en';
+  const isEn = resolvedLanguage === 'en';
   const elapsedBadge =
     elapsedMinutes < 60
       ? isEn

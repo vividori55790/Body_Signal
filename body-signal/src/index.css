@@ -3,8 +3,60 @@
 @tailwind utilities;
 
 @layer base {
+  :root {
+    --bg-canvas: #f8fafc;
+    --surface: #ffffff;
+    --surface-elevated: #ffffff;
+    --surface-muted: #f1f5f9;
+    --on-surface: #1e293b;
+    --on-surface-muted: #64748b;
+    --border-subtle: #e2e8f0;
+    --accent: #059669;
+    --accent-soft: rgba(16, 185, 129, 0.12);
+    --accent-contrast: #ffffff;
+    --status-mild: #10b981;
+    --status-moderate: #f59e0b;
+    --status-severe: #e11d48;
+  }
+
+  html.dark {
+    --bg-canvas: #020617;
+    --surface: #0f172a;
+    --surface-elevated: #1e293b;
+    --surface-muted: #1e293b;
+    --on-surface: #f1f5f9;
+    --on-surface-muted: #94a3b8;
+    --border-subtle: #1e293b;
+    --accent: #10b981;
+    --accent-soft: rgba(16, 185, 129, 0.18);
+    --accent-contrast: #022c22;
+  }
+
+  html[data-accent='teal'] {
+    --accent: #0d9488;
+    --accent-soft: rgba(20, 184, 166, 0.14);
+  }
+  html[data-accent='blue'] {
+    --accent: #2563eb;
+    --accent-soft: rgba(37, 99, 235, 0.14);
+  }
+  html[data-accent='indigo'] {
+    --accent: #4f46e5;
+    --accent-soft: rgba(79, 70, 229, 0.14);
+  }
+  html[data-accent='rose'] {
+    --accent: #e11d48;
+    --accent-soft: rgba(225, 29, 72, 0.14);
+  }
+  html[data-accent='amber'] {
+    --accent: #d97706;
+    --accent-soft: rgba(217, 119, 6, 0.14);
+  }
+
   html {
     @apply h-full bg-slate-50 text-slate-800 antialiased transition-colors duration-200;
+    background-color: var(--bg-canvas);
+    color: var(--on-surface);
     -webkit-tap-highlight-color: transparent;
     -webkit-text-size-adjust: 100%;
     text-size-adjust: 100%;
@@ -17,6 +69,23 @@
     @apply min-h-full overflow-y-auto overscroll-none text-base;
     padding-top: env(safe-area-inset-top);
   }
+}
+
+/* Semantic surface utility classes ready for v3 adaptive morphism design */
+.bg-semantic-canvas {
+  background-color: var(--bg-canvas);
+}
+.bg-semantic-surface {
+  background-color: var(--surface);
+  color: var(--on-surface);
+  border-color: var(--border-subtle);
+}
+.text-semantic-accent {
+  color: var(--accent);
+}
+.bg-semantic-accent {
+  background-color: var(--accent);
+  color: var(--accent-contrast);
 }
 
 /* Suppress Recharts SVG/wrapper focus bounding box when tapped or clicked */

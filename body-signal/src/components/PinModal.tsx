@@ -36,7 +36,7 @@ export const PinModal: React.FC<PinModalProps> = ({
   cancellable = false,
 }) => {
   const settingsCtx = useContext(SettingsContext);
-  const isEn = settingsCtx?.settings.language === 'en';
+  const isEn = settingsCtx?.resolvedLanguage === 'en';
   const [pin, setPin] = useState('');
   const [firstPin, setFirstPin] = useState(''); // For set/change confirmation
   const [step, setStep] = useState<'enter' | 'confirm'>('enter');

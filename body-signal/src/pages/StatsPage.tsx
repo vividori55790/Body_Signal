@@ -22,8 +22,8 @@ import { triggerHaptic } from '../utils/native';
 export const StatsPage: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
   const navigate = useNavigate();
   const { conditions, logs, diaryEntries, diagnosticRecords } = useHealth();
-  const { settings } = useSettings();
-  const isEn = settings.language === 'en';
+  const { resolvedLanguage } = useSettings();
+  const isEn = resolvedLanguage === 'en';
 
   const metrics = useMemo(
     () => computeTreatmentMetrics(conditions, logs, diaryEntries, diagnosticRecords),

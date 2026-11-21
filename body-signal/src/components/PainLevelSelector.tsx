@@ -20,7 +20,7 @@ export const PainLevelSelector: React.FC<PainLevelSelectorProps> = ({
 }) => {
   const settingsCtx = useContext(SettingsContext);
   const t = settingsCtx?.t || ((k: keyof typeof translations.ko) => translations.ko[k] || (k as string));
-  const isEn = settingsCtx?.settings.language === 'en';
+  const isEn = settingsCtx?.resolvedLanguage === 'en';
 
   // Ephemeral slider state: defaults to button mode, merges to slider on hold/slide, reverts on release
   const [isSliderMode, setIsSliderMode] = useState(false);

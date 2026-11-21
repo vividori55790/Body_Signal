@@ -50,7 +50,7 @@ export const BrandLogo: React.FC<BrandLogoProps> = ({
   const settingsCtx = useContext(SettingsContext);
   const candidate = variant ?? settingsCtx?.settings.logoVariant;
   const resolvedVariant: LogoVariant = candidate === 'cube-2d' ? 'cube-2d' : 'cube-3d';
-  const isEn = settingsCtx?.settings.language === 'en';
+  const isEn = settingsCtx?.resolvedLanguage === 'en';
 
   const src = resolvedVariant === 'cube-3d' ? bignalCube3d : bignalCube2d;
   const alt =

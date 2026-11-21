@@ -33,6 +33,7 @@ import {
 } from '../utils/crypto';
 import { deleteEncryptedPhoto } from '../utils/mediaStorage';
 import { normalizeIsoTimestamp, normalizeLocalYmd, toLocalYmd } from '../utils/dateUtils';
+import { resolveBodyPartIds, resolvePqrstCodes } from '../utils/clinicalTaxonomy';
 import { useAuth } from './AuthContext';
 import { format, differenceInDays } from 'date-fns';
 
@@ -310,10 +311,12 @@ export const HealthProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         return false;
       }
       conditionId = crypto.randomUUID();
+      const bodyPartText = payload.conditionData.bodyPart.trim();
       const newCond: Condition = {
         id: conditionId,
         label: payload.conditionData.label.trim(),
-        bodyPart: payload.conditionData.bodyPart.trim(),
+        bodyPart: bodyPartText,
+        bodyPartIds: resolveBodyPartIds(bodyPartText),
         onsetDate: normalizeLocalYmd(payload.conditionData.onsetDate),
         isArchived: false,
       };
@@ -329,6 +332,11 @@ export const HealthProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       const prevSignature = tip ? getGenesisSignature(tip) : '';
       const chainIndex =
         typeof tip?.chainIndex === 'number' ? tip.chainIndex + 1 : curLogs.length;
+      const painQualities = payload.logData.painQuality || [];
+      const radiationText = payload.logData.radiation?.trim() || '';
+      const triggers = payload.logData.triggers || [];
+      const reliefFactors = payload.logData.reliefFactors || [];
+      const redFlags = payload.logData.redFlags || [];
       const newLog: PainLog = {
         id: crypto.randomUUID(),
         conditionId,
@@ -337,12 +345,18 @@ export const HealthProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         medication: payload.logData.medication?.trim() || '',
         notes: payload.logData.notes?.trim() || '',
         bodyPartOverride: payload.logData.bodyPartOverride,
-        painQuality: payload.logData.painQuality || [],
-        radiation: payload.logData.radiation?.trim() || '',
+        bodyPartOverrideIds: resolveBodyPartIds(payload.logData.bodyPartOverride),
+        painQuality: painQualities,
+        painQualityCodes: resolvePqrstCodes('quality', painQualities),
+        radiation: radiationText,
+        radiationCodes: radiationText ? resolvePqrstCodes('radiation', [radiationText]) : [],
         painTiming: payload.logData.painTiming,
-        triggers: payload.logData.triggers || [],
-        reliefFactors: payload.logData.reliefFactors || [],
-        redFlags: payload.logData.redFlags || [],
+        triggers,
+        triggerCodes: resolvePqrstCodes('triggers', triggers),
+        reliefFactors,
+        reliefFactorCodes: resolvePqrstCodes('reliefFactors', reliefFactors),
+        redFlags,
+        redFlagCodes: resolvePqrstCodes('redFlags', redFlags),
         postMedIntensity: payload.logData.postMedIntensity,
         prevSignature,
         signedAt: nowIso,
@@ -424,6 +438,7 @@ export const HealthProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           id: targetId,
           label,
           bodyPart,
+          bodyPartIds: resolveBodyPartIds(bodyPart),
           onsetDate: normalizeLocalYmd(target.newCondition.onsetDate),
           isArchived: false,
         },
@@ -462,7 +477,11 @@ export const HealthProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   };
 
   const updateCondition = async (id: string, updates: Partial<Condition>): Promise<boolean> => {
-    const next = conditionsRef.current.map((c) => (c.id === id ? { ...c, ...updates } : c));
+    const resolvedUpdates: Partial<Condition> =
+      updates.bodyPart !== undefined && updates.bodyPartIds === undefined
+        ? { ...updates, bodyPartIds: resolveBodyPartIds(updates.bodyPart) }
+        : updates;
+    const next = conditionsRef.current.map((c) => (c.id === id ? { ...c, ...resolvedUpdates } : c));
     await persist(next, logsRef.current, diaryEntriesRef.current, diagnosticRecordsRef.current);
     conditionsRef.current = next;
     setConditions(next);

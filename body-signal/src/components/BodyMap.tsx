@@ -166,7 +166,7 @@ export const BodyMap: React.FC<BodyMapProps> = ({
   readOnly = false,
 }) => {
   const settingsCtx = useContext(SettingsContext);
-  const isEn = settingsCtx?.settings.language === 'en';
+  const isEn = settingsCtx?.resolvedLanguage === 'en';
   const [viewSide, setViewSide] = useState<'front' | 'back'>('front');
   const [sprayStrokes, setSprayStrokes] = useState<SprayStroke[]>([]);
   const [isPainting, setIsPainting] = useState(false);

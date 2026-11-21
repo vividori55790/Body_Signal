@@ -1,5 +1,6 @@
-import { Condition, PainLog } from '../types/health';
+import { Condition, DepartmentId, PainLog } from '../types/health';
 import { parseMultiRegionParts } from '../components/BodyMap';
+import { classifyBodyPartIdToDepartmentId } from './clinicalTaxonomy';
 import { differenceInDays } from 'date-fns';
 
 /**
@@ -15,7 +16,17 @@ export const DEPARTMENT_KEYS = {
 
 export type DepartmentType = (typeof DEPARTMENT_KEYS)[keyof typeof DEPARTMENT_KEYS];
 
-export type DepartmentId = 'orthopedics' | 'neurology' | 'gastroenterology' | 'internal_medicine';
+const DEPARTMENT_BY_ID: Record<DepartmentId, DepartmentType> = {
+  orthopedics: DEPARTMENT_KEYS.ORTHOPEDICS,
+  neurology: DEPARTMENT_KEYS.NEUROLOGY,
+  gastroenterology: DEPARTMENT_KEYS.GASTROENTEROLOGY,
+  internal_medicine: DEPARTMENT_KEYS.INTERNAL_MEDICINE,
+};
+
+export function departmentTypeFromId(deptId?: DepartmentId | null): DepartmentType | null {
+  if (!deptId) return null;
+  return DEPARTMENT_BY_ID[deptId] || null;
+}
 
 export interface DepartmentMeta {
   id: DepartmentId;
@@ -235,12 +246,20 @@ export function categorizeByDepartment(
   // Map active conditions to departments (a multi-region condition may map to multiple departments)
   const conditionDeptsMap = new Map<string, Set<DepartmentType>>();
   activeConditions.forEach((cond) => {
-    const parts = parseMultiRegionParts(cond.bodyPart);
     const depts = new Set<DepartmentType>();
-    if (parts.length === 0) {
-      depts.add(classifyAnatomicalPart(cond.bodyPart));
-    } else {
-      parts.forEach((p) => depts.add(classifyAnatomicalPart(p)));
+    if (cond.bodyPartIds && cond.bodyPartIds.length > 0) {
+      cond.bodyPartIds.forEach((pid) => {
+        const mapped = departmentTypeFromId(classifyBodyPartIdToDepartmentId(pid));
+        if (mapped) depts.add(mapped);
+      });
+    }
+    if (depts.size === 0) {
+      const parts = parseMultiRegionParts(cond.bodyPart);
+      if (parts.length === 0) {
+        depts.add(classifyAnatomicalPart(cond.bodyPart));
+      } else {
+        parts.forEach((p) => depts.add(classifyAnatomicalPart(p)));
+      }
     }
     conditionDeptsMap.set(cond.id, depts);
   });
@@ -257,9 +276,17 @@ export function categorizeByDepartment(
     const matchingConditionIds = new Set(matchingConditions.map((c) => c.id));
 
     // Logs belonging to this department:
-    // Either the log's condition belongs to this department, OR the log has a bodyPartOverride mapping here
+    // Either the log's condition belongs to this department, OR the log has a bodyPartOverride / bodyPartOverrideIds mapping here
     const matchingLogs = logs
       .filter((log) => {
+        if (log.bodyPartOverrideIds && log.bodyPartOverrideIds.length > 0) {
+          const overrideDepts = log.bodyPartOverrideIds
+            .map((pid) => departmentTypeFromId(classifyBodyPartIdToDepartmentId(pid)))
+            .filter((d): d is DepartmentType => Boolean(d));
+          if (overrideDepts.length > 0) {
+            return overrideDepts.includes(deptName);
+          }
+        }
         if (log.bodyPartOverride) {
           const overrideParts = parseMultiRegionParts(log.bodyPartOverride);
           if (overrideParts.length === 0) {
