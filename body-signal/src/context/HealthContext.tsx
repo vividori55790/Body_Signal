@@ -15,12 +15,18 @@ import {
   InputSource,
   RevisionReason,
   UNASSIGNED_CONDITION_ID,
+  UserSettings,
+  UserSettingsSchema,
 } from '../types/health';
 import {
   loadHealthData,
   saveHealthData,
   resetAllData,
   recoverAndNormalizeHealthPayload,
+  loadUserSettings,
+  saveUserSettings,
+  ensurePersistentStorage,
+  StoragePersistenceReport,
 } from '../utils/storage';
 import {
   AuditChainVerificationResult,
@@ -31,7 +37,12 @@ import {
   verifyDiagnosticSignature,
   verifyRecordSignature,
 } from '../utils/crypto';
-import { deleteEncryptedPhoto } from '../utils/mediaStorage';
+import {
+  deleteEncryptedPhoto,
+  exportDecryptedMediaMap,
+  garbageCollectOrphanMedia,
+  importDecryptedMediaMap,
+} from '../utils/mediaStorage';
 import { normalizeIsoTimestamp, normalizeLocalYmd, toLocalYmd } from '../utils/dateUtils';
 import { resolveBodyPartIds, resolvePqrstCodes } from '../utils/clinicalTaxonomy';
 import { useAuth } from './AuthContext';
@@ -68,12 +79,15 @@ function buildPainLogSnapshot(log: PainLog): PainLogSnapshot {
 function buildDiagnosticSnapshot(diag: DiagnosticRecord): DiagnosticSnapshot {
   return {
     conditionId: diag.conditionId,
+    recordType: diag.recordType || 'diagnosis',
     diagnosisDate: diag.diagnosisDate,
     diagnosisName: diag.diagnosisName,
     hospitalName: diag.hospitalName,
     department: diag.department,
+    departmentId: diag.departmentId,
     amountKrw: diag.amountKrw,
     notes: diag.notes,
+    consultNotes: diag.consultNotes,
     photoIds: diag.photoIds,
     claimStatus: diag.claimStatus,
     claimDeadlineYears: diag.claimDeadlineYears,
@@ -175,7 +189,14 @@ interface HealthContextValue {
   deleteDiagnosticRecord: (id: string) => Promise<boolean>;
   getClinicalBriefing: () => ClinicalBriefing;
   generateEMRSummaryText: (formatType?: 'standard' | 'soap') => string;
+  storageReport: StoragePersistenceReport | null;
   exportBackupJson: () => string;
+  exportFullBackupBundle: () => Promise<{
+    payloadJson: string;
+    media: Record<string, string>;
+    settings: UserSettings;
+    skippedMediaCount: number;
+  }>;
   importBackupJson: (jsonStr: string) => Promise<void>;
   resetData: () => Promise<void>;
 }
@@ -189,6 +210,7 @@ export const HealthProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [diaryEntries, setDiaryEntries] = useState<DiaryEntry[]>([]);
   const [diagnosticRecords, setDiagnosticRecords] = useState<DiagnosticRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [storageReport, setStorageReport] = useState<StoragePersistenceReport | null>(null);
 
   // Debounce timer for diary auto-saving and live refs to avoid stale closures / race overwrites
   const diaryDebounceTimer = useRef<any>(null);
@@ -232,6 +254,9 @@ export const HealthProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         setLogs(getActiveLogsSorted(nextAllLogs));
         setDiaryEntries(nextDiary);
         setDiagnosticRecords(getActiveDiagnostics(nextAllDiagnostics));
+        // Durable storage request & orphan encrypted_media GC (non-blocking)
+        void ensurePersistentStorage().then(setStorageReport).catch(() => {});
+        void garbageCollectOrphanMedia(nextAllDiagnostics).catch(() => {});
       })
       .catch((err) => {
         console.error('Failed to load health data:', err);
@@ -1055,6 +1080,24 @@ export const HealthProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     return JSON.stringify(payload, null, 2);
   };
 
+  const exportFullBackupBundle = async (): Promise<{
+    payloadJson: string;
+    media: Record<string, string>;
+    settings: UserSettings;
+    skippedMediaCount: number;
+  }> => {
+    const [currentSettings, mediaExport] = await Promise.all([
+      loadUserSettings(),
+      exportDecryptedMediaMap(diagnosticRecordsRef.current, activeSessionPin || undefined),
+    ]);
+    return {
+      payloadJson: exportBackupJson(),
+      media: mediaExport.media,
+      settings: currentSettings,
+      skippedMediaCount: mediaExport.skippedCount,
+    };
+  };
+
   const importBackupJson = async (jsonStr: string) => {
     const parsed = JSON.parse(jsonStr);
     const raw = parsed?.data || parsed;
@@ -1083,20 +1126,59 @@ export const HealthProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           validated = payload;
         }
       }
-      await persist(
-        validated.conditions,
-        validated.logs,
-        validated.diaryEntries,
-        validated.diagnosticRecords
-      );
-      conditionsRef.current = validated.conditions;
-      logsRef.current = validated.logs;
-      diaryEntriesRef.current = validated.diaryEntries;
-      diagnosticRecordsRef.current = validated.diagnosticRecords;
-      setConditions(validated.conditions);
-      setLogs(getActiveLogsSorted(validated.logs));
-      setDiaryEntries(validated.diaryEntries);
-      setDiagnosticRecords(getActiveDiagnostics(validated.diagnosticRecords));
+
+      // Automatic safety rollback snapshot prior to overwriting local vault/settings
+      const rollbackConditions = conditionsRef.current;
+      const rollbackLogs = logsRef.current;
+      const rollbackDiary = diaryEntriesRef.current;
+      const rollbackDiagnostics = diagnosticRecordsRef.current;
+      const rollbackSettings = await loadUserSettings().catch(() => null);
+
+      try {
+        if (raw.encryptedMedia && typeof raw.encryptedMedia === 'object') {
+          await importDecryptedMediaMap(
+            raw.encryptedMedia as Record<string, string>,
+            activeSessionPin || undefined
+          );
+        }
+        if (raw.settings && typeof raw.settings === 'object') {
+          const parsedSettings = UserSettingsSchema.safeParse(raw.settings);
+          if (parsedSettings.success) {
+            await saveUserSettings(parsedSettings.data);
+          }
+        }
+        await persist(
+          validated.conditions,
+          validated.logs,
+          validated.diaryEntries,
+          validated.diagnosticRecords
+        );
+        conditionsRef.current = validated.conditions;
+        logsRef.current = validated.logs;
+        diaryEntriesRef.current = validated.diaryEntries;
+        diagnosticRecordsRef.current = validated.diagnosticRecords;
+        setConditions(validated.conditions);
+        setLogs(getActiveLogsSorted(validated.logs));
+        setDiaryEntries(validated.diaryEntries);
+        setDiagnosticRecords(getActiveDiagnostics(validated.diagnosticRecords));
+        void garbageCollectOrphanMedia(validated.diagnosticRecords).catch(() => {});
+      } catch (restoreErr) {
+        // Revert local encrypted stores & memory refs on partial failure
+        await persist(
+          rollbackConditions,
+          rollbackLogs,
+          rollbackDiary,
+          rollbackDiagnostics
+        ).catch(() => {});
+        if (rollbackSettings) {
+          await saveUserSettings(rollbackSettings).catch(() => {});
+        }
+        conditionsRef.current = rollbackConditions;
+        logsRef.current = rollbackLogs;
+        diaryEntriesRef.current = rollbackDiary;
+        diagnosticRecordsRef.current = rollbackDiagnostics;
+        throw restoreErr;
+      }
     } else {
       const isEn = typeof document !== 'undefined' && document.documentElement?.dataset?.lang === 'en';
       throw new Error(isEn ? 'Invalid backup file format.' : '올바른 백업 파일 형식이 아닙니다.');
@@ -1144,7 +1226,9 @@ export const HealthProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         deleteDiagnosticRecord,
         getClinicalBriefing,
         generateEMRSummaryText,
+        storageReport,
         exportBackupJson,
+        exportFullBackupBundle,
         importBackupJson,
         resetData,
       }}

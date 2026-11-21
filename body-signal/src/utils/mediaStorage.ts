@@ -15,6 +15,102 @@ import {
   decryptWithDeviceKey,
 } from './crypto';
 import { getDB, getOrCreateDeviceMasterKey } from './storage';
+import { DiagnosticRecord } from '../types/health';
+
+export interface OrphanMediaCleanupResult {
+  scannedCount: number;
+  deletedIds: string[];
+  retainedCount: number;
+}
+
+export function findOrphanMediaIds(
+  storedKeys: string[],
+  diagnosticRecords: DiagnosticRecord[]
+): string[] {
+  const referenced = new Set<string>();
+  for (const rec of diagnosticRecords) {
+    if (rec.deletedAt) continue;
+    for (const pid of rec.photoIds || []) {
+      referenced.add(pid);
+    }
+  }
+  return storedKeys.filter((k) => k.startsWith('diag_photo_') && !referenced.has(k));
+}
+
+export async function garbageCollectOrphanMedia(
+  diagnosticRecords: DiagnosticRecord[]
+): Promise<OrphanMediaCleanupResult> {
+  if (typeof indexedDB === 'undefined') {
+    return { scannedCount: 0, deletedIds: [], retainedCount: 0 };
+  }
+  const db = await getDB();
+  if (!db.objectStoreNames.contains('encrypted_media')) {
+    return { scannedCount: 0, deletedIds: [], retainedCount: 0 };
+  }
+  const storedKeys = (await db.getAllKeys('encrypted_media')).map(String);
+  const orphanIds = findOrphanMediaIds(storedKeys, diagnosticRecords);
+  for (const id of orphanIds) {
+    await db.delete('encrypted_media', id);
+  }
+  return {
+    scannedCount: storedKeys.length,
+    deletedIds: orphanIds,
+    retainedCount: storedKeys.length - orphanIds.length,
+  };
+}
+
+export async function exportDecryptedMediaMap(
+  diagnosticRecords: DiagnosticRecord[],
+  pin?: string,
+  maxTotalBytes = 40 * 1024 * 1024
+): Promise<{ media: Record<string, string>; skippedCount: number }> {
+  if (typeof indexedDB === 'undefined') {
+    return { media: {}, skippedCount: 0 };
+  }
+  const media: Record<string, string> = {};
+  let skippedCount = 0;
+  let runningBytes = 0;
+  const activePhotoIds = Array.from(
+    new Set(
+      diagnosticRecords
+        .filter((d) => !d.deletedAt)
+        .flatMap((d) => d.photoIds || [])
+    )
+  );
+  for (const pid of activePhotoIds) {
+    try {
+      const dataUrl = await loadEncryptedPhoto(pid, pin);
+      if (!dataUrl) {
+        skippedCount += 1;
+        continue;
+      }
+      if (runningBytes + dataUrl.length > maxTotalBytes) {
+        skippedCount += 1;
+        continue;
+      }
+      media[pid] = dataUrl;
+      runningBytes += dataUrl.length;
+    } catch {
+      skippedCount += 1;
+    }
+  }
+  return { media, skippedCount };
+}
+
+export async function importDecryptedMediaMap(
+  mediaMap: Record<string, string>,
+  pin?: string
+): Promise<string[]> {
+  if (typeof indexedDB === 'undefined') return [];
+  const restoredIds: string[] = [];
+  for (const [pid, dataUrl] of Object.entries(mediaMap)) {
+    if (typeof pid === 'string' && pid.trim() && typeof dataUrl === 'string' && dataUrl.startsWith('data:')) {
+      await saveEncryptedPhoto(pid, dataUrl, pin);
+      restoredIds.push(pid);
+    }
+  }
+  return restoredIds;
+}
 
 /**
  * Resize/compress image and strip EXIF GPS/device metadata by drawing onto a canvas.

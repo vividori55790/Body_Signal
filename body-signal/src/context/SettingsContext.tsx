@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useMemo } from '
 import {
   UserSettings,
   MedicationPreset,
+  FilterPreset,
   LogoVariant,
   ThemeAccentId,
   LanguagePreference,
@@ -56,6 +57,9 @@ interface SettingsContextValue {
   deactivateMedicationsForCondition: (conditionId: string, endedAt?: string) => Promise<void>;
   addSymptomPreset: (name: string) => Promise<void>;
   removeSymptomPreset: (name: string) => Promise<void>;
+  addFilterPreset: (preset: Omit<FilterPreset, 'id' | 'createdAt'> & { id?: string }) => Promise<FilterPreset>;
+  removeFilterPreset: (id: string) => Promise<void>;
+  reloadSettings: () => Promise<UserSettings>;
   updateLocalLlm: (configUpdates: Partial<UserSettings['localLlm']>) => Promise<void>;
 }
 
@@ -376,6 +380,41 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }));
   };
 
+  const addFilterPreset = async (
+    preset: Omit<FilterPreset, 'id' | 'createdAt'> & { id?: string }
+  ): Promise<FilterPreset> => {
+    const cleanName = (preset.name || '').trim().slice(0, 80);
+    const nextPreset: FilterPreset = {
+      ...preset,
+      id: preset.id || crypto.randomUUID(),
+      name: cleanName || 'Saved Filter',
+      createdAt: new Date().toISOString(),
+    };
+    await updateAndSave((prev) => {
+      const existing = prev.filterPresets || [];
+      const replaced = existing.some((f) => f.id === nextPreset.id)
+        ? existing.map((f) => (f.id === nextPreset.id ? nextPreset : f))
+        : [...existing, nextPreset];
+      return { ...prev, filterPresets: replaced };
+    });
+    return nextPreset;
+  };
+
+  const removeFilterPreset = async (id: string) => {
+    await updateAndSave((prev) => ({
+      ...prev,
+      filterPresets: (prev.filterPresets || []).filter((f) => f.id !== id),
+    }));
+  };
+
+  const reloadSettings = async (): Promise<UserSettings> => {
+    const loaded = await loadUserSettings();
+    setSettings(loaded);
+    applyTheme(loaded.theme, loaded.themeAccent);
+    setHapticsEnabled(loaded.hapticsEnabled);
+    return loaded;
+  };
+
   const updateLocalLlm = async (configUpdates: Partial<UserSettings['localLlm']>) => {
     await updateAndSave((prev) => ({
       ...prev,
@@ -417,6 +456,9 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         deactivateMedicationsForCondition,
         addSymptomPreset,
         removeSymptomPreset,
+        addFilterPreset,
+        removeFilterPreset,
+        reloadSettings,
         updateLocalLlm,
       }}
     >

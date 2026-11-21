@@ -40,7 +40,12 @@ import { useAuthorizedDelete } from '../components/DeleteAuthModal';
 import { triggerHaptic } from '../utils/native';
 import { formatMedicationPreset } from '../utils/medication';
 import { testLocalLlmConnection, isOnDeviceLlmEndpoint } from '../utils/localLlm';
-import { encryptBackupWithPassphrase, decryptBackupWithPassphrase } from '../utils/crypto';
+import {
+  encryptBackupWithPassphrase,
+  decryptBackupWithPassphrase,
+  inspectBackupEnvelope,
+} from '../utils/crypto';
+import { CURRENT_SCHEMA_VERSION } from '../types/health';
 import { toLocalYmd } from '../utils/dateUtils';
 import {
   generateTotpSecret,
@@ -85,10 +90,18 @@ export const SettingsPage: React.FC = () => {
     setDefaultBodyMapOpen,
     addMedicationPreset,
     removeMedicationPreset,
+    reloadSettings,
     updateLocalLlm,
   } = useSettings();
 
-  const { conditions, logs, exportBackupJson, importBackupJson, resetData } = useHealth();
+  const {
+    conditions,
+    logs,
+    storageReport,
+    exportFullBackupBundle,
+    importBackupJson,
+    resetData,
+  } = useHealth();
   const {
     isPinSet,
     pinLengthHint,
@@ -142,6 +155,10 @@ export const SettingsPage: React.FC = () => {
     conditionsCount: number;
     logsCount: number;
     diaryCount: number;
+    diagnosticsCount: number;
+    mediaCount: number;
+    hasSettings: boolean;
+    formatLabel: string;
     isEncrypted: boolean;
   } | null>(null);
 
@@ -264,8 +281,13 @@ export const SettingsPage: React.FC = () => {
     }
     try {
       triggerHaptic();
-      const plainJson = exportBackupJson();
-      const encryptedContent = await encryptBackupWithPassphrase(plainJson, backupPassphrase);
+      const { payloadJson, media, settings: currentSettings } = await exportFullBackupBundle();
+      const encryptedContent = await encryptBackupWithPassphrase(payloadJson, backupPassphrase, {
+        format: 'v2',
+        schemaVersion: CURRENT_SCHEMA_VERSION,
+        settings: currentSettings,
+        media,
+      });
       const blob = new Blob([encryptedContent], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
@@ -331,9 +353,10 @@ export const SettingsPage: React.FC = () => {
     if (!file) return;
     try {
       const text = await file.text();
+      const inspection = inspectBackupEnvelope(text);
       const parsed = JSON.parse(text);
 
-      if (parsed?.format === 'bignal-encrypted-backup-v1' || (parsed?.data?.ct && parsed?.data?.salt && parsed?.data?.iv)) {
+      if (inspection.isEncrypted) {
         setPendingImportRaw(text);
         setBackupPassphrase('');
         setBackupError('');
@@ -348,6 +371,13 @@ export const SettingsPage: React.FC = () => {
           conditionsCount: data.conditions.length,
           logsCount: data.logs.length,
           diaryCount: Array.isArray(data.diaryEntries) ? data.diaryEntries.length : 0,
+          diagnosticsCount: Array.isArray(data.diagnosticRecords) ? data.diagnosticRecords.length : 0,
+          mediaCount:
+            data.encryptedMedia && typeof data.encryptedMedia === 'object'
+              ? Object.keys(data.encryptedMedia).length
+              : 0,
+          hasSettings: Boolean(data.settings && typeof data.settings === 'object'),
+          formatLabel: 'plaintext',
           isEncrypted: false,
         });
         setBackupError('');
@@ -368,6 +398,7 @@ export const SettingsPage: React.FC = () => {
       return;
     }
     try {
+      const inspection = inspectBackupEnvelope(pendingImportRaw);
       const decryptedJson = await decryptBackupWithPassphrase(pendingImportRaw, backupPassphrase);
       const data = JSON.parse(decryptedJson);
       if (!data || !Array.isArray(data.conditions) || !Array.isArray(data.logs)) {
@@ -378,6 +409,13 @@ export const SettingsPage: React.FC = () => {
         conditionsCount: data.conditions.length,
         logsCount: data.logs.length,
         diaryCount: Array.isArray(data.diaryEntries) ? data.diaryEntries.length : 0,
+        diagnosticsCount: Array.isArray(data.diagnosticRecords) ? data.diagnosticRecords.length : 0,
+        mediaCount:
+          data.encryptedMedia && typeof data.encryptedMedia === 'object'
+            ? Object.keys(data.encryptedMedia).length
+            : 0,
+        hasSettings: Boolean(data.settings && typeof data.settings === 'object'),
+        formatLabel: inspection.format === 'bignal-encrypted-backup-v2' ? 'v2' : 'v1',
         isEncrypted: true,
       });
       setBackupError('');
@@ -392,6 +430,7 @@ export const SettingsPage: React.FC = () => {
     try {
       triggerHaptic();
       await importBackupJson(importPreviewData.jsonStr);
+      await reloadSettings();
       resetBackupModal();
       showToast(isEn ? 'Backup restored successfully.' : '백업이 복원되었습니다.');
     } catch (err: any) {
@@ -1020,7 +1059,15 @@ export const SettingsPage: React.FC = () => {
 
       {/* DEPTH 2D: Data & Backups */}
       {activeSection === 'data' && (
-        <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden shadow-sm divide-y divide-slate-100 dark:divide-slate-800 text-sm">
+        <div className="space-y-3">
+          {storageReport?.isLowSpace && (
+            <div className="rounded-xl border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/50 p-3 text-xs text-amber-800 dark:text-amber-300 font-semibold">
+              {isEn
+                ? '⚠️ Device storage is nearly full. Export an encrypted backup and clear unnecessary photos if needed.'
+                : '⚠️ 기기 저장 공간이 부족합니다. 암호화 백업을 저장하고 불필요한 데이터를 정리해 주세요.'}
+            </div>
+          )}
+          <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden shadow-sm divide-y divide-slate-100 dark:divide-slate-800 text-sm">
           <button
             type="button"
             onClick={handleExportJson}
@@ -1090,6 +1137,7 @@ export const SettingsPage: React.FC = () => {
               </div>
             </div>
           </button>
+        </div>
         </div>
       )}
 
@@ -1354,21 +1402,33 @@ export const SettingsPage: React.FC = () => {
 
               {backupModalMode === 'importPreview' && importPreviewData && (
                 <div className="space-y-3">
+                  <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-800/70 text-[11px] font-bold text-amber-800 dark:text-amber-300">
+                    {isEn
+                      ? '⚠️ Restoring overwrites existing local records on this device (automatic rollback runs on failure).'
+                      : '⚠️ 복원 시 현재 기기의 기존 기록을 덮어씁니다 (실패 시 기존 데이터로 자동 롤백됩니다).'}
+                  </div>
                   <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800 text-xs space-y-1">
                     <p className="font-bold">
                       {importPreviewData.isEncrypted
                         ? isEn
-                          ? '✓ SHA-256 Integrity Verified'
-                          : '✓ SHA-256 무결성 검증 완료'
+                          ? `✓ SHA-256 Verified (${importPreviewData.formatLabel})`
+                          : `✓ SHA-256 무결성 검증 완료 (${importPreviewData.formatLabel})`
                         : isEn
                         ? '⚠️ Legacy Plaintext JSON'
                         : '⚠️ 구버전 평문 JSON'}
                     </p>
                     <p>
                       {isEn
-                        ? `${importPreviewData.conditionsCount} conditions · ${importPreviewData.logsCount} logs · ${importPreviewData.diaryCount} diary entries`
-                        : `질병 ${importPreviewData.conditionsCount}건 · 기록 ${importPreviewData.logsCount}건 · 일기 ${importPreviewData.diaryCount}건`}
+                        ? `${importPreviewData.conditionsCount} conditions · ${importPreviewData.logsCount} logs · ${importPreviewData.diaryCount} diary · ${importPreviewData.diagnosticsCount} diagnostics`
+                        : `질병 ${importPreviewData.conditionsCount}건 · 기록 ${importPreviewData.logsCount}건 · 일기 ${importPreviewData.diaryCount}건 · 진료 ${importPreviewData.diagnosticsCount}건`}
                     </p>
+                    {(importPreviewData.mediaCount > 0 || importPreviewData.hasSettings) && (
+                      <p className="text-[11px] text-teal-600 dark:text-teal-400 font-semibold">
+                        {isEn
+                          ? `Includes ${importPreviewData.mediaCount} encrypted photos${importPreviewData.hasSettings ? ' + settings/presets' : ''}`
+                          : `암호화 사진 ${importPreviewData.mediaCount}장${importPreviewData.hasSettings ? ' + 설정·프리셋 포함' : ''}`}
+                      </p>
+                    )}
                   </div>
                   {backupError && <p className="text-xs font-bold text-rose-500">{backupError}</p>}
                   <button

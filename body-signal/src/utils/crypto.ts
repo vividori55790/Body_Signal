@@ -263,13 +263,125 @@ export async function decryptWithPin(pkg: EncryptedPackage, pin: string): Promis
   }
 }
 
+export interface EncryptBackupOptions {
+  format?: 'v1' | 'v2';
+  schemaVersion?: number;
+  settings?: unknown;
+  media?: Record<string, string>;
+  chunkMaxBytes?: number;
+}
+
+export interface BackupInspectionResult {
+  format: 'bignal-encrypted-backup-v1' | 'bignal-encrypted-backup-v2' | 'plaintext';
+  isEncrypted: boolean;
+  schemaVersion?: number;
+  hasMediaChunks?: boolean;
+  mediaChunkCount?: number;
+}
+
+function splitMediaMapIntoChunks(
+  media: Record<string, string>,
+  chunkMaxBytes: number = 2 * 1024 * 1024
+): Array<Record<string, string>> {
+  const entries = Object.entries(media);
+  if (entries.length === 0) return [];
+  const chunks: Array<Record<string, string>> = [];
+  let current: Record<string, string> = {};
+  let currentBytes = 0;
+
+  for (const [id, dataUrl] of entries) {
+    const entryBytes = id.length + dataUrl.length;
+    if (Object.keys(current).length > 0 && currentBytes + entryBytes > chunkMaxBytes) {
+      chunks.push(current);
+      current = {};
+      currentBytes = 0;
+    }
+    current[id] = dataUrl;
+    currentBytes += entryBytes;
+  }
+  if (Object.keys(current).length > 0) {
+    chunks.push(current);
+  }
+  return chunks;
+}
+
+export function inspectBackupEnvelope(fileContent: string): BackupInspectionResult {
+  const parsed = JSON.parse(fileContent);
+  if (parsed?.format === 'bignal-encrypted-backup-v2') {
+    return {
+      format: 'bignal-encrypted-backup-v2',
+      isEncrypted: true,
+      schemaVersion: typeof parsed.schemaVersion === 'number' ? parsed.schemaVersion : 2,
+      hasMediaChunks: Array.isArray(parsed.mediaChunks) && parsed.mediaChunks.length > 0,
+      mediaChunkCount: Array.isArray(parsed.mediaChunks) ? parsed.mediaChunks.length : 0,
+    };
+  }
+  if (parsed?.format === 'bignal-encrypted-backup-v1' || (parsed?.data?.ct && parsed?.data?.salt && parsed?.data?.iv)) {
+    return {
+      format: 'bignal-encrypted-backup-v1',
+      isEncrypted: true,
+    };
+  }
+  return {
+    format: 'plaintext',
+    isEncrypted: false,
+  };
+}
+
 /**
  * Encrypts entire backup payload with a custom user passphrase and embeds SHA-256 checksum.
+ * Supports legacy v1 string payloads (default when options omitted) and v2 bundles with
+ * settings + chunked encrypted_media for OOM-safe mobile export/restore.
  */
 export async function encryptBackupWithPassphrase(
   dataJson: string,
-  passphrase: string
+  passphrase: string,
+  options?: EncryptBackupOptions
 ): Promise<string> {
+  if (options?.format === 'v2') {
+    const exportedAt = new Date().toISOString();
+    const coreObj = JSON.parse(dataJson);
+    const enrichedObj = {
+      ...coreObj,
+      schemaVersion: options.schemaVersion ?? coreObj?.schemaVersion ?? 2,
+      ...(options.settings !== undefined ? { settings: options.settings } : {}),
+    };
+    const coreJson = JSON.stringify(enrichedObj);
+    const checksum = await computeSha256Checksum(coreJson);
+    const dataEnvelope = JSON.stringify({
+      payload: coreJson,
+      checksum,
+      exportedAt,
+    });
+    const encryptedData = await encryptWithPin(dataEnvelope, passphrase);
+
+    const mediaChunksRaw = options.media
+      ? splitMediaMapIntoChunks(options.media, options.chunkMaxBytes)
+      : [];
+    const mediaChunks: EncryptedPackage[] = [];
+    for (const chunkObj of mediaChunksRaw) {
+      const chunkJson = JSON.stringify(chunkObj);
+      const chunkChecksum = await computeSha256Checksum(chunkJson);
+      const encChunk = await encryptWithPin(
+        JSON.stringify({ media: chunkObj, checksum: chunkChecksum }),
+        passphrase
+      );
+      mediaChunks.push(encChunk);
+    }
+
+    return JSON.stringify(
+      {
+        format: 'bignal-encrypted-backup-v2',
+        schemaVersion: options.schemaVersion ?? enrichedObj.schemaVersion ?? 2,
+        exportedAt,
+        data: encryptedData,
+        mediaChunks,
+      },
+      null,
+      2
+    );
+  }
+
   const checksum = await computeSha256Checksum(dataJson);
   const payloadToEncrypt = JSON.stringify({
     payload: dataJson,
@@ -278,40 +390,71 @@ export async function encryptBackupWithPassphrase(
   });
 
   const encrypted = await encryptWithPin(payloadToEncrypt, passphrase);
-  return JSON.stringify({
-    format: 'bignal-encrypted-backup-v1',
-    data: encrypted,
-  }, null, 2);
+  return JSON.stringify(
+    {
+      format: 'bignal-encrypted-backup-v1',
+      data: encrypted,
+    },
+    null,
+    2
+  );
 }
 
 /**
- * Decrypts backup file with user passphrase and verifies SHA-256 data integrity.
+ * Decrypts backup file (v1 or v2 container) with user passphrase and verifies SHA-256 data integrity.
+ * Reassembles chunked encrypted_media from v2 bundles sequentially to prevent mobile OOM.
  */
 export async function decryptBackupWithPassphrase(
   encryptedFileContent: string,
   passphrase: string
 ): Promise<string> {
+  let parsedFile: any;
   let pkg: EncryptedPackage;
   try {
-    const parsed = JSON.parse(encryptedFileContent);
-    pkg = parsed.data || parsed;
-  } catch (e) {
+    parsedFile = JSON.parse(encryptedFileContent);
+    pkg = parsedFile.data || parsedFile;
+  } catch {
     throw new Error('올바른 백업 파일 형식이 아닙니다.');
   }
 
   const decryptedJson = await decryptWithPin(pkg, passphrase);
   const envelope = JSON.parse(decryptedJson);
 
-  // Verify Checksum (constant-time)
+  let corePayloadJson = decryptedJson;
   if (envelope.checksum && envelope.payload) {
     const calculatedChecksum = await computeSha256Checksum(envelope.payload);
     if (!constantTimeEqual(calculatedChecksum, envelope.checksum)) {
       throw new Error('데이터 무결성 검증 실패: 백업 파일이 변조되었거나 손상되었습니다.');
     }
-    return envelope.payload;
+    corePayloadJson = envelope.payload;
   }
 
-  return decryptedJson;
+  // Reassemble chunked encrypted_media when present in bignal-encrypted-backup-v2
+  if (
+    parsedFile?.format === 'bignal-encrypted-backup-v2' &&
+    Array.isArray(parsedFile.mediaChunks) &&
+    parsedFile.mediaChunks.length > 0
+  ) {
+    const coreObj = JSON.parse(corePayloadJson);
+    const mergedMedia: Record<string, string> = {};
+    for (const chunkPkg of parsedFile.mediaChunks) {
+      const decChunkJson = await decryptWithPin(chunkPkg as EncryptedPackage, passphrase);
+      const chunkEnvelope = JSON.parse(decChunkJson);
+      if (chunkEnvelope.checksum && chunkEnvelope.media) {
+        const expectedChunkHash = await computeSha256Checksum(JSON.stringify(chunkEnvelope.media));
+        if (!constantTimeEqual(expectedChunkHash, chunkEnvelope.checksum)) {
+          throw new Error('미디어 청크 무결성 검증 실패: 백업 파일이 손상되었습니다.');
+        }
+        Object.assign(mergedMedia, chunkEnvelope.media);
+      }
+    }
+    return JSON.stringify({
+      ...coreObj,
+      encryptedMedia: mergedMedia,
+    });
+  }
+
+  return corePayloadJson;
 }
 
 /**
