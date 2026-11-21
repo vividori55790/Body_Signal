@@ -4,7 +4,7 @@
   <p><strong>Offline-first, hardware-hardened personal pain, symptom &amp; encrypted medical record vault for Android and the Web.</strong></p>
   <p>
     <a href="./LICENSE"><img src="https://img.shields.io/badge/License-GPL--3.0--only-0d9488.svg" alt="License: GPL-3.0-only" /></a>
-    <a href="./fastlane/metadata/android/en-US/changelogs/7.txt"><img src="https://img.shields.io/badge/Version-v2.0.2-0f172a.svg" alt="Version v2.0.2" /></a>
+    <a href="./fastlane/metadata/android/en-US/changelogs/12.txt"><img src="https://img.shields.io/badge/Version-v2.2.1-0f172a.svg" alt="Version v2.2.1" /></a>
     <a href="#installation"><img src="https://img.shields.io/badge/Platform-Android%20%7C%20Web%20PWA-14b8a6.svg" alt="Platform: Android | Web PWA" /></a>
     <a href="#bilingual-support"><img src="https://img.shields.io/badge/Languages-English%20%7C%20%ED%95%9C%EA%B5%AD%EC%96%B4-334155.svg" alt="Languages: English | 한국어" /></a>
   </p>
@@ -99,9 +99,15 @@ Body Signal automatically detects your system/browser language (`English` or `�
 
 ## Installation
 
-### Android APK (GitHub Releases)
+### Android APK (GitHub Releases & Obtainium Auto-Updates)
 
-Download the latest signed APK from [GitHub Releases](https://github.com/vividori55790/Body_Signal/releases).
+- **Direct Install**: Download the latest signed `BodySignal-v*-release.apk` (and verify its `.sha256` checksum) from [GitHub Releases](https://github.com/vividori55790/Body_Signal/releases).
+- **Automatic Updates via [Obtainium](https://github.com/ImranR98/Obtainium)** *(Recommended until F-Droid inclusion)*:
+  1. Install **Obtainium** on your Android device.
+  2. Tap **Add App** and enter `https://github.com/vividori55790/Body_Signal`.
+  3. Obtainium tracks new GitHub Releases and notifies/updates the APK externally — keeping Body Signal 100% offline with zero background network calls or `REQUEST_INSTALL_PACKAGES` permission.
+
+> **Switching to F-Droid later**: GitHub Releases APKs and official F-Droid APKs use different signing keys. Before migrating between them, export an encrypted backup from **Settings → Backup & Data** first.
 
 ### F-Droid Status
 
