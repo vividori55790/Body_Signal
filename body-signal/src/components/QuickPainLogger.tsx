@@ -1,9 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Zap, Check, AlertCircle, Sparkles, HeartPulse, Plus } from 'lucide-react';
 import { useHealth } from '../context/HealthContext';
 import { useSettings } from '../context/SettingsContext';
 import { triggerHaptic } from '../utils/native';
-import { formatMedicationPreset, localizeMedicationName } from '../utils/medication';
+import {
+  formatMedicationPreset,
+  localizeMedicationName,
+  prioritizeConditionMedications,
+} from '../utils/medication';
+import { MedicationPreset, UNASSIGNED_CONDITION_ID } from '../types/health';
 import { AddMedicationInline } from './AddMedicationInline';
 import { PainLevelSelector } from './PainLevelSelector';
 
@@ -39,23 +44,36 @@ const QUICK_MED_EN_MAP: Record<string, string> = {
 
 export const QuickPainLogger: React.FC<{ onSaved?: () => void }> = ({ onSaved }) => {
   const { conditions, saveEntry } = useHealth();
-  const { settings, resolvedLanguage, t } = useSettings();
+  const { settings, resolvedLanguage, t, adjustMedicationStock } = useSettings();
   const isEn = resolvedLanguage === 'en';
   const [selectedIntensity, setSelectedIntensity] = useState<number>(5);
   const [selectedPart, setSelectedPart] = useState<string>('허리/요통');
   const [selectedConditionId, setSelectedConditionId] = useState<string>('unassigned');
   const [hasManualCondition, setHasManualCondition] = useState<boolean>(false);
   const [selectedMed, setSelectedMed] = useState<string>('');
+  const [selectedMedIds, setSelectedMedIds] = useState<string[]>([]);
   const [showAddMed, setShowAddMed] = useState<boolean>(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [justSaved, setJustSaved] = useState(false);
 
-  const availableMeds =
-    settings?.medicationPresets && settings.medicationPresets.length > 0
-      ? settings.medicationPresets.map((p) => formatMedicationPreset(p, resolvedLanguage))
-      : isEn
-      ? QUICK_MEDS.map((m) => QUICK_MED_EN_MAP[m] || m)
-      : QUICK_MEDS;
+  const prioritizedPresets = useMemo(
+    () => prioritizeConditionMedications(settings?.medicationPresets || [], selectedConditionId),
+    [settings?.medicationPresets, selectedConditionId]
+  );
+
+  const availableMedItems =
+    prioritizedPresets.length > 0
+      ? prioritizedPresets.map((p) => ({
+          id: p.id,
+          label: formatMedicationPreset(p, resolvedLanguage),
+          isConditionLinked:
+            selectedConditionId !== UNASSIGNED_CONDITION_ID && p.conditionId === selectedConditionId,
+        }))
+      : (isEn ? QUICK_MEDS.map((m) => QUICK_MED_EN_MAP[m] || m) : QUICK_MEDS).map((label) => ({
+          id: undefined as string | undefined,
+          label,
+          isConditionLinked: false,
+        }));
 
   const activeConditions = conditions.filter((c) => !c.isArchived);
 
@@ -117,9 +135,11 @@ export const QuickPainLogger: React.FC<{ onSaved?: () => void }> = ({ onSaved })
     }
   };
 
-  const handleToggleMed = (med: string) => {
+  const handleToggleMed = (med: string, presetId?: string) => {
     triggerHaptic();
-    setSelectedMed((prev) => (prev === med ? '' : med));
+    const isDeselecting = selectedMed === med;
+    setSelectedMed(isDeselecting ? '' : med);
+    setSelectedMedIds(isDeselecting || !presetId ? [] : [presetId]);
   };
 
   const handleQuickSave = async () => {
@@ -134,15 +154,18 @@ export const QuickPainLogger: React.FC<{ onSaved?: () => void }> = ({ onSaved })
         : undefined;
 
     const localizedPart = isEn ? BODY_PART_EN_MAP[selectedPart] || selectedPart : selectedPart;
+    const nowIso = new Date().toISOString();
 
     const payload = {
       isNewCondition: false,
       isUnassigned: !matchingCond,
       conditionData: matchingCond ? { id: matchingCond.id } : {},
       logData: {
-        date: new Date().toISOString(),
+        date: nowIso,
         intensity: selectedIntensity,
         medication: selectedMed,
+        medicationIds: selectedMedIds,
+        medTakenAt: selectedMed.trim() ? nowIso : undefined,
         notes: isEn ? '⚡ 3s Quick Log (Home)' : '⚡ 3초 퀵 기록 (홈 화면)',
         bodyPartOverride: localizedPart,
       },
@@ -152,6 +175,9 @@ export const QuickPainLogger: React.FC<{ onSaved?: () => void }> = ({ onSaved })
     setIsSubmitting(false);
 
     if (success) {
+      if (selectedMedIds.length > 0) {
+        void adjustMedicationStock(selectedMedIds, -1);
+      }
       triggerHaptic();
       setJustSaved(true);
       setTimeout(() => {
@@ -263,19 +289,21 @@ export const QuickPainLogger: React.FC<{ onSaved?: () => void }> = ({ onSaved })
           {isEn ? '3. Medication Taken (Optional)' : '3. 복약 여부 (선택)'}
         </span>
         <div className="flex flex-wrap gap-1.5">
-          {availableMeds.map((med) => {
-            const isSelected = selectedMed === med;
+          {availableMedItems.map((item) => {
+            const isSelected = selectedMed === item.label;
             const displayMed = isEn
-              ? QUICK_MED_EN_MAP[med] || localizeMedicationName(med, 'en')
-              : localizeMedicationName(med, 'ko');
+              ? QUICK_MED_EN_MAP[item.label] || localizeMedicationName(item.label, 'en')
+              : localizeMedicationName(item.label, 'ko');
             return (
               <button
-                key={med}
+                key={item.id || item.label}
                 type="button"
-                onClick={() => handleToggleMed(med)}
+                onClick={() => handleToggleMed(item.label, item.id)}
                 className={`min-h-[32px] px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all break-words ${
                   isSelected
                     ? 'bg-blue-600 text-white shadow-sm ring-1 ring-blue-300'
+                    : item.isConditionLinked
+                    ? 'bg-teal-50 dark:bg-teal-950/50 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800/70 active:scale-95'
                     : 'bg-slate-100 dark:bg-slate-800/70 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700/60 active:scale-95'
                 }`}
               >
@@ -299,8 +327,10 @@ export const QuickPainLogger: React.FC<{ onSaved?: () => void }> = ({ onSaved })
       <AddMedicationInline
         isOpen={showAddMed}
         onClose={() => setShowAddMed(false)}
-        onAdded={(newMed) => {
+        conditionId={selectedConditionId}
+        onAdded={(newMed: string, preset?: MedicationPreset) => {
           setSelectedMed(newMed);
+          setSelectedMedIds(preset?.id ? [preset.id] : []);
           setShowAddMed(false);
         }}
       />

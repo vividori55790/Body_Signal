@@ -20,6 +20,7 @@ import {
   resolveBodyPartIds,
   resolvePqrstCodes,
 } from './clinicalTaxonomy';
+import { normalizeMedicationNameDosage } from './medication';
 import {
   EncryptedPackage,
   SESSION_KEY_TOKEN,
@@ -784,6 +785,20 @@ export async function savePinMeta(meta: PinMeta | null): Promise<void> {
 /**
  * Settings operations (AES-GCM 256 encrypted at rest with device master key)
  */
+function normalizeSettingsMedicationPresets(settingsObj: UserSettings): UserSettings {
+  if (!Array.isArray(settingsObj.medicationPresets)) return settingsObj;
+  let changed = false;
+  const normalized = settingsObj.medicationPresets.map((p) => {
+    const split = normalizeMedicationNameDosage(p.name, p.dosage);
+    if (split.name !== p.name || split.dosage !== p.dosage) {
+      changed = true;
+      return { ...p, name: split.name, dosage: split.dosage };
+    }
+    return p;
+  });
+  return changed ? { ...settingsObj, medicationPresets: normalized } : settingsObj;
+}
+
 export async function loadUserSettings(): Promise<UserSettings> {
   if (typeof indexedDB === 'undefined') {
     return DEFAULT_SETTINGS;
@@ -806,20 +821,20 @@ export async function loadUserSettings(): Promise<UserSettings> {
   } else {
     // Transparently encrypt legacy plaintext user_settings (which may hold localLlm.apiKey)
     try {
-      const parsed = UserSettingsSchema.parse(rawSettings);
+      const parsed = normalizeSettingsMedicationPresets(UserSettingsSchema.parse(rawSettings));
       await saveUserSettings(parsed);
       return parsed;
     } catch {
-      const merged = { ...DEFAULT_SETTINGS, ...rawSettings };
+      const merged = normalizeSettingsMedicationPresets({ ...DEFAULT_SETTINGS, ...rawSettings });
       await saveUserSettings(merged).catch(() => {});
       return merged;
     }
   }
 
   try {
-    return UserSettingsSchema.parse(rawSettings);
+    return normalizeSettingsMedicationPresets(UserSettingsSchema.parse(rawSettings));
   } catch {
-    return { ...DEFAULT_SETTINGS, ...rawSettings };
+    return normalizeSettingsMedicationPresets({ ...DEFAULT_SETTINGS, ...rawSettings });
   }
 }
 

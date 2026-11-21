@@ -37,7 +37,7 @@ const DetailedConditionCard: React.FC<{
 }> = ({ condition, logs, diagnostics = [], isArchived = false }) => {
   const navigate = useNavigate();
   const { updateCondition } = useHealth();
-  const { t, resolvedLanguage } = useSettings();
+  const { t, resolvedLanguage, deactivateMedicationsForCondition } = useSettings();
   const isEn = resolvedLanguage === 'en';
   const [isExpanded, setIsExpanded] = useState(false);
 
@@ -66,7 +66,11 @@ const DetailedConditionCard: React.FC<{
   const handleToggleArchive = async (e: React.MouseEvent) => {
     e.stopPropagation();
     triggerHaptic();
-    await updateCondition(condition.id, { isArchived: !isArchived });
+    const nextArchived = !isArchived;
+    await updateCondition(condition.id, { isArchived: nextArchived });
+    if (nextArchived) {
+      await deactivateMedicationsForCondition(condition.id);
+    }
   };
 
   return (

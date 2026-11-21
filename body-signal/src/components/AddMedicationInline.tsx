@@ -4,11 +4,14 @@ import { Pill, X, Check } from 'lucide-react';
 import { useSettings } from '../context/SettingsContext';
 import { triggerHaptic } from '../utils/native';
 import { formatMedicationPreset, validateMedicationInput } from '../utils/medication';
+import { MedicationPreset, isUnassignedConditionId } from '../types/health';
+import { toLocalYmd } from '../utils/dateUtils';
 
 export interface AddMedicationInlineProps {
   isOpen: boolean;
   onClose: () => void;
-  onAdded: (formattedMedName: string) => void;
+  onAdded: (formattedMedName: string, preset?: MedicationPreset) => void;
+  conditionId?: string;
   placeholder?: string;
 }
 
@@ -16,6 +19,7 @@ export const AddMedicationInline: React.FC<AddMedicationInlineProps> = ({
   isOpen,
   onClose,
   onAdded,
+  conditionId,
   placeholder,
 }) => {
   const { resolvedLanguage, addMedicationPreset } = useSettings();
@@ -53,13 +57,21 @@ export const AddMedicationInline: React.FC<AddMedicationInlineProps> = ({
 
     setIsSubmitting(true);
     try {
-      const preset = await addMedicationPreset(validation.cleanName!, validation.cleanDosage);
+      const targetConditionId =
+        conditionId && !isUnassignedConditionId(conditionId) ? conditionId.trim() : undefined;
+      const preset = await addMedicationPreset(
+        validation.cleanName!,
+        validation.cleanDosage,
+        targetConditionId
+          ? { conditionId: targetConditionId, isActive: true, startedAt: toLocalYmd(new Date()) }
+          : undefined
+      );
       if (preset) {
         const formatted = formatMedicationPreset(preset, resolvedLanguage);
         setName('');
         setDosage('');
         setError(null);
-        onAdded(formatted);
+        onAdded(formatted, preset);
       } else {
         setError(isEn ? 'Failed to add medication.' : '약 추가에 실패했습니다.');
       }
