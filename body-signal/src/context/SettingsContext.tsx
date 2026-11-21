@@ -8,6 +8,13 @@ import {
 } from '../types/health';
 import { loadUserSettings, saveUserSettings, DEFAULT_SETTINGS } from '../utils/storage';
 import {
+  deactivateConditionMedications,
+  deductMedicationStock,
+  normalizeMedicationNameDosage,
+  refillMedicationStock,
+} from '../utils/medication';
+import { toLocalYmd } from '../utils/dateUtils';
+import {
   translations,
   translate,
   LocaleId,
@@ -38,9 +45,15 @@ interface SettingsContextValue {
   ) => Promise<boolean>;
   setReminder: (enabled: boolean, time?: string) => Promise<void>;
   acceptDisclaimer: () => Promise<void>;
-  addMedicationPreset: (name: string, dosage?: string) => Promise<MedicationPreset | null>;
+  addMedicationPreset: (
+    name: string,
+    dosage?: string,
+    options?: Partial<Omit<MedicationPreset, 'id' | 'name' | 'dosage'>>
+  ) => Promise<MedicationPreset | null>;
   updateMedicationPreset: (id: string, updates: Partial<MedicationPreset>) => Promise<void>;
   removeMedicationPreset: (id: string) => Promise<void>;
+  adjustMedicationStock: (medicationIds: string[], delta: number) => Promise<void>;
+  deactivateMedicationsForCondition: (conditionId: string, endedAt?: string) => Promise<void>;
   addSymptomPreset: (name: string) => Promise<void>;
   removeSymptomPreset: (name: string) => Promise<void>;
   updateLocalLlm: (configUpdates: Partial<UserSettings['localLlm']>) => Promise<void>;
@@ -266,15 +279,23 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }));
   };
 
-  const addMedicationPreset = async (name: string, dosage?: string): Promise<MedicationPreset | null> => {
+  const addMedicationPreset = async (
+    name: string,
+    dosage?: string,
+    options?: Partial<Omit<MedicationPreset, 'id' | 'name' | 'dosage'>>
+  ): Promise<MedicationPreset | null> => {
     const trimmed = (name || '').trim();
     if (!trimmed) return null;
-    const cappedName = trimmed.slice(0, 80);
-    const cappedDosage = dosage ? dosage.trim().slice(0, 40) : undefined;
+    const normalized = normalizeMedicationNameDosage(trimmed.slice(0, 80), dosage?.trim().slice(0, 40));
+    if (!normalized.name) return null;
 
-    // Check duplicate (case-insensitive name match)
+    const targetConditionId = options?.conditionId?.trim() || undefined;
+    // Deduplicate case-insensitively within the same scope (conditionId or global)
     const existing = settings.medicationPresets.find(
-      (p) => p.name.trim().toLowerCase() === cappedName.toLowerCase()
+      (p) =>
+        p.isActive !== false &&
+        p.name.trim().toLowerCase() === normalized.name.toLowerCase() &&
+        (p.conditionId || undefined) === targetConditionId
     );
     if (existing) {
       return existing;
@@ -282,8 +303,20 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
     const newPreset: MedicationPreset = {
       id: crypto.randomUUID(),
-      name: cappedName,
-      dosage: cappedDosage || undefined,
+      name: normalized.name,
+      dosage: normalized.dosage,
+      isActive: options?.isActive ?? true,
+      ...(targetConditionId ? { conditionId: targetConditionId } : {}),
+      ...(options?.startedAt ? { startedAt: options.startedAt } : {}),
+      ...(options?.endedAt ? { endedAt: options.endedAt } : {}),
+      ...(options?.scheduleSlots ? { scheduleSlots: options.scheduleSlots } : {}),
+      ...(options?.isPrn !== undefined ? { isPrn: options.isPrn } : {}),
+      ...(options?.remainingCount !== undefined ? { remainingCount: options.remainingCount } : {}),
+      ...(options?.totalCount !== undefined ? { totalCount: options.totalCount } : {}),
+      ...(options?.unit ? { unit: options.unit } : {}),
+      ...(options?.lowStockThreshold !== undefined
+        ? { lowStockThreshold: options.lowStockThreshold }
+        : {}),
     };
     await updateAndSave((prev) => ({
       ...prev,
@@ -305,6 +338,26 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     await updateAndSave((prev) => ({
       ...prev,
       medicationPresets: prev.medicationPresets.filter((p) => p.id !== id),
+    }));
+  };
+
+  const adjustMedicationStock = async (medicationIds: string[], delta: number) => {
+    if (!medicationIds.length || delta === 0) return;
+    const idSet = new Set(medicationIds);
+    await updateAndSave((prev) => ({
+      ...prev,
+      medicationPresets: prev.medicationPresets.map((p) => {
+        if (!idSet.has(p.id)) return p;
+        return delta < 0 ? deductMedicationStock(p, Math.abs(delta)) : refillMedicationStock(p, delta);
+      }),
+    }));
+  };
+
+  const deactivateMedicationsForCondition = async (conditionId: string, endedAt?: string) => {
+    const closeDate = endedAt || toLocalYmd(new Date());
+    await updateAndSave((prev) => ({
+      ...prev,
+      medicationPresets: deactivateConditionMedications(prev.medicationPresets, conditionId, closeDate),
     }));
   };
 
@@ -360,6 +413,8 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         addMedicationPreset,
         updateMedicationPreset,
         removeMedicationPreset,
+        adjustMedicationStock,
+        deactivateMedicationsForCondition,
         addSymptomPreset,
         removeSymptomPreset,
         updateLocalLlm,

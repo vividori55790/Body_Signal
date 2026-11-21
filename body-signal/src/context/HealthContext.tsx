@@ -43,6 +43,8 @@ function buildPainLogSnapshot(log: PainLog): PainLogSnapshot {
     date: log.date,
     intensity: log.intensity,
     medication: log.medication,
+    medicationIds: log.medicationIds,
+    medTakenAt: log.medTakenAt,
     notes: log.notes,
     bodyPartOverride: log.bodyPartOverride,
     painQuality: log.painQuality,
@@ -128,6 +130,8 @@ interface HealthContextValue {
       date: string;
       intensity: number;
       medication?: string;
+      medicationIds?: string[];
+      medTakenAt?: string;
       notes?: string;
       bodyPartOverride?: string;
       painQuality?: string[];
@@ -277,6 +281,8 @@ export const HealthProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       date: string;
       intensity: number;
       medication?: string;
+      medicationIds?: string[];
+      medTakenAt?: string;
       notes?: string;
       bodyPartOverride?: string;
       painQuality?: string[];
@@ -343,6 +349,8 @@ export const HealthProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         date: normalizeIsoTimestamp(payload.logData.date, nowIso),
         intensity: Number(payload.logData.intensity),
         medication: payload.logData.medication?.trim() || '',
+        medicationIds: payload.logData.medicationIds || [],
+        medTakenAt: payload.logData.medTakenAt,
         notes: payload.logData.notes?.trim() || '',
         bodyPartOverride: payload.logData.bodyPartOverride,
         bodyPartOverrideIds: resolveBodyPartIds(payload.logData.bodyPartOverride),
@@ -477,10 +485,13 @@ export const HealthProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   };
 
   const updateCondition = async (id: string, updates: Partial<Condition>): Promise<boolean> => {
-    const resolvedUpdates: Partial<Condition> =
-      updates.bodyPart !== undefined && updates.bodyPartIds === undefined
-        ? { ...updates, bodyPartIds: resolveBodyPartIds(updates.bodyPart) }
-        : updates;
+    const resolvedUpdates: Partial<Condition> = { ...updates };
+    if (updates.bodyPart !== undefined && updates.bodyPartIds === undefined) {
+      resolvedUpdates.bodyPartIds = resolveBodyPartIds(updates.bodyPart);
+    }
+    if (updates.isArchived !== undefined && updates.resolvedAt === undefined) {
+      resolvedUpdates.resolvedAt = updates.isArchived ? toLocalYmd(new Date()) : undefined;
+    }
     const next = conditionsRef.current.map((c) => (c.id === id ? { ...c, ...resolvedUpdates } : c));
     await persist(next, logsRef.current, diaryEntriesRef.current, diagnosticRecordsRef.current);
     conditionsRef.current = next;
@@ -489,7 +500,10 @@ export const HealthProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   };
 
   const archiveCondition = async (id: string, isArchived: boolean): Promise<boolean> => {
-    return updateCondition(id, { isArchived });
+    return updateCondition(id, {
+      isArchived,
+      resolvedAt: isArchived ? toLocalYmd(new Date()) : undefined,
+    });
   };
 
   const updateLog = async (

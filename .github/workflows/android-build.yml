@@ -64,6 +64,7 @@ jobs:
           node test/v2_2_1_features_test.mjs
           node test/v2_3_0_s6_schema_test.mjs
           node test/v2_3_0_s7_taxonomy_i18n_test.mjs
+          node test/v2_3_0_s8_medication_test.mjs
           node test/run-feedback-tests.mjs
 
       - name: Build release APK

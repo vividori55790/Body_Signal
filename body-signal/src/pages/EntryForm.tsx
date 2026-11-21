@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   ArrowLeft,
   Clock,
@@ -16,11 +16,11 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useHealth } from '../context/HealthContext';
 import { useAuth } from '../context/AuthContext';
 import { useSettings } from '../context/SettingsContext';
-import { UNASSIGNED_CONDITION_ID } from '../types/health';
+import { UNASSIGNED_CONDITION_ID, MedicationPreset } from '../types/health';
 import BodyMap, { parseMultiRegionParts, formatMultiRegionParts } from '../components/BodyMap';
 import DefaultClosedSuggestion from '../components/DefaultClosedSuggestion';
 import { triggerHaptic } from '../utils/native';
-import { formatMedicationPreset } from '../utils/medication';
+import { formatMedicationPreset, prioritizeConditionMedications } from '../utils/medication';
 import {
   compressAndStripExif,
   encryptDraftPhotos,
@@ -45,7 +45,14 @@ export const EntryFormPage: React.FC = () => {
   const location = useLocation();
   const { conditions, logs, diagnosticRecords, saveEntry, updateLog, updateDiagnosticRecord } = useHealth();
   const { activeSessionPin } = useAuth();
-  const { settings, resolvedLanguage, t, setDefaultBodyMapOpen, recordCollapsibleDismissal } = useSettings();
+  const {
+    settings,
+    resolvedLanguage,
+    t,
+    setDefaultBodyMapOpen,
+    recordCollapsibleDismissal,
+    adjustMedicationStock,
+  } = useSettings();
   const isEn = resolvedLanguage === 'en';
   const labelOf = (val: string) => {
     for (const cat of ['quality', 'radiation', 'triggers', 'reliefFactors', 'redFlags'] as const) {
@@ -146,6 +153,7 @@ export const EntryFormPage: React.FC = () => {
   );
   const [intensity, setIntensity] = useState<number>(() => (editingLog ? editingLog.intensity : 5));
   const [medication, setMedication] = useState(() => editingLog?.medication || '');
+  const [selectedMedIds, setSelectedMedIds] = useState<string[]>(() => editingLog?.medicationIds || []);
   const [showAddMed, setShowAddMed] = useState(false);
   const [notes, setNotes] = useState(() => editingDiagnostic?.notes || editingLog?.notes || '');
   const [error, setError] = useState('');
@@ -272,10 +280,20 @@ export const EntryFormPage: React.FC = () => {
     );
   };
 
-  const handleAddMedPreset = (name: string) => {
+  const handleAddMedPreset = (name: string, presetId?: string) => {
     triggerHaptic();
     setMedication((prev) => (prev ? `${prev}, ${name}` : name));
+    if (presetId) {
+      setSelectedMedIds((prev) => (prev.includes(presetId) ? prev : [...prev, presetId]));
+    }
   };
+
+  const activeMedScopeConditionId =
+    mode === 'existing' ? selectedConditionId : undefined;
+  const prioritizedMedPresets = useMemo(
+    () => prioritizeConditionMedications(settings.medicationPresets, activeMedScopeConditionId),
+    [settings.medicationPresets, activeMedScopeConditionId]
+  );
 
   const flagInvalidField = (
     field: NonNullable<typeof invalidField>,
@@ -423,6 +441,8 @@ export const EntryFormPage: React.FC = () => {
           date: new Date(date).toISOString(),
           intensity,
           medication,
+          medicationIds: selectedMedIds,
+          medTakenAt: medication.trim() ? new Date(date).toISOString() : undefined,
           notes,
           painQuality: selectedQualities,
           radiation: selectedRadiation,
@@ -462,6 +482,8 @@ export const EntryFormPage: React.FC = () => {
           date: new Date(date).toISOString(),
           intensity,
           medication,
+          medicationIds: selectedMedIds,
+          medTakenAt: medication.trim() ? new Date(date).toISOString() : undefined,
           notes,
           bodyPartOverride: mode === 'unassigned' ? unassignedBodyPart.trim() : undefined,
           painQuality: selectedQualities,
@@ -486,6 +508,9 @@ export const EntryFormPage: React.FC = () => {
 
       const success = await saveEntry(payload);
       if (success) {
+        if (selectedMedIds.length > 0) {
+          void adjustMedicationStock(selectedMedIds, -1);
+        }
         triggerHaptic();
         navigate('/');
       } else {
@@ -1079,14 +1104,20 @@ export const EntryFormPage: React.FC = () => {
               {t('quickMedPresets')}
             </span>
             <div className="flex flex-wrap gap-1.5">
-              {settings.medicationPresets.map((preset) => {
+              {prioritizedMedPresets.map((preset) => {
                 const formattedName = formatMedicationPreset(preset, resolvedLanguage);
+                const isConditionLinked =
+                  Boolean(activeMedScopeConditionId) && preset.conditionId === activeMedScopeConditionId;
                 return (
                   <button
                     key={preset.id}
                     type="button"
-                    onClick={() => handleAddMedPreset(formattedName)}
-                    className="rounded-full bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-900/60 px-2.5 py-1 text-xs font-bold text-blue-700 dark:text-blue-300 active:scale-95 transition-all"
+                    onClick={() => handleAddMedPreset(formattedName, preset.id)}
+                    className={`rounded-full px-2.5 py-1 text-xs font-bold active:scale-95 transition-all border ${
+                      isConditionLinked
+                        ? 'bg-teal-50 dark:bg-teal-950/60 border-teal-300 dark:border-teal-800 text-teal-700 dark:text-teal-300'
+                        : 'bg-blue-50 dark:bg-blue-950/60 border-blue-200 dark:border-blue-900/60 text-blue-700 dark:text-blue-300'
+                    }`}
                   >
                     + {formattedName}
                   </button>
@@ -1116,8 +1147,9 @@ export const EntryFormPage: React.FC = () => {
           <AddMedicationInline
             isOpen={showAddMed}
             onClose={() => setShowAddMed(false)}
-            onAdded={(newMed) => {
-              handleAddMedPreset(newMed);
+            conditionId={activeMedScopeConditionId}
+            onAdded={(newMed: string, preset?: MedicationPreset) => {
+              handleAddMedPreset(newMed, preset?.id);
               setShowAddMed(false);
             }}
           />

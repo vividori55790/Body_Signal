@@ -65,6 +65,8 @@ export const PainLogSnapshotSchema = z
     date: z.string(),
     intensity: z.number(),
     medication: z.string().optional(),
+    medicationIds: z.array(z.string()).optional(),
+    medTakenAt: z.string().optional(),
     notes: z.string().optional(),
     bodyPartOverride: z.string().optional(),
     bodyPartOverrideIds: z.array(z.string()).optional(),
@@ -140,6 +142,8 @@ export const PainLogSchema = z.object({
   date: z.string(), // ISO 8601 timestamp
   intensity: z.number().int().min(1).max(10),
   medication: z.string().max(500).optional().default(''),
+  medicationIds: z.array(z.string()).optional().default([]),
+  medTakenAt: z.string().optional(),
   notes: z.string().max(5000).optional().default(''),
   bodyPartOverride: z.string().optional(),
   bodyPartOverrideIds: z.array(z.string()).optional().default([]),
@@ -180,6 +184,7 @@ export type PainLog = Omit<
   z.infer<typeof PainLogSchema>,
   | 'postMedSideEffects'
   | 'revisions'
+  | 'medicationIds'
   | 'bodyPartOverrideIds'
   | 'painQualityCodes'
   | 'radiationCodes'
@@ -190,6 +195,7 @@ export type PainLog = Omit<
 > & {
   postMedSideEffects?: string[];
   revisions?: PainLogRevision[];
+  medicationIds?: string[];
   bodyPartOverrideIds?: string[];
   painQualityCodes?: string[];
   radiationCodes?: string[];
@@ -275,14 +281,32 @@ export type DiagnosticRecord = Omit<z.infer<typeof DiagnosticRecordSchema>, 'rev
   revisions?: DiagnosticRevision[];
 };
 
-// Presets for quick mobile logging
+export const MedicationScheduleSlotSchema = z.enum(['morning', 'afternoon', 'evening', 'bedtime']);
+export type MedicationScheduleSlot = z.infer<typeof MedicationScheduleSlotSchema>;
+
+// Medication & Condition-linked Course Schema (backward-compatible with legacy presets)
 export const MedicationPresetSchema = z.object({
   id: z.string(),
   name: z.string(),
   dosage: z.string().optional(),
+  conditionId: z.string().optional(),
+  isActive: z.boolean().optional().default(true),
+  startedAt: z.string().optional(), // YYYY-MM-DD
+  endedAt: z.string().optional(), // YYYY-MM-DD
+  scheduleSlots: z.array(MedicationScheduleSlotSchema).optional(),
+  isPrn: z.boolean().optional(),
+  remainingCount: z.number().nonnegative().optional(),
+  totalCount: z.number().nonnegative().optional(),
+  unit: z.string().max(24).optional(),
+  lowStockThreshold: z.number().nonnegative().optional(),
 });
 
-export type MedicationPreset = z.infer<typeof MedicationPresetSchema>;
+export type MedicationPreset = Omit<z.infer<typeof MedicationPresetSchema>, 'isActive'> & {
+  isActive?: boolean;
+};
+
+export const MedicationSchema = MedicationPresetSchema;
+export type Medication = MedicationPreset;
 
 // Local LLM Config Schema
 export const LocalLlmConfigSchema = z.object({
@@ -309,12 +333,12 @@ export const DEFAULT_LOCAL_LLM_CONFIG: LocalLlmConfig = {
   maxTokens: 1024,
 };
 
-export const DEFAULT_MEDICATION_PRESETS: MedicationPreset[] = [
-  { id: '1', name: '타이레놀', dosage: '500mg' },
-  { id: '2', name: '이부프로펜', dosage: '400mg' },
-  { id: '3', name: '소염진통제' },
-  { id: '4', name: '근이완제' },
-  { id: '5', name: '위장보호제' },
+export const DEFAULT_MEDICATION_PRESETS = [
+  { id: '1', name: '타이레놀', dosage: '500mg', isActive: true },
+  { id: '2', name: '이부프로펜', dosage: '400mg', isActive: true },
+  { id: '3', name: '소염진통제', isActive: true },
+  { id: '4', name: '근이완제', isActive: true },
+  { id: '5', name: '위장보호제', isActive: true },
 ];
 
 export const DEFAULT_SYMPTOM_PRESETS: string[] = [
@@ -350,7 +374,9 @@ export const UserSettingsSchema = z.object({
   disclaimerAcceptedAt: z.string().optional(),
 });
 
-export type UserSettings = z.infer<typeof UserSettingsSchema>;
+export type UserSettings = Omit<z.infer<typeof UserSettingsSchema>, 'medicationPresets'> & {
+  medicationPresets: MedicationPreset[];
+};
 
 export const DEFAULT_USER_SETTINGS: UserSettings = UserSettingsSchema.parse({});
 
@@ -367,13 +393,14 @@ export const HealthDataPayloadSchema = z.object({
 
 export type HealthDataPayload = Omit<
   z.infer<typeof HealthDataPayloadSchema>,
-  'conditions' | 'logs' | 'diaryEntries' | 'diagnosticRecords' | 'schemaVersion'
+  'conditions' | 'logs' | 'diaryEntries' | 'diagnosticRecords' | 'settings' | 'schemaVersion'
 > & {
   schemaVersion?: number;
   conditions: Condition[];
   logs: PainLog[];
   diaryEntries: DiaryEntry[];
   diagnosticRecords: DiagnosticRecord[];
+  settings?: UserSettings;
 };
 
 // Clinical Briefing (For Doctors & Nurses)
