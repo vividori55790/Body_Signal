@@ -38,6 +38,7 @@ import { PinModal } from '../components/PinModal';
 import DisclaimerModal from '../components/DisclaimerModal';
 import { useAuthorizedDelete } from '../components/DeleteAuthModal';
 import { triggerHaptic } from '../utils/native';
+import { formatMedicationPreset } from '../utils/medication';
 import { testLocalLlmConnection, isOnDeviceLlmEndpoint } from '../utils/localLlm';
 import { encryptBackupWithPassphrase, decryptBackupWithPassphrase } from '../utils/crypto';
 import { toLocalYmd } from '../utils/dateUtils';
@@ -76,7 +77,6 @@ export const SettingsPage: React.FC = () => {
     t,
     setLanguage,
     setTheme,
-    setLogoVariant,
     setHaptics,
     setQuickSos,
     setShowDiagnosticsTab,
@@ -621,19 +621,24 @@ export const SettingsPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Brand Logo Style */}
-          <div className="p-3.5 space-y-2.5">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <Sparkles size={18} className="text-emerald-600 dark:text-emerald-400" />
-                <div>
-                  <span className="font-bold text-xs block">
-                    {settings.language === 'en' ? 'Brand Emblem' : '대표 로고 스타일'}
-                  </span>
-                  <span className="text-[10px] text-slate-400">
-                    {settings.language === 'en'
-                      ? 'Shown on launch splash, lock screen & welcome header'
-                      : '시작 스플래시와 잠금 화면 로고에 적용됩니다'}
+          {/* Brand Logo Style (In Development — deferred to v4.0.0) */}
+          <div className="p-3.5 space-y-2.5 opacity-65">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-3 min-w-0">
+                <Sparkles size={18} className="text-slate-400 shrink-0" />
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="font-bold text-xs">
+                      {isEn ? 'Brand Emblem' : '대표 로고 스타일'}
+                    </span>
+                    <span className="rounded-full bg-amber-100 dark:bg-amber-950/70 px-2 py-0.5 text-[10px] font-bold text-amber-700 dark:text-amber-300">
+                      {isEn ? 'In Dev (v4)' : '개발중 (v4 예정)'}
+                    </span>
+                  </div>
+                  <span className="text-[10px] text-slate-400 block">
+                    {isEn
+                      ? 'Dynamic emblem & launcher icon switching will be introduced in v4.0.0.'
+                      : '앱 아이콘·전역 로고 동적 전환 기능은 v4.0.0에서 정식 지원 예정입니다.'}
                   </span>
                 </div>
               </div>
@@ -645,16 +650,17 @@ export const SettingsPage: React.FC = () => {
                   <button
                     key={opt.id}
                     type="button"
-                    onClick={() => setLogoVariant(opt.id)}
-                    className={`flex flex-col items-center rounded-xl border p-2 transition-all ${
+                    disabled
+                    aria-disabled="true"
+                    className={`flex flex-col items-center rounded-xl border p-2 cursor-not-allowed ${
                       selected
-                        ? 'border-emerald-500 bg-emerald-50/70 dark:bg-emerald-950/40 ring-1 ring-emerald-500/30'
-                        : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
+                        ? 'border-slate-300 dark:border-slate-700 bg-slate-100/70 dark:bg-slate-800/50'
+                        : 'border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/40'
                     }`}
                   >
                     <BrandLogo variant={opt.id} size={36} showFrame={true} />
-                    <span className="mt-1.5 text-[11px] font-bold text-slate-700 dark:text-slate-200">
-                      {settings.language === 'en' ? opt.labelEn : opt.labelKo}
+                    <span className="mt-1.5 text-[11px] font-bold text-slate-500 dark:text-slate-400">
+                      {isEn ? opt.labelEn : opt.labelKo}
                     </span>
                   </button>
                 );
@@ -986,7 +992,7 @@ export const SettingsPage: React.FC = () => {
                 key={preset.id}
                 className="flex items-center gap-1.5 rounded-full bg-blue-50 dark:bg-blue-950/60 border border-blue-100 dark:border-blue-900 px-3 py-1 text-xs font-bold text-blue-700 dark:text-blue-300"
               >
-                {preset.name}
+                {formatMedicationPreset(preset, settings.language)}
                 <button
                   type="button"
                   onClick={() => removeMedicationPreset(preset.id)}
@@ -1738,7 +1744,7 @@ export const SettingsPage: React.FC = () => {
         <div>
           <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-200/60 dark:bg-slate-800 text-[10px] font-bold text-slate-500">
             <Shield size={12} className="text-teal-600" />
-            Body Signal Mobile v2.2.0 (Encrypted)
+            Body Signal Mobile v2.2.1 (Encrypted)
           </span>
         </div>
       </div>

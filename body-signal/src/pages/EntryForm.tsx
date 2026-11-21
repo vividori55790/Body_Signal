@@ -1117,7 +1117,7 @@ export const EntryFormPage: React.FC = () => {
             </span>
             <div className="flex flex-wrap gap-1.5">
               {settings.medicationPresets.map((preset) => {
-                const formattedName = formatMedicationPreset(preset);
+                const formattedName = formatMedicationPreset(preset, settings.language);
                 return (
                   <button
                     key={preset.id}

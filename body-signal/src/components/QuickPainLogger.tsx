@@ -3,7 +3,7 @@ import { Zap, Check, AlertCircle, Sparkles, HeartPulse, Plus } from 'lucide-reac
 import { useHealth } from '../context/HealthContext';
 import { useSettings } from '../context/SettingsContext';
 import { triggerHaptic } from '../utils/native';
-import { formatMedicationPreset } from '../utils/medication';
+import { formatMedicationPreset, localizeMedicationName } from '../utils/medication';
 import { AddMedicationInline } from './AddMedicationInline';
 import { PainLevelSelector } from './PainLevelSelector';
 
@@ -52,7 +52,9 @@ export const QuickPainLogger: React.FC<{ onSaved?: () => void }> = ({ onSaved })
 
   const availableMeds =
     settings?.medicationPresets && settings.medicationPresets.length > 0
-      ? settings.medicationPresets.map(formatMedicationPreset)
+      ? settings.medicationPresets.map((p) => formatMedicationPreset(p, settings.language))
+      : isEn
+      ? QUICK_MEDS.map((m) => QUICK_MED_EN_MAP[m] || m)
       : QUICK_MEDS;
 
   const activeConditions = conditions.filter((c) => !c.isArchived);
@@ -131,6 +133,8 @@ export const QuickPainLogger: React.FC<{ onSaved?: () => void }> = ({ onSaved })
         ? activeConditions.find((c) => c.id === selectedConditionId)
         : undefined;
 
+    const localizedPart = isEn ? BODY_PART_EN_MAP[selectedPart] || selectedPart : selectedPart;
+
     const payload = {
       isNewCondition: false,
       isUnassigned: !matchingCond,
@@ -139,8 +143,8 @@ export const QuickPainLogger: React.FC<{ onSaved?: () => void }> = ({ onSaved })
         date: new Date().toISOString(),
         intensity: selectedIntensity,
         medication: selectedMed,
-        notes: '⚡ 3초 퀵 기록 (홈 화면)',
-        bodyPartOverride: selectedPart,
+        notes: isEn ? '⚡ 3s Quick Log (Home)' : '⚡ 3초 퀵 기록 (홈 화면)',
+        bodyPartOverride: localizedPart,
       },
     };
 
@@ -261,7 +265,9 @@ export const QuickPainLogger: React.FC<{ onSaved?: () => void }> = ({ onSaved })
         <div className="flex flex-wrap gap-1.5">
           {availableMeds.map((med) => {
             const isSelected = selectedMed === med;
-            const displayMed = isEn ? QUICK_MED_EN_MAP[med] || med : med;
+            const displayMed = isEn
+              ? QUICK_MED_EN_MAP[med] || localizeMedicationName(med, 'en')
+              : localizeMedicationName(med, 'ko');
             return (
               <button
                 key={med}

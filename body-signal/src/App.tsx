@@ -133,6 +133,7 @@ const AppContent: React.FC = () => {
           mode="set"
           required={true}
           title={isEn ? 'Set Mandatory 6-Digit Security PIN' : '초기 6자리 보안 PIN 설정'}
+          confirmTitle={isEn ? 'Confirm Mandatory 6-Digit Security PIN' : '초기 6자리 보안 PIN 확인'}
           onSuccess={async (newPin) => {
             await setupNewPin(newPin);
             const bioReady =
