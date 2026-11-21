@@ -15,6 +15,39 @@ export function toLocalYmd(raw?: string | Date): string {
 }
 
 /**
+ * Normalize a date-only field (onsetDate, diagnosisDate, DiaryEntry.date, startedAt/endedAt)
+ * to strict local YYYY-MM-DD format.
+ */
+export function normalizeLocalYmd(raw?: string, fallbackDate: Date = new Date()): string {
+  const trimmed = (raw || '').trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    return trimmed;
+  }
+  if (trimmed) {
+    const converted = toLocalYmd(trimmed);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(converted)) {
+      return converted;
+    }
+  }
+  return toLocalYmd(fallbackDate);
+}
+
+/**
+ * Normalize an event timestamp (PainLog.date, createdAt, updatedAt, signedAt)
+ * to strict ISO 8601 format. Bare YYYY-MM-DD values anchor at local noon to avoid UTC day-shift.
+ */
+export function normalizeIsoTimestamp(raw?: string, fallbackIso: string = new Date().toISOString()): string {
+  const trimmed = (raw || '').trim();
+  if (!trimmed) return fallbackIso;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    const localNoon = parseLocalDate(trimmed, 12);
+    return localNoon ? localNoon.toISOString() : fallbackIso;
+  }
+  const dt = new Date(trimmed);
+  return isValid(dt) ? dt.toISOString() : fallbackIso;
+}
+
+/**
  * Format a Date or ISO timestamp for `<input type="datetime-local">` using local wall-clock time.
  */
 export function toLocalDateTimeInput(raw?: string | Date): string {
