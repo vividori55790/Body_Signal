@@ -3,7 +3,7 @@ import { Zap, Check, AlertCircle, HeartPulse, Pill, ArrowLeft, ShieldAlert, Plus
 import { useHealth } from '../context/HealthContext';
 import { useSettings } from '../context/SettingsContext';
 import { triggerHaptic } from '../utils/native';
-import { formatMedicationPreset } from '../utils/medication';
+import { formatMedicationPreset, prioritizeConditionMedications } from '../utils/medication';
 import { AddMedicationInline } from './AddMedicationInline';
 import { PainLevelSelector } from './PainLevelSelector';
 
@@ -24,9 +24,10 @@ export const AcutePainMode: React.FC<{ onClose: () => void }> = ({ onClose }) =>
   const partDisplayName = (name: string) =>
     isEn ? ACUTE_BODY_PARTS.find((p) => p.name === name)?.nameEn || name : name;
 
+  const activePresets = prioritizeConditionMedications(settings?.medicationPresets || []);
   const effectiveMeds =
-    settings?.medicationPresets && settings.medicationPresets.length > 0
-      ? settings.medicationPresets.map((p) => formatMedicationPreset(p, resolvedLanguage))
+    activePresets.length > 0
+      ? activePresets.map((p) => formatMedicationPreset(p, resolvedLanguage))
       : isEn
       ? ['Tylenol 500mg', 'Ibuprofen 400mg', 'NSAID', 'Rx Medication', 'Muscle Relaxant']
       : ['타이레놀 500mg', '이부프로펜 400mg', '소염진통제', '병원 처방약', '근육이완제'];

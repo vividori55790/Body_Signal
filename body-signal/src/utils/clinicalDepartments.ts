@@ -197,6 +197,37 @@ export function classifyAnatomicalPart(partName?: string | null): DepartmentType
   return DEPARTMENT_KEYS.INTERNAL_MEDICINE;
 }
 
+export function resolveDiagnosticDepartmentId(
+  departmentText?: string | null,
+  conditionBodyPartIds?: string[]
+): DepartmentId | undefined {
+  const lower = (departmentText || '').trim().toLowerCase();
+  if (lower) {
+    if (lower.includes('신경') || lower.includes('neuro')) return 'neurology';
+    if (lower.includes('소화') || lower.includes('위장') || lower.includes('gastro') || lower === 'gi') {
+      return 'gastroenterology';
+    }
+    if (
+      lower.includes('정형') ||
+      lower.includes('재활') ||
+      lower.includes('통증') ||
+      lower.includes('ortho') ||
+      lower.includes('rehab') ||
+      lower.includes('spine')
+    ) {
+      return 'orthopedics';
+    }
+    if (lower.includes('내과') || lower.includes('가정의학') || lower.includes('internal') || lower.includes('general')) {
+      return 'internal_medicine';
+    }
+  }
+  if (conditionBodyPartIds && conditionBodyPartIds.length > 0) {
+    const mapped = classifyBodyPartIdToDepartmentId(conditionBodyPartIds[0]);
+    if (mapped) return mapped;
+  }
+  return undefined;
+}
+
 /**
  * Department Briefing Group Interface
  */
