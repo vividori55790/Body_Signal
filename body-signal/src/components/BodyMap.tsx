@@ -113,7 +113,7 @@ interface SprayStroke {
   side: 'front' | 'back';
 }
 
-const EN_PART_NAMES: Record<string, string> = {
+export const EN_PART_NAMES: Record<string, string> = {
   '머리/안면': 'Head / Face',
   '목/경추': 'Neck',
   '왼쪽 어깨': 'Left Shoulder',
@@ -143,6 +143,19 @@ const EN_PART_NAMES: Record<string, string> = {
   '왼쪽 종아리/발목': 'Left Calf / Ankle',
   '오른쪽 종아리/발목': 'Right Calf / Ankle',
 };
+
+const KO_PART_NAMES_BY_EN: Record<string, string> = Object.fromEntries(
+  Object.entries(EN_PART_NAMES).map(([ko, en]) => [en.toLowerCase(), ko])
+);
+
+export function localizeBodyPart(part: string, isEn: boolean): string {
+  const trimmed = (part || '').trim();
+  if (!trimmed) return '';
+  if (isEn) {
+    return EN_PART_NAMES[trimmed] || trimmed;
+  }
+  return KO_PART_NAMES_BY_EN[trimmed.toLowerCase()] || trimmed;
+}
 
 export const BodyMap: React.FC<BodyMapProps> = ({
   selectedParts,
@@ -174,21 +187,30 @@ export const BodyMap: React.FC<BodyMapProps> = ({
     return [];
   }, [selectedParts, selectedPart]);
 
-  const isZoneSelected = useCallback(
-    (zone: RegionZone): boolean => {
-      return effectiveSelectedParts.some((part) => {
+  const findMatchingStoredPart = useCallback(
+    (zone: RegionZone): string | undefined => {
+      const enName = (EN_PART_NAMES[zone.name] || '').toLowerCase();
+      return effectiveSelectedParts.find((part) => {
         const trimmed = part.trim();
         if (!trimmed) return false;
+        const lower = trimmed.toLowerCase();
         return (
           trimmed === zone.name ||
           zone.name.includes(trimmed) ||
           trimmed.includes(zone.name) ||
           trimmed === zone.category ||
-          trimmed.split('/')[0] === zone.category
+          trimmed.split('/')[0] === zone.category ||
+          trimmed === zone.id ||
+          (enName && (lower === enName || enName.includes(lower) || lower.includes(enName)))
         );
       });
     },
     [effectiveSelectedParts]
+  );
+
+  const isZoneSelected = useCallback(
+    (zone: RegionZone): boolean => Boolean(findMatchingStoredPart(zone)),
+    [findMatchingStoredPart]
   );
 
   const clientToSvgPoint = (clientX: number, clientY: number): { x: number; y: number } | null => {
@@ -216,22 +238,26 @@ export const BodyMap: React.FC<BodyMapProps> = ({
         return [...prev.slice(-180), { x, y, side: viewSide }];
       });
 
-      if (strokeRecognizedRef.current.has(matched.name)) return;
-      strokeRecognizedRef.current.add(matched.name);
+      if (strokeRecognizedRef.current.has(matched.id)) return;
+      strokeRecognizedRef.current.add(matched.id);
 
-      // Single-tap toggles existing selection off; drag painting only adds unrecognized parts
-      const alreadySelected = effectiveSelectedParts.includes(matched.name);
+      const localizedName = isEn ? EN_PART_NAMES[matched.name] || matched.name : matched.name;
+      const existingStoredPart = findMatchingStoredPart(matched);
+      const alreadySelected = Boolean(existingStoredPart);
+
+      // Single-tap toggles existing selection off (using stored token so alias cleanup works);
+      // drag painting only adds unrecognized parts in the active UI locale.
       if (onTogglePart) {
         if (strokeRecognizedRef.current.size === 1 || !alreadySelected) {
           triggerHaptic();
-          onTogglePart(matched.name);
+          onTogglePart(alreadySelected && existingStoredPart ? existingStoredPart : localizedName);
         }
       } else if (onSelectPart && !alreadySelected) {
         triggerHaptic();
-        onSelectPart(matched.name);
+        onSelectPart(localizedName);
       }
     },
-    [zones, viewSide, effectiveSelectedParts, onTogglePart, onSelectPart]
+    [zones, viewSide, isEn, findMatchingStoredPart, onTogglePart, onSelectPart]
   );
 
   const handlePointerDown = (e: React.PointerEvent<SVGSVGElement>) => {
@@ -269,10 +295,23 @@ export const BodyMap: React.FC<BodyMapProps> = ({
   };
 
   const getZoneIntensity = (zone: RegionZone): number => {
-    let int = intensityMap[zone.name] || intensityMap[zone.category] || intensityMap[zone.id] || 0;
+    const enName = EN_PART_NAMES[zone.name] || '';
+    let int =
+      intensityMap[zone.name] ||
+      (enName ? intensityMap[enName] : 0) ||
+      intensityMap[zone.category] ||
+      intensityMap[zone.id] ||
+      0;
     if (!int) {
       for (const [key, val] of Object.entries(intensityMap)) {
-        if (key.includes(zone.name) || zone.name.includes(key) || key.includes(zone.category)) {
+        const lowerKey = key.toLowerCase();
+        const lowerEn = enName.toLowerCase();
+        if (
+          key.includes(zone.name) ||
+          zone.name.includes(key) ||
+          key.includes(zone.category) ||
+          (lowerEn && (lowerKey.includes(lowerEn) || lowerEn.includes(lowerKey)))
+        ) {
           int = Math.max(int, val);
         }
       }
@@ -453,28 +492,31 @@ export const BodyMap: React.FC<BodyMapProps> = ({
         <div className="w-full text-center space-y-1.5">
           {effectiveSelectedParts.length > 0 ? (
             <div className="flex flex-wrap gap-1.5 justify-center px-2">
-              {effectiveSelectedParts.map((part) => (
-                <span
-                  key={part}
-                  className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-teal-50 dark:bg-teal-950/70 border border-teal-200 dark:border-teal-800 text-xs font-bold text-teal-800 dark:text-teal-200"
-                >
-                  {isEn ? EN_PART_NAMES[part] || part : part}
-                  {onTogglePart && (
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        triggerHaptic();
-                        onTogglePart(part);
-                      }}
-                      className="hover:text-rose-500 ml-0.5 font-bold"
-                      aria-label={isEn ? `Deselect ${EN_PART_NAMES[part] || part}` : `${part} 선택 해제`}
-                    >
-                      ×
-                    </button>
-                  )}
-                </span>
-              ))}
+              {effectiveSelectedParts.map((part) => {
+                const displayPart = localizeBodyPart(part, Boolean(isEn));
+                return (
+                  <span
+                    key={part}
+                    className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-teal-50 dark:bg-teal-950/70 border border-teal-200 dark:border-teal-800 text-xs font-bold text-teal-800 dark:text-teal-200"
+                  >
+                    {displayPart}
+                    {onTogglePart && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          triggerHaptic();
+                          onTogglePart(part);
+                        }}
+                        className="hover:text-rose-500 ml-0.5 font-bold"
+                        aria-label={isEn ? `Deselect ${displayPart}` : `${displayPart} 선택 해제`}
+                      >
+                        ×
+                      </button>
+                    )}
+                  </span>
+                );
+              })}
             </div>
           ) : (
             <p className="text-[11px] font-medium text-slate-400">

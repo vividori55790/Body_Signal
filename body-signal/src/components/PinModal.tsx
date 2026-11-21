@@ -10,7 +10,9 @@ interface PinModalProps {
   onSuccess: (pin: string) => Promise<void> | void;
   onCancel: () => void;
   title?: string;
+  confirmTitle?: string;
   subtitle?: string;
+  confirmSubtitle?: string;
   errorMessage?: string;
   lockoutRemainingMs?: number;
   expectedLength?: number;
@@ -24,7 +26,9 @@ export const PinModal: React.FC<PinModalProps> = ({
   onSuccess,
   onCancel,
   title,
+  confirmTitle,
   subtitle,
+  confirmSubtitle,
   errorMessage,
   lockoutRemainingMs = 0,
   expectedLength = 6,
@@ -125,18 +129,27 @@ export const PinModal: React.FC<PinModalProps> = ({
   };
 
   const displayTitle =
-    title ||
-    (mode === 'unlock'
-      ? isEn
-        ? 'Enter PIN'
-        : 'PIN 입력'
+    mode === 'unlock'
+      ? title || (isEn ? 'Enter PIN' : 'PIN 입력')
       : step === 'enter'
-      ? isEn
-        ? `Enter New ${targetLength}-Digit PIN`
-        : `새 ${targetLength}자리 PIN 입력`
-      : isEn
-      ? 'Confirm PIN (Re-enter)'
-      : 'PIN 확인 (한 번 더 입력)');
+      ? title || (isEn ? `Enter New ${targetLength}-Digit PIN` : `새 ${targetLength}자리 PIN 입력`)
+      : confirmTitle || (isEn ? 'Confirm PIN (Re-enter)' : 'PIN 확인 (한 번 더 입력)');
+
+  const displaySubtitle =
+    mode === 'unlock'
+      ? subtitle ||
+        (isEn
+          ? 'Your records are encrypted and protected on-device'
+          : '데이터를 안전하게 암호화하여 보호합니다')
+      : step === 'enter'
+      ? subtitle ||
+        (isEn
+          ? 'A 6-digit PIN is required to protect your health records'
+          : '보안을 위해 6자리 숫자 PIN을 필수 적용합니다')
+      : confirmSubtitle ||
+        (isEn
+          ? 'Re-enter your 6-digit PIN to confirm'
+          : '설정한 6자리 PIN을 한 번 더 입력해 확인해 주세요');
 
   const errorText =
     localError ||
@@ -171,16 +184,7 @@ export const PinModal: React.FC<PinModalProps> = ({
           <Lock size={30} className="text-emerald-400" />
         </div>
         <h2 id="pin-modal-title" className="text-xl font-bold tracking-wider">{displayTitle}</h2>
-        <p className="mt-1 text-xs text-slate-400">
-          {subtitle ||
-            (mode === 'unlock'
-              ? isEn
-                ? 'Your records are encrypted and protected on-device'
-                : '데이터를 안전하게 암호화하여 보호합니다'
-              : isEn
-              ? 'A 6-digit PIN is required to protect your health records'
-              : '보안을 위해 6자리 숫자 PIN을 필수 적용합니다')}
-        </p>
+        <p className="mt-1 text-xs text-slate-400">{displaySubtitle}</p>
       </div>
 
       {/* Dots Indicator */}

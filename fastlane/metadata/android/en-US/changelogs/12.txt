@@ -1,0 +1,5 @@
+v2.2.1
+- Fixed English localization for built-in medication presets and BodyMap region selections across Settings, EntryForm, Quick Logger, and Acute Mode
+- Adapted First-Launch Welcome Step 1 hero stage and framed BrandLogo backgrounds for Light Theme readability
+- Split initial 6-digit PIN setup vs. confirmation step titles in PinModal
+- Deferred unconnected Brand Emblem switcher to v4 (In Development) under Zero Dead-Control Gate

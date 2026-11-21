@@ -470,7 +470,16 @@ export async function loadUserSettings(): Promise<UserSettings> {
     if (typeof window !== 'undefined' && typeof navigator !== 'undefined' && navigator.language) {
       const detectedLang = navigator.language.toLowerCase().startsWith('ko') ? 'ko' : 'en';
       if (detectedLang === 'en') {
-        return { ...DEFAULT_SETTINGS, language: 'en' };
+        return {
+          ...DEFAULT_SETTINGS,
+          language: 'en',
+          medicationPresets: [
+            { id: '1', name: 'Tylenol 500mg' },
+            { id: '2', name: 'Ibuprofen 400mg' },
+            { id: '3', name: 'NSAID' },
+            { id: '4', name: 'GI Protectant' },
+          ],
+        };
       }
     }
     return DEFAULT_SETTINGS;

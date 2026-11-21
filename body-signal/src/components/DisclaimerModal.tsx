@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import { useSettings } from '../context/SettingsContext';
 import { triggerHaptic } from '../utils/native';
-import BrandLogo, { LOGO_VARIANT_OPTIONS } from './BrandLogo';
+import BrandLogo from './BrandLogo';
 
 interface DisclaimerModalProps {
   mode?: 'gate' | 'view';
@@ -36,7 +36,7 @@ const FirstLaunchWelcome: React.FC<FirstLaunchWelcomeProps> = ({
   onToggleLang,
   onContinue,
 }) => {
-  const { settings, setLogoVariant, setTheme } = useSettings();
+  const { settings, setTheme } = useSettings();
 
   const pillars = [
     {
@@ -70,34 +70,30 @@ const FirstLaunchWelcome: React.FC<FirstLaunchWelcomeProps> = ({
       data-testid="first-launch-welcome"
       className="fixed inset-0 z-[9998] flex flex-col bg-slate-50 dark:bg-[#030909] text-slate-800 dark:text-slate-100"
     >
-      {/* Scrollable luxury showcase + personalization */}
+      {/* Scrollable showcase + theme setup */}
       <div className="flex-1 overflow-y-auto">
-        {/* Luxury Deep Obsidian-Emerald Hero Stage */}
+        {/* Adaptive Light/Dark Emerald Hero Stage */}
         <div
-          className="relative overflow-hidden px-5 pt-5 pb-7 text-white"
-          style={{
-            background:
-              'radial-gradient(circle at 50% 34%, rgba(16, 185, 129, 0.22) 0%, rgba(6, 78, 59, 0.16) 42%, #020808 82%)',
-          }}
+          className="relative overflow-hidden px-5 pt-5 pb-7 border-b border-emerald-100/90 dark:border-emerald-950/60 bg-[radial-gradient(circle_at_50%_30%,rgba(16,185,129,0.16)_0%,rgba(20,184,166,0.08)_46%,#f8fafc_88%)] dark:bg-[radial-gradient(circle_at_50%_34%,rgba(16,185,129,0.22)_0%,rgba(6,78,59,0.16)_42%,#020808_82%)] text-slate-900 dark:text-white"
         >
-          {/* Ambient starlight accents */}
+          {/* Ambient glow accents */}
           <div
             aria-hidden="true"
-            className="pointer-events-none absolute -top-12 left-1/2 -translate-x-1/2 h-56 w-56 rounded-full bg-cyan-400/10 blur-3xl"
+            className="pointer-events-none absolute -top-12 left-1/2 -translate-x-1/2 h-56 w-56 rounded-full bg-emerald-400/15 dark:bg-cyan-400/10 blur-3xl"
           />
 
           <div className="relative max-w-xl mx-auto">
             {/* Top Bar */}
             <div className="flex items-center justify-between">
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-400/25 bg-emerald-950/50 px-3 py-1 text-[11px] font-bold text-emerald-300 backdrop-blur-sm">
-                <Sparkles size={12} className="text-cyan-300" />
-                {isEn ? 'Step 1 of 2 · Welcome' : '1 / 2 · 첫 시작 꾸미기'}
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-300/70 dark:border-emerald-400/25 bg-white/80 dark:bg-emerald-950/50 px-3 py-1 text-[11px] font-bold text-emerald-700 dark:text-emerald-300 backdrop-blur-sm shadow-sm dark:shadow-none">
+                <Sparkles size={12} className="text-teal-600 dark:text-cyan-300" />
+                {isEn ? 'Step 1 of 2 · Welcome' : '1 / 2 · 시작 설정'}
               </span>
 
               <button
                 type="button"
                 onClick={onToggleLang}
-                className="px-3 py-1 rounded-full border border-white/15 bg-white/5 hover:bg-white/10 text-[11px] font-bold text-slate-200 transition-colors"
+                className="px-3 py-1 rounded-full border border-slate-200 dark:border-white/15 bg-white/80 dark:bg-white/5 hover:bg-white dark:hover:bg-white/10 text-[11px] font-bold text-slate-700 dark:text-slate-200 transition-colors shadow-sm dark:shadow-none"
               >
                 {isEn ? '한국어' : 'EN'}
               </button>
@@ -106,23 +102,23 @@ const FirstLaunchWelcome: React.FC<FirstLaunchWelcomeProps> = ({
             {/* Hero Floating Logo */}
             <div className="mt-5 flex flex-col items-center text-center">
               <div className="relative flex items-center justify-center">
-                <div className="absolute h-36 w-36 rounded-full bg-cyan-400/10 blur-2xl" />
-                <div className="absolute h-28 w-28 rounded-full bg-emerald-500/20 blur-xl" />
+                <div className="absolute h-36 w-36 rounded-full bg-teal-400/15 dark:bg-cyan-400/10 blur-2xl" />
+                <div className="absolute h-28 w-28 rounded-full bg-emerald-400/20 dark:bg-emerald-500/20 blur-xl" />
                 <BrandLogo size={116} showFrame={false} className="relative transition-all duration-300" />
               </div>
 
-              <h1 className="mt-4 text-2xl font-black tracking-[0.16em] text-white">
+              <h1 className="mt-4 text-2xl font-black tracking-[0.16em] text-slate-900 dark:text-white">
                 BIGNAL
               </h1>
-              <p className="mt-1.5 text-sm font-bold text-emerald-300/95">
+              <p className="mt-1.5 text-sm font-bold text-teal-700 dark:text-emerald-300/95">
                 {isEn
                   ? 'Your Private Encrypted Health Signal Vault'
                   : '내 몸의 신호를 지키는 온디바이스 암호화 건강 금고'}
               </p>
-              <p className="mt-1 max-w-sm text-[11px] leading-relaxed text-slate-300/80">
+              <p className="mt-1 max-w-sm text-[11px] leading-relaxed text-slate-600 dark:text-slate-300/80">
                 {isEn
-                  ? 'Choose your preferred emblem & display look before reviewing the safety notice.'
-                  : '시작 전 마음에 드는 브랜드 로고와 화면 스타일을 골라 나만의 Bignal을 완성해 보세요.'}
+                  ? 'Choose your display theme before reviewing the safety notice.'
+                  : '시작 전 화면 스타일을 고르고 안전 고지를 확인해 보세요.'}
               </p>
             </div>
           </div>
@@ -130,56 +126,6 @@ const FirstLaunchWelcome: React.FC<FirstLaunchWelcomeProps> = ({
 
         {/* Customization & Value Cards */}
         <div className="px-5 py-5 space-y-4 max-w-xl w-full mx-auto">
-          {/* Logo Variant Picker */}
-          <section className="rounded-2xl border border-slate-200 dark:border-slate-800/90 bg-white dark:bg-slate-900/90 p-4 shadow-sm space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Sparkles size={15} className="text-teal-600 dark:text-emerald-400" />
-                <h2 className="text-xs font-extrabold tracking-tight">
-                  {isEn ? 'Choose Your Brand Emblem' : '대표 로고 스타일 선택'}
-                </h2>
-              </div>
-              <span className="text-[10px] font-semibold text-slate-400">
-                {isEn ? 'Change anytime in Settings' : '설정에서 언제든 변경 가능'}
-              </span>
-            </div>
-
-            <div className="grid grid-cols-2 gap-2.5">
-              {LOGO_VARIANT_OPTIONS.map((opt) => {
-                const selected = settings.logoVariant === opt.id;
-                return (
-                  <button
-                    key={opt.id}
-                    type="button"
-                    data-testid={`logo-option-${opt.id}`}
-                    onClick={() => {
-                      triggerHaptic();
-                      setLogoVariant(opt.id);
-                    }}
-                    className={`group relative flex flex-col items-center rounded-xl border p-2.5 text-center transition-all ${
-                      selected
-                        ? 'border-emerald-500 bg-emerald-50/70 dark:bg-emerald-950/35 ring-2 ring-emerald-500/25 shadow-sm'
-                        : 'border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-950/60 hover:border-slate-300 dark:hover:border-slate-700'
-                    }`}
-                  >
-                    <BrandLogo
-                      variant={opt.id}
-                      size={44}
-                      showFrame={true}
-                      className="transition-transform group-hover:scale-105"
-                    />
-                    <span className="mt-2 text-[11px] font-extrabold text-slate-800 dark:text-slate-100">
-                      {isEn ? opt.labelEn : opt.labelKo}
-                    </span>
-                    <span className="mt-0.5 text-[9px] leading-tight text-slate-500 dark:text-slate-400 line-clamp-2">
-                      {isEn ? opt.descEn : opt.descKo}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          </section>
-
           {/* Theme Quick Selector */}
           <section className="rounded-2xl border border-slate-200 dark:border-slate-800/90 bg-white dark:bg-slate-900/90 px-4 py-3 shadow-sm flex items-center justify-between gap-3">
             <div className="flex items-center gap-2">

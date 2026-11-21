@@ -26,13 +26,15 @@ export const AcutePainMode: React.FC<{ onClose: () => void }> = ({ onClose }) =>
 
   const effectiveMeds =
     settings?.medicationPresets && settings.medicationPresets.length > 0
-      ? settings.medicationPresets.map(formatMedicationPreset)
+      ? settings.medicationPresets.map((p) => formatMedicationPreset(p, settings.language))
+      : isEn
+      ? ['Tylenol 500mg', 'Ibuprofen 400mg', 'NSAID', 'Rx Medication', 'Muscle Relaxant']
       : ['타이레놀 500mg', '이부프로펜 400mg', '소염진통제', '병원 처방약', '근육이완제'];
 
   const [intensity, setIntensity] = useState<number>(7); // Default to acute distress level
   const [selectedPart, setSelectedPart] = useState<string>('허리/요통');
   const [tookMed, setTookMed] = useState<boolean>(false);
-  const [selectedMed, setSelectedMed] = useState<string>(effectiveMeds[0] || '타이레놀 500mg');
+  const [selectedMed, setSelectedMed] = useState<string>(effectiveMeds[0] || (isEn ? 'Tylenol 500mg' : '타이레놀 500mg'));
   const [showAddMed, setShowAddMed] = useState<boolean>(false);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [isSaved, setIsSaved] = useState<boolean>(false);
@@ -71,12 +73,19 @@ export const AcutePainMode: React.FC<{ onClose: () => void }> = ({ onClose }) =>
     triggerHaptic();
     setIsSubmitting(true);
 
-    const matchingCond = activeConditions.find(
-      (c) =>
+    const activePartEn = partDisplayName(selectedPart).toLowerCase();
+    const matchingCond = activeConditions.find((c) => {
+      const bodyLower = c.bodyPart.toLowerCase();
+      const labelLower = c.label.toLowerCase();
+      return (
         c.bodyPart.includes(selectedPart.split('/')[0]) ||
         selectedPart.includes(c.bodyPart) ||
-        c.label.includes(selectedPart.split('/')[0])
-    );
+        c.label.includes(selectedPart.split('/')[0]) ||
+        bodyLower.includes(activePartEn) ||
+        activePartEn.includes(bodyLower) ||
+        labelLower.includes(activePartEn)
+      );
+    });
 
     const payload = {
       isNewCondition: false,
@@ -86,8 +95,8 @@ export const AcutePainMode: React.FC<{ onClose: () => void }> = ({ onClose }) =>
         date: new Date().toISOString(),
         intensity,
         medication: tookMed ? selectedMed : '',
-        notes: '🚨 급성 통증 1초 집중 기록',
-        bodyPartOverride: selectedPart,
+        notes: isEn ? '🚨 1s Acute Pain Log' : '🚨 급성 통증 1초 집중 기록',
+        bodyPartOverride: isEn ? partDisplayName(selectedPart) : selectedPart,
       },
     };
 

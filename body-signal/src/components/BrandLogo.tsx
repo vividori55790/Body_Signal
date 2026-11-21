@@ -67,13 +67,12 @@ export const BrandLogo: React.FC<BrandLogoProps> = ({
   if (showFrame) {
     return (
       <div
-        className={`inline-flex shrink-0 items-center justify-center overflow-hidden border border-emerald-400/25 shadow-sm ${className}`}
+        className={`inline-flex shrink-0 items-center justify-center overflow-hidden border border-emerald-200/80 dark:border-emerald-400/25 bg-gradient-to-br from-emerald-50 via-teal-50 to-white dark:bg-[radial-gradient(circle_at_50%_38%,#072924_0%,#031110_72%,#020808_100%)] shadow-sm ${className}`}
         style={{
           width: size,
           height: size,
           borderRadius: radius,
           padding: pad,
-          background: 'radial-gradient(circle at 50% 38%, #072924 0%, #031110 72%, #020808 100%)',
         }}
         role="img"
         aria-label={alt}
