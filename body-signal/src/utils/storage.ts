@@ -35,7 +35,8 @@ import {
   importKeyFromHex,
 } from './crypto';
 import SecureAuth, { isNativeAndroidSecureAuth } from './secureAuthBridge';
-import { normalizeIsoTimestamp, normalizeLocalYmd, toLocalYmd } from './dateUtils';
+import { normalizeIsoTimestamp, normalizeLocalYmd } from './dateUtils';
+import { isRecord } from './errors';
 
 const DB_NAME = 'bignal_mobile_db';
 const DB_VERSION = 3;
@@ -44,16 +45,25 @@ const LEGACY_STORAGE_KEY = 'bs-data-v2';
 interface BignalDBSchema extends DBSchema {
   app_state: {
     key: string;
-    value: any;
+    value: unknown;
   };
   device_key_store: {
     key: string;
-    value: any;
+    value: string;
   };
   encrypted_media: {
     key: string;
-    value: any;
+    value: EncryptedPackage;
   };
+}
+
+function isEncryptedPackage(value: unknown): value is EncryptedPackage {
+  return (
+    isRecord(value) &&
+    value.v === 1 &&
+    typeof value.salt === 'string' &&
+    typeof value.ct === 'string'
+  );
 }
 
 let dbPromise: Promise<IDBPDatabase<BignalDBSchema>> | null = null;
@@ -117,8 +127,8 @@ export function extractHealthPayloadJson(rawText: string): unknown {
   }
 }
 
-function normalizeConditionCandidate(raw: any): Condition | null {
-  if (!raw || typeof raw !== 'object') return null;
+function normalizeConditionCandidate(raw: unknown): Condition | null {
+  if (!isRecord(raw)) return null;
   const candidate = {
     ...raw,
     id: typeof raw.id === 'string' && raw.id.trim() ? raw.id.trim() : crypto.randomUUID(),
@@ -131,8 +141,8 @@ function normalizeConditionCandidate(raw: any): Condition | null {
   return parsed.success ? parsed.data : null;
 }
 
-function normalizePainLogCandidate(raw: any): PainLog | null {
-  if (!raw || typeof raw !== 'object') return null;
+function normalizePainLogCandidate(raw: unknown): PainLog | null {
+  if (!isRecord(raw)) return null;
   const rawInt = Number(raw.intensity);
   const clampedIntensity = Number.isFinite(rawInt)
     ? Math.max(1, Math.min(10, Math.round(rawInt)))
@@ -165,8 +175,8 @@ function normalizePainLogCandidate(raw: any): PainLog | null {
   return parsed.success ? (parsed.data as PainLog) : null;
 }
 
-function normalizeDiaryCandidate(raw: any): DiaryEntry | null {
-  if (!raw || typeof raw !== 'object') return null;
+function normalizeDiaryCandidate(raw: unknown): DiaryEntry | null {
+  if (!isRecord(raw)) return null;
   const candidate = {
     ...raw,
     date: normalizeLocalYmd(typeof raw.date === 'string' ? raw.date : undefined),
@@ -177,8 +187,8 @@ function normalizeDiaryCandidate(raw: any): DiaryEntry | null {
   return parsed.success ? parsed.data : null;
 }
 
-function normalizeDiagnosticCandidate(raw: any): DiagnosticRecord | null {
-  if (!raw || typeof raw !== 'object') return null;
+function normalizeDiagnosticCandidate(raw: unknown): DiagnosticRecord | null {
+  if (!isRecord(raw)) return null;
   if (typeof raw.diagnosisName !== 'string' || !raw.diagnosisName.trim()) return null;
   const nowIso = new Date().toISOString();
   const rawAmt =
@@ -257,12 +267,12 @@ function enrichPainLogTaxonomy(l: PainLog): { item: PainLog; changed: boolean } 
 
 export function recoverAndNormalizeHealthPayload(raw: unknown): PayloadRecoveryResult {
   const warnings: string[] = [];
-  if (!raw || typeof raw !== 'object') {
+  if (!isRecord(raw)) {
     warnings.push('Empty or non-object payload recovered as empty vault.');
     return { payload: { ...EMPTY_HEALTH_DATA }, recoveredWarnings: warnings, didMigrate: true };
   }
 
-  const obj = raw as Record<string, any>;
+  const obj = raw;
   const rawVersion = typeof obj.schemaVersion === 'number' ? obj.schemaVersion : 1;
   let didMigrate = rawVersion < CURRENT_SCHEMA_VERSION;
 
@@ -418,27 +428,15 @@ export async function migrateLegacyDataIfNeeded(): Promise<HealthDataPayload | n
 
     const parsed = JSON.parse(raw);
     const data = parsed?.data || parsed;
-    if (data && Array.isArray(data.conditions) && Array.isArray(data.logs)) {
-      const payload: HealthDataPayload = {
-        conditions: data.conditions.map((c: any) => ({
-          id: c.id || crypto.randomUUID(),
-          label: c.label || '미지정',
-          bodyPart: c.bodyPart || '미지정',
-          onsetDate: c.onsetDate || toLocalYmd(new Date()),
-          isArchived: Boolean(c.isArchived),
-        })),
-        logs: data.logs.map((l: any) => ({
-          id: l.id || crypto.randomUUID(),
-          conditionId: l.conditionId,
-          date: l.date || new Date().toISOString(),
-          intensity: Number(l.intensity) || 5,
-          medication: l.medication || '',
-          notes: l.notes || '',
-        })),
-        diaryEntries: Array.isArray(data.diaryEntries) ? data.diaryEntries : [],
-        diagnosticRecords: Array.isArray(data.diagnosticRecords) ? data.diagnosticRecords : [],
+    if (isRecord(data) && Array.isArray(data.conditions) && Array.isArray(data.logs)) {
+      const recovered = recoverAndNormalizeHealthPayload({
+        ...data,
         settings: DEFAULT_SETTINGS,
         lastUpdated: new Date().toISOString(),
+      }).payload;
+      const payload: HealthDataPayload = {
+        ...recovered,
+        settings: DEFAULT_SETTINGS,
       };
 
       // Save migrated data to IndexedDB encrypted at rest, then purge plaintext localStorage copy
@@ -474,7 +472,8 @@ export async function getOrCreateDeviceMasterKey(): Promise<CryptoKey> {
   }
   if (!hexKey) {
     try {
-      hexKey = (await db.get('app_state', 'device_master_key')) || null;
+      const legacyKey = await db.get('app_state', 'device_master_key');
+      hexKey = typeof legacyKey === 'string' && legacyKey ? legacyKey : null;
     } catch {}
   }
   if (!hexKey && typeof localStorage !== 'undefined') {
@@ -564,9 +563,10 @@ export async function loadHealthData(pin?: string): Promise<{ data: HealthDataPa
   }
 
   // Check if the record is an EncryptedPackage
-  if (record && typeof record === 'object' && record.v === 1 && record.salt && record.ct) {
-    const pkg = record as EncryptedPackage;
-    const pinMeta = await db.get('app_state', 'pin_meta');
+  if (isEncryptedPackage(record)) {
+    const pkg = record;
+    const pinMetaRaw = await db.get('app_state', 'pin_meta');
+    const pinMeta = isRecord(pinMetaRaw) ? pinMetaRaw : null;
     const isPinActive = Boolean(pinMeta && pinMeta.hash && pinMeta.salt);
 
     if (isPinActive) {
@@ -665,8 +665,8 @@ export async function migratePinRecordsToSessionKey(rawPin: string): Promise<voi
   if (!hasActiveSessionCryptoKey()) return;
   const db = await getDB();
   const record = await db.get('app_state', 'health_data');
-  if (record && typeof record === 'object' && record.v === 1 && record.salt && record.ct) {
-    const pkg = record as EncryptedPackage;
+  if (isEncryptedPackage(record)) {
+    const pkg = record;
     try {
       await decryptWithActiveSessionKey(pkg);
     } catch {
@@ -700,8 +700,8 @@ export async function reEncryptHealthData(newPin?: string, oldPin?: string): Pro
   const record = await db.get('app_state', 'health_data');
   if (record) {
     let payload: HealthDataPayload | null = null;
-    if (record && typeof record === 'object' && record.v === 1 && record.salt && record.ct) {
-      const pkg = record as EncryptedPackage;
+    if (isEncryptedPackage(record)) {
+      const pkg = record;
       if (oldPin === SESSION_KEY_TOKEN) {
         try {
           const json = await decryptWithActiveSessionKey(pkg);
@@ -770,7 +770,8 @@ export interface PinMeta {
 
 export async function getPinMeta(): Promise<PinMeta | null> {
   const db = await getDB();
-  return (await db.get('app_state', 'pin_meta')) || null;
+  const raw = await db.get('app_state', 'pin_meta');
+  return isRecord(raw) ? (raw as unknown as PinMeta) : null;
 }
 
 export async function savePinMeta(meta: PinMeta | null): Promise<void> {
@@ -809,32 +810,34 @@ export async function loadUserSettings(): Promise<UserSettings> {
     return DEFAULT_SETTINGS;
   }
 
-  let rawSettings: any = stored;
-  if (stored && typeof stored === 'object' && stored.v === 1 && stored.salt && stored.ct) {
+  let rawSettings: unknown = stored;
+  if (isEncryptedPackage(stored)) {
     try {
       const deviceKey = await getOrCreateDeviceMasterKey();
-      const decryptedJson = await decryptWithDeviceKey(stored as EncryptedPackage, deviceKey);
+      const decryptedJson = await decryptWithDeviceKey(stored, deviceKey);
       rawSettings = JSON.parse(decryptedJson);
     } catch {
       return DEFAULT_SETTINGS;
     }
   } else {
     // Transparently encrypt legacy plaintext user_settings (which may hold localLlm.apiKey)
+    const fallbackObj = isRecord(rawSettings) ? rawSettings : {};
     try {
       const parsed = normalizeSettingsMedicationPresets(UserSettingsSchema.parse(rawSettings));
       await saveUserSettings(parsed);
       return parsed;
     } catch {
-      const merged = normalizeSettingsMedicationPresets({ ...DEFAULT_SETTINGS, ...rawSettings });
+      const merged = normalizeSettingsMedicationPresets({ ...DEFAULT_SETTINGS, ...fallbackObj });
       await saveUserSettings(merged).catch(() => {});
       return merged;
     }
   }
 
+  const fallbackObj = isRecord(rawSettings) ? rawSettings : {};
   try {
     return normalizeSettingsMedicationPresets(UserSettingsSchema.parse(rawSettings));
   } catch {
-    return normalizeSettingsMedicationPresets({ ...DEFAULT_SETTINGS, ...rawSettings });
+    return normalizeSettingsMedicationPresets({ ...DEFAULT_SETTINGS, ...fallbackObj });
   }
 }
 

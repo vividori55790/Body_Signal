@@ -214,7 +214,7 @@ export const HealthProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [storageReport, setStorageReport] = useState<StoragePersistenceReport | null>(null);
 
   // Debounce timer for diary auto-saving and live refs to avoid stale closures / race overwrites
-  const diaryDebounceTimer = useRef<any>(null);
+  const diaryDebounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const conditionsRef = useRef<Condition[]>([]);
   const logsRef = useRef<PainLog[]>([]);
   const diaryEntriesRef = useRef<DiaryEntry[]>([]);

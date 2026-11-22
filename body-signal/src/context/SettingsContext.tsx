@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo, useRef } from 'react';
 import {
   UserSettings,
   MedicationPreset,
@@ -67,6 +67,8 @@ export const SettingsContext = createContext<SettingsContextValue | null>(null);
 
 export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [settings, setSettings] = useState<UserSettings>(DEFAULT_SETTINGS);
+  const settingsRef = useRef<UserSettings>(DEFAULT_SETTINGS);
+  const saveQueueRef = useRef<Promise<void>>(Promise.resolve());
   const [isSettingsLoaded, setIsSettingsLoaded] = useState(false);
   const [systemLocaleTick, setSystemLocaleTick] = useState(0);
   const [localePackVersion, setLocalePackVersion] = useState(0);
@@ -97,6 +99,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   useEffect(() => {
     loadUserSettings()
       .then((loaded) => {
+        settingsRef.current = loaded;
         setSettings(loaded);
         applyTheme(loaded.theme, loaded.themeAccent);
         setHapticsEnabled(loaded.hapticsEnabled);
@@ -174,13 +177,16 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   }, [settings.theme]);
 
   const updateAndSave = async (updater: (prev: UserSettings) => UserSettings) => {
-    const next = updater(settings);
+    const next = updater(settingsRef.current);
+    settingsRef.current = next;
     setSettings(next);
     setHapticsEnabled(next.hapticsEnabled);
-    await saveUserSettings(next);
     if (next.hapticsEnabled) {
       triggerHaptic();
     }
+    const task = saveQueueRef.current.then(() => saveUserSettings(next));
+    saveQueueRef.current = task.catch(() => {});
+    await task;
   };
 
   const t = (key: TranslationKey, params?: Record<string, string | number>): string => {
@@ -194,12 +200,12 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   const setTheme = async (theme: 'light' | 'dark' | 'system') => {
-    applyTheme(theme, settings.themeAccent);
+    applyTheme(theme, settingsRef.current.themeAccent);
     await updateAndSave((prev) => ({ ...prev, theme }));
   };
 
   const setThemeAccent = async (themeAccent: ThemeAccentId) => {
-    applyTheme(settings.theme, themeAccent);
+    applyTheme(settingsRef.current.theme, themeAccent);
     await updateAndSave((prev) => ({ ...prev, themeAccent }));
   };
 
@@ -409,6 +415,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const reloadSettings = async (): Promise<UserSettings> => {
     const loaded = await loadUserSettings();
+    settingsRef.current = loaded;
     setSettings(loaded);
     applyTheme(loaded.theme, loaded.themeAccent);
     setHapticsEnabled(loaded.hapticsEnabled);

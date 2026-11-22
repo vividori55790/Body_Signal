@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Zap, Check, AlertCircle, Sparkles, HeartPulse, Plus } from 'lucide-react';
+import { Zap, Check, Plus } from 'lucide-react';
 import { useHealth } from '../context/HealthContext';
 import { useSettings } from '../context/SettingsContext';
 import { triggerHaptic } from '../utils/native';
@@ -98,11 +98,6 @@ export const QuickPainLogger: React.FC<{ onSaved?: () => void }> = ({ onSaved })
     }
   }, [activeConditions.length]);
 
-  const handleSelectIntensity = (num: number) => {
-    triggerHaptic();
-    setSelectedIntensity(num);
-  };
-
   const handleSelectPart = (part: string) => {
     triggerHaptic();
     setSelectedPart(part);
@@ -185,22 +180,6 @@ export const QuickPainLogger: React.FC<{ onSaved?: () => void }> = ({ onSaved })
         onSaved?.();
       }, 1400);
     }
-  };
-
-  const getNrsButtonClass = (num: number, isSelected: boolean) => {
-    if (num <= 3) {
-      return isSelected
-        ? 'bg-emerald-500 text-white scale-110 shadow-md ring-2 ring-emerald-400 z-10 font-black'
-        : 'bg-emerald-50/70 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 text-emerald-800 dark:text-emerald-300 active:scale-95';
-    }
-    if (num <= 6) {
-      return isSelected
-        ? 'bg-amber-500 text-white scale-110 shadow-md ring-2 ring-amber-400 z-10 font-black'
-        : 'bg-amber-50/70 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 text-amber-800 dark:text-amber-300 active:scale-95';
-    }
-    return isSelected
-      ? 'bg-rose-600 text-white scale-110 shadow-md ring-2 ring-rose-400 z-10 font-black'
-      : 'bg-rose-50/70 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800/60 text-rose-800 dark:text-rose-300 active:scale-95';
   };
 
   return (

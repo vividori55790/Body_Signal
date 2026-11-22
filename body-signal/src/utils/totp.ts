@@ -16,6 +16,7 @@ import {
   EncryptedPackage,
 } from './crypto';
 import { getDB, getOrCreateDeviceMasterKey } from './storage';
+import { isRecord } from './errors';
 
 const BASE32_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
 const TOTP_MAX_ATTEMPTS = 5;
@@ -160,7 +161,8 @@ export async function getTotpMeta(): Promise<TotpMeta | null> {
     if (typeof indexedDB !== 'undefined') {
       const db = await getDB();
       if (db.objectStoreNames.contains('app_state')) {
-        return (await db.get('app_state', 'totp_meta')) || null;
+        const raw = await db.get('app_state', 'totp_meta');
+        return isRecord(raw) ? (raw as unknown as TotpMeta) : null;
       }
     }
   } catch {}

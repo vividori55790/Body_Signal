@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect, useContext, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { Lock, Delete, X, AlertCircle } from 'lucide-react';
 import { triggerHaptic } from '../utils/native';
@@ -43,6 +43,14 @@ export const PinModal: React.FC<PinModalProps> = ({
   const [localError, setLocalError] = useState('');
   const targetLength = mode === 'unlock' ? Math.max(4, Math.min(16, expectedLength)) : 6;
 
+  const handleClose = useCallback(() => {
+    setPin('');
+    setFirstPin('');
+    setStep('enter');
+    setLocalError('');
+    onCancel();
+  }, [onCancel]);
+
   // Lock background scrolling and handle Escape key while modal is open
   useEffect(() => {
     if (!isOpen) return;
@@ -64,7 +72,7 @@ export const PinModal: React.FC<PinModalProps> = ({
       document.body.style.touchAction = originalTouchAction;
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [isOpen, mode, required, cancellable]);
+  }, [isOpen, mode, required, cancellable, handleClose]);
 
   // Reset internal state when opened
   useEffect(() => {
@@ -118,14 +126,6 @@ export const PinModal: React.FC<PinModalProps> = ({
     triggerHaptic();
     setPin((prev) => prev.slice(0, -1));
     setLocalError('');
-  };
-
-  const handleClose = () => {
-    setPin('');
-    setFirstPin('');
-    setStep('enter');
-    setLocalError('');
-    onCancel();
   };
 
   const displayTitle =

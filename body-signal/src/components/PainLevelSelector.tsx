@@ -33,7 +33,9 @@ export const PainLevelSelector: React.FC<PainLevelSelectorProps> = ({
   const startYRef = useRef(0);
   const sliderActivatedRef = useRef(false);
   const valueRef = useRef(value);
-  valueRef.current = value;
+  useEffect(() => {
+    valueRef.current = value;
+  }, [value]);
 
   const isDarkVariant = variant === 'dark';
 

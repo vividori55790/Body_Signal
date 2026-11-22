@@ -27,9 +27,11 @@ export const tier1Tests = [
     name: 'Verifies 10 NRS touch targets (1-10) are available for one-hand selection',
     run: async () => {
       const acuteComponent = fs.readFileSync(path.join(SRC_DIR, 'components/AcutePainMode.tsx'), 'utf8');
-      // NRS grid definition 1..10
-      assert.match(acuteComponent, /\[1,\s*2,\s*3,\s*4,\s*5,\s*6,\s*7,\s*8,\s*9,\s*10\]/);
-      assert.match(acuteComponent, /handleSelectIntensity/);
+      const painSelector = fs.readFileSync(path.join(SRC_DIR, 'components/PainLevelSelector.tsx'), 'utf8');
+      assert.match(acuteComponent, /<PainLevelSelector[\s\S]*onChange=\{setIntensity\}/);
+      // NRS grid definition 1..10 inside PainLevelSelector
+      assert.match(painSelector, /Array\.from\(\s*\{\s*length:\s*10\s*\},\s*\(_,\s*i\)\s*=>\s*i\s*\+\s*1\s*\)/);
+      assert.match(painSelector, /onClick=\{\(\)\s*=>\s*handleButtonClick\(num\)\}/);
     },
   },
   {

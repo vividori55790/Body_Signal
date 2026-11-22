@@ -586,7 +586,7 @@ export const tier2Tests = [
     name: 'Malformed endpoint URL string handled without unhandled exception',
     run: async () => {
       const localLlmSrc = fs.readFileSync(path.join(SRC_DIR, 'utils/localLlm.ts'), 'utf8');
-      assert.match(localLlmSrc, /try\s*\{[\s\S]*catch\s*\(err:\s*any\)\s*\{/);
+      assert.match(localLlmSrc, /try\s*\{[\s\S]*catch\s*\(err:\s*(?:unknown|any)\)\s*\{/);
     },
   },
   {
@@ -604,7 +604,7 @@ export const tier2Tests = [
     name: 'AbortError handled specifically with connection timeout message',
     run: async () => {
       const localLlmSrc = fs.readFileSync(path.join(SRC_DIR, 'utils/localLlm.ts'), 'utf8');
-      assert.match(localLlmSrc, /if\s*\(err\.name\s*===\s*'AbortError'\)/);
+      assert.match(localLlmSrc, /if\s*\((?:err instanceof Error && )?err\.name\s*===\s*'AbortError'\)/);
       assert.match(localLlmSrc, /연결 시간 초과/);
     },
   },
@@ -1006,10 +1006,12 @@ export const tier2Tests = [
       const gradleSrc = fs.readFileSync(path.join(ANDROID_DIR, 'app/build.gradle'), 'utf8');
       const code = gradleSrc.match(/\bversionCode\s+(\d+)/)?.[1];
       for (const locale of ['en-US', 'ko-KR']) {
-        const cl = fs.readFileSync(
-          path.join(REPO_ROOT, `fastlane/metadata/android/${locale}/changelogs/${code}.txt`),
-          'utf8'
-        );
+        const cl = fs
+          .readFileSync(
+            path.join(REPO_ROOT, `fastlane/metadata/android/${locale}/changelogs/${code}.txt`),
+            'utf8'
+          )
+          .replace(/\r\n/g, '\n');
         assert.ok(cl.length > 0 && cl.length <= 500, `${locale} changelog exceeds 500 char limit (${cl.length})`);
       }
     },

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Fingerprint, KeyRound, ShieldAlert, Trash2, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
