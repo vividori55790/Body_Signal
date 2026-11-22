@@ -6,19 +6,12 @@ import {
   Stethoscope,
   Copy,
   Check,
-  TrendingDown,
-  TrendingUp,
-  Minus,
-  Pill,
   ShieldCheck,
   Printer,
-  Calendar,
-  Activity,
   AlertTriangle,
   Bot,
   Sparkles,
   FileText,
-  Clock,
   RefreshCw,
   Send,
   MessageSquare,
@@ -32,8 +25,6 @@ import { format } from 'date-fns';
 import { triggerHaptic } from '../utils/native';
 import {
   categorizeByDepartment,
-  DEPARTMENT_KEYS,
-  DepartmentType,
   DepartmentBriefingGroup,
   generateDepartmentSummaryText,
 } from '../utils/clinicalDepartments';
@@ -41,10 +32,10 @@ import {
   generateClinicalAiAnalysisStream,
   askClinicalQuestionStream,
   ChatMessage,
-  LocalLlmOfflineError,
   testLocalLlmConnection,
   isOnDeviceLlmEndpoint,
 } from '../utils/localLlm';
+import { getErrorMessage } from '../utils/errors';
 
 export const ClinicalBriefingPage: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
   const navigate = useNavigate();
@@ -129,13 +120,14 @@ export const ClinicalBriefingPage: React.FC<{ embedded?: boolean }> = ({ embedde
         personaToUse
       );
       triggerHaptic();
-    } catch (err: any) {
+    } catch (err: unknown) {
       setAiAnalysis(null);
-      const message =
-        err?.message ||
-        (isEn
+      const message = getErrorMessage(
+        err,
+        isEn
           ? '⚠️ Local AI is offline. Please start your on-device Ollama server.'
-          : '⚠️ 로컬 AI 미연결 상태입니다. Ollama 서버를 실행해 주세요.');
+          : '⚠️ 로컬 AI 미연결 상태입니다. Ollama 서버를 실행해 주세요.'
+      );
       setAiOfflineError(message);
     } finally {
       setIsGeneratingAi(false);
@@ -161,9 +153,10 @@ export const ClinicalBriefingPage: React.FC<{ embedded?: boolean }> = ({ embedde
           isEn ? `⚠️ Unable to connect: ${res.message}` : `⚠️ 연결 불가: ${res.message}`
         );
       }
-    } catch (e: any) {
+    } catch (e: unknown) {
+      const msg = getErrorMessage(e, 'Unknown error');
       setConnectionStatus(
-        isEn ? `⚠️ Connection error: ${e.message}` : `⚠️ 연결 테스트 오류: ${e.message}`
+        isEn ? `⚠️ Connection error: ${msg}` : `⚠️ 연결 테스트 오류: ${msg}`
       );
     } finally {
       setIsTestingConnection(false);
@@ -214,14 +207,14 @@ export const ClinicalBriefingPage: React.FC<{ embedded?: boolean }> = ({ embedde
         }
       );
       triggerHaptic();
-    } catch (err: any) {
+    } catch (err: unknown) {
       setQaMessages((prev) => {
         const next = [...prev];
         const lastIdx = next.length - 1;
         if (lastIdx >= 0 && next[lastIdx].role === 'assistant') {
           next[lastIdx] = {
             ...next[lastIdx],
-            content: `⚠️ [로컬 AI 미연결 상태] ${err?.message || '로컬 AI 서버에 연결할 수 없습니다. Ollama 서버를 실행한 후 다시 시도해 주세요.'}`,
+            content: `⚠️ [로컬 AI 미연결 상태] ${getErrorMessage(err, '로컬 AI 서버에 연결할 수 없습니다. Ollama 서버를 실행한 후 다시 시도해 주세요.')}`,
           };
         }
         return next;

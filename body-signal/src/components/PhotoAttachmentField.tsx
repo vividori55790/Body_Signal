@@ -3,6 +3,7 @@ import { Camera, Image as ImageIcon, Loader2, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useSettings } from '../context/SettingsContext';
 import { compressAndStripExif } from '../utils/mediaStorage';
+import { getErrorMessage } from '../utils/errors';
 
 const PHOTO_PROCESS_BATCH_SIZE = 4;
 
@@ -66,8 +67,8 @@ export const PhotoAttachmentField: React.FC<PhotoAttachmentFieldProps> = ({
             : `최대 ${maxPhotos}장까지 첨부 가능해 앞 ${processed.length}장만 추가되었습니다.`
         );
       }
-    } catch (err: any) {
-      onError?.(err?.message || (isEn ? 'Failed to process photos.' : '사진을 처리할 수 없습니다.'));
+    } catch (err: unknown) {
+      onError?.(getErrorMessage(err, isEn ? 'Failed to process photos.' : '사진을 처리할 수 없습니다.'));
     } finally {
       setProgress(null);
       e.target.value = '';

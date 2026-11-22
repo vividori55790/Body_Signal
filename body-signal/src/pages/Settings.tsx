@@ -4,6 +4,7 @@ import { useSearchParams } from 'react-router-dom';
 import { useSettings } from '../context/SettingsContext';
 import { useHealth } from '../context/HealthContext';
 import { useAuth } from '../context/AuthContext';
+import { getErrorMessage } from '../utils/errors';
 import {
   Shield,
   ShieldCheck,
@@ -297,8 +298,8 @@ export const SettingsPage: React.FC = () => {
       URL.revokeObjectURL(url);
       resetBackupModal();
       showToast(isEn ? 'AES-256 encrypted backup downloaded.' : 'AES-256 암호화 백업이 다운로드되었습니다.');
-    } catch (err: any) {
-      setBackupError(err?.message || (isEn ? 'Failed to create encrypted backup.' : '암호화 백업 생성에 실패했습니다.'));
+    } catch (err: unknown) {
+      setBackupError(getErrorMessage(err, isEn ? 'Failed to create encrypted backup.' : '암호화 백업 생성에 실패했습니다.'));
     }
   };
 
@@ -309,7 +310,7 @@ export const SettingsPage: React.FC = () => {
 
   const confirmExportCsv = () => {
     triggerHaptic();
-    const escapeCsv = (v: any) => {
+    const escapeCsv = (v: unknown) => {
       const raw = String(v ?? '');
       // Neutralize spreadsheet formula injection (=, +, -, @, tab, CR)
       const safe = /^[=+\-@\t\r]/.test(raw) ? `'${raw}` : raw;
@@ -385,8 +386,8 @@ export const SettingsPage: React.FC = () => {
       } else {
         throw new Error(isEn ? 'Invalid backup file format.' : '올바른 백업 파일 형식이 아닙니다.');
       }
-    } catch (err: any) {
-      showToast(err.message || (isEn ? 'Could not read backup file.' : '백업 파일을 읽을 수 없습니다.'));
+    } catch (err: unknown) {
+      showToast(getErrorMessage(err, isEn ? 'Could not read backup file.' : '백업 파일을 읽을 수 없습니다.'));
     } finally {
       e.target.value = '';
     }
@@ -420,8 +421,8 @@ export const SettingsPage: React.FC = () => {
       });
       setBackupError('');
       setBackupModalMode('importPreview');
-    } catch (err: any) {
-      setBackupError(err?.message || (isEn ? 'Incorrect backup passphrase.' : '백업 암호가 일치하지 않습니다.'));
+    } catch (err: unknown) {
+      setBackupError(getErrorMessage(err, isEn ? 'Incorrect backup passphrase.' : '백업 암호가 일치하지 않습니다.'));
     }
   };
 
@@ -433,8 +434,8 @@ export const SettingsPage: React.FC = () => {
       await reloadSettings();
       resetBackupModal();
       showToast(isEn ? 'Backup restored successfully.' : '백업이 복원되었습니다.');
-    } catch (err: any) {
-      setBackupError(err?.message || (isEn ? 'Failed to restore backup.' : '백업 복원에 실패했습니다.'));
+    } catch (err: unknown) {
+      setBackupError(getErrorMessage(err, isEn ? 'Failed to restore backup.' : '백업 복원에 실패했습니다.'));
     }
   };
 

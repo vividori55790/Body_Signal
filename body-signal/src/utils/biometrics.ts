@@ -8,6 +8,7 @@ import { getOrCreateDeviceMasterKey } from './storage';
 import { encryptWithDeviceKey, decryptWithDeviceKey, EncryptedPackage } from './crypto';
 import { verifyAppPin } from './pin';
 import SecureAuth, { isNativeAndroidSecureAuth } from './secureAuthBridge';
+import { getErrorMessage } from './errors';
 
 export interface BiometricMeta {
   enabled: boolean;
@@ -243,9 +244,12 @@ export async function enrollBiometrics(
         }
         credentialId = bufferToBase64(credential.rawId);
         authType = 'webauthn';
-      } catch (authErr: any) {
+      } catch (authErr: unknown) {
         // Fail-closed: never fall back to mock authentication in production
-        console.warn('WebAuthn biometric enrollment unavailable or cancelled:', authErr?.name || authErr);
+        console.warn(
+          'WebAuthn biometric enrollment unavailable or cancelled:',
+          authErr instanceof Error ? authErr.name : getErrorMessage(authErr, 'Unknown error')
+        );
         return false;
       }
     }
@@ -381,9 +385,12 @@ export async function authenticateWithBiometrics(options?: {
         if (!assertion) {
           return { success: false };
         }
-      } catch (promptErr: any) {
+      } catch (promptErr: unknown) {
         // User cancelled prompt or fingerprint mismatch
-        console.info('Biometric prompt cancelled or failed:', promptErr.name);
+        console.info(
+          'Biometric prompt cancelled or failed:',
+          promptErr instanceof Error ? promptErr.name : getErrorMessage(promptErr, 'Cancelled')
+        );
         return { success: false };
       }
     }

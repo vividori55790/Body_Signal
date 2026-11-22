@@ -23,6 +23,7 @@ import { useAuthorizedDelete } from '../components/DeleteAuthModal';
 import { useHealth } from '../context/HealthContext';
 import { useAuth } from '../context/AuthContext';
 import { useSettings } from '../context/SettingsContext';
+import { getErrorMessage } from '../utils/errors';
 import { DiagnosticRecord } from '../types/health';
 import { calculateInsuranceClaimStatus } from '../utils/insurance';
 import {
@@ -271,11 +272,11 @@ export const DiagnosticsPage: React.FC<{ embedded?: boolean }> = ({ embedded = f
       });
 
       resetForm();
-    } catch (err: any) {
+    } catch (err: unknown) {
       if (createdPhotoIds.length) {
         await Promise.all(createdPhotoIds.map((pid) => deleteEncryptedPhoto(pid).catch(() => {})));
       }
-      setFormError(err?.message || (isEn ? 'Failed to save diagnostic record.' : '진단 기록 저장에 실패했습니다.'));
+      setFormError(getErrorMessage(err, isEn ? 'Failed to save diagnostic record.' : '진단 기록 저장에 실패했습니다.'));
     } finally {
       setIsSaving(false);
     }

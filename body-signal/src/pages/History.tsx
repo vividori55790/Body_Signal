@@ -62,7 +62,7 @@ const HistoryItem: React.FC<HistoryItemProps> = ({
   onUpdate,
 }) => {
   const navigate = useNavigate();
-  const { settings, resolvedLanguage, t } = useSettings();
+  const { resolvedLanguage, t } = useSettings();
   const isEn = resolvedLanguage === 'en';
   const [expanded, setExpanded] = useState(false);
   const [editing, setEditing] = useState(false);

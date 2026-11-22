@@ -1,10 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   ArrowLeft,
-  Clock,
   Save,
-  Sparkles,
-  Plus,
   AlertCircle,
   AlertTriangle,
   ShieldAlert,
@@ -16,6 +13,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useHealth } from '../context/HealthContext';
 import { useAuth } from '../context/AuthContext';
 import { useSettings } from '../context/SettingsContext';
+import { getErrorMessage } from '../utils/errors';
 import { UNASSIGNED_CONDITION_ID, MedicationPreset } from '../types/health';
 import BodyMap, { parseMultiRegionParts, formatMultiRegionParts } from '../components/BodyMap';
 import DefaultClosedSuggestion from '../components/DefaultClosedSuggestion';
@@ -240,11 +238,6 @@ export const EntryFormPage: React.FC = () => {
       d.setDate(d.getDate() - 1);
     }
     setDate(toLocalDateTimeInput(d));
-  };
-
-  const handleIntensityClick = (num: number) => {
-    triggerHaptic();
-    setIntensity(num);
   };
 
   const handleToggleQuality = (q: string) => {
@@ -521,29 +514,16 @@ export const EntryFormPage: React.FC = () => {
           isEn ? 'Failed to save record. Please check your inputs.' : '기록 저장에 실패했습니다. 입력값을 확인해 주세요.'
         );
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       if (createdPhotoIds.length) {
         await Promise.all(createdPhotoIds.map((pid) => deleteEncryptedPhoto(pid).catch(() => {})));
       }
       setError(
-        err?.message || (isEn ? 'Failed to save record. Please try again.' : '기록 저장 중 오류가 발생했습니다.')
+        getErrorMessage(err, isEn ? 'Failed to save record. Please try again.' : '기록 저장 중 오류가 발생했습니다.')
       );
     } finally {
       setIsSubmitting(false);
     }
-  };
-
-  const getIntensityColor = (num: number) => {
-    if (num >= 8) return 'bg-rose-500 text-white border-rose-600 shadow-rose-200';
-    if (num >= 5) return 'bg-amber-500 text-white border-amber-600 shadow-amber-200';
-    return 'bg-emerald-500 text-white border-emerald-600 shadow-emerald-200';
-  };
-
-  const getIntensityDescription = (num: number) => {
-    if (num <= 3) return '1~3: 가벼운 통증 (일상생활 가능, 수면 지장 없음)';
-    if (num <= 6) return '4~6: 중등도 통증 (일상생활에 지장 발생, 진통제 필요)';
-    if (num <= 8) return '7~8: 매우 심한 통증 (거동 힘들고 집중 불가능)';
-    return '9~10: 극심하여 참을 수 없음 (즉시 응급 진료 요망)';
   };
 
   return (

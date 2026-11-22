@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Zap, Check, AlertCircle, HeartPulse, Pill, ArrowLeft, ShieldAlert, Plus } from 'lucide-react';
+import { Zap, Check, Pill, ArrowLeft, Plus } from 'lucide-react';
 import { useHealth } from '../context/HealthContext';
 import { useSettings } from '../context/SettingsContext';
 import { triggerHaptic } from '../utils/native';
@@ -57,12 +57,6 @@ export const AcutePainMode: React.FC<{ onClose: () => void }> = ({ onClose }) =>
       }
     }
   }, [activeConditions.length]);
-
-  // 10 NRS touch targets: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
-  const handleSelectIntensity = (num: number) => {
-    triggerHaptic();
-    setIntensity(num);
-  };
 
   const handleSelectPart = (partName: string) => {
     triggerHaptic();
@@ -130,26 +124,6 @@ export const AcutePainMode: React.FC<{ onClose: () => void }> = ({ onClose }) =>
       </div>
     );
   }
-
-  // Visual distinction colors: Green (1-3), Yellow/Amber (4-6), Red/Rose (7-10)
-  const getNrsButtonStyle = (num: number, isSelected: boolean) => {
-    if (num <= 3) {
-      // Green 1-3
-      return isSelected
-        ? 'bg-emerald-500 text-white scale-105 shadow-xl shadow-emerald-500/50 ring-4 ring-emerald-300 font-black'
-        : 'bg-emerald-950/70 text-emerald-300 border-2 border-emerald-700/60 hover:bg-emerald-900/80 active:scale-95 font-extrabold';
-    }
-    if (num <= 6) {
-      // Yellow 4-6
-      return isSelected
-        ? 'bg-amber-500 text-white scale-105 shadow-xl shadow-amber-500/50 ring-4 ring-amber-300 font-black'
-        : 'bg-amber-950/70 text-amber-300 border-2 border-amber-700/60 hover:bg-amber-900/80 active:scale-95 font-extrabold';
-    }
-    // Red 7-10
-    return isSelected
-      ? 'bg-rose-600 text-white scale-105 shadow-xl shadow-rose-600/50 ring-4 ring-rose-400 font-black'
-      : 'bg-rose-950/70 text-rose-300 border-2 border-rose-700/60 hover:bg-rose-900/80 active:scale-95 font-extrabold';
-  };
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-slate-900 text-white overflow-y-auto animate-in fade-in">

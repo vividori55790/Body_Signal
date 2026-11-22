@@ -3,6 +3,7 @@
  * Uses PBKDF2 (100,000 iterations) with SHA-256 for key derivation.
  * Includes SHA-256 Medical Integrity Signatures & Encrypted Passphrase Backups.
  */
+import { isRecord } from './errors';
 
 export const DEFAULT_PBKDF2_ITERATIONS = 100_000;
 const PBKDF2_ITERATIONS = DEFAULT_PBKDF2_ITERATIONS;
@@ -258,7 +259,7 @@ export async function decryptWithPin(pkg: EncryptedPackage, pin: string): Promis
       ciphertextBuffer
     );
     return new TextDecoder().decode(decryptedBuffer);
-  } catch (err) {
+  } catch {
     throw new Error('비밀번호/PIN이 일치하지 않거나 데이터가 손상되었습니다.');
   }
 }
@@ -408,11 +409,12 @@ export async function decryptBackupWithPassphrase(
   encryptedFileContent: string,
   passphrase: string
 ): Promise<string> {
-  let parsedFile: any;
+  let parsedFile: unknown;
   let pkg: EncryptedPackage;
   try {
     parsedFile = JSON.parse(encryptedFileContent);
-    pkg = parsedFile.data || parsedFile;
+    const maybeWrapped = isRecord(parsedFile) && parsedFile.data !== undefined ? parsedFile.data : parsedFile;
+    pkg = maybeWrapped as EncryptedPackage;
   } catch {
     throw new Error('올바른 백업 파일 형식이 아닙니다.');
   }
@@ -431,7 +433,8 @@ export async function decryptBackupWithPassphrase(
 
   // Reassemble chunked encrypted_media when present in bignal-encrypted-backup-v2
   if (
-    parsedFile?.format === 'bignal-encrypted-backup-v2' &&
+    isRecord(parsedFile) &&
+    parsedFile.format === 'bignal-encrypted-backup-v2' &&
     Array.isArray(parsedFile.mediaChunks) &&
     parsedFile.mediaChunks.length > 0
   ) {
@@ -701,6 +704,23 @@ export interface AuditChainVerificationResult {
  * 2) Each revision's pre-edit snapshot (if signed) matches computeRecordSignature
  * 3) Adjacent records sorted in chain order (chainIndex asc / signedAt asc) link via prevSignature -> genesis signature
  */
+export interface AuditChainSnapshot {
+  conditionId?: string;
+  date?: string;
+  intensity?: number;
+  medication?: string;
+  postMedIntensity?: number;
+  notes?: string;
+  radiation?: string;
+  painQuality?: string[];
+  triggers?: string[];
+  reliefFactors?: string[];
+  redFlags?: string[];
+  signature?: string;
+  prevSignature?: string;
+  signedAt?: string;
+}
+
 export async function verifyAuditChain(
   records: Array<{
     id: string;
@@ -722,7 +742,7 @@ export async function verifyAuditChain(
     revisions?: Array<{
       editedAt: string;
       reason?: string;
-      previous: Record<string, any>;
+      previous: AuditChainSnapshot;
     }>;
   }>
 ): Promise<AuditChainVerificationResult> {

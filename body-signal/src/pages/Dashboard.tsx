@@ -5,7 +5,6 @@ import {
   ChevronDown,
   ChevronUp,
   CheckCircle,
-  Clock,
   Pill,
   Calendar,
   // Zap,
@@ -285,6 +284,14 @@ export const DashboardPage: React.FC = () => {
   const [dismissedMedId, setDismissedMedId] = useState<string | null>(null);
   const [medRatingSaved, setMedRatingSaved] = useState<boolean>(false);
   const [selectedSideEffects, setSelectedSideEffects] = useState<string[]>([]);
+  const [nowMs, setNowMs] = useState<number>(() => Date.now());
+
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      setNowMs(Date.now());
+    }, 60_000);
+    return () => window.clearInterval(interval);
+  }, []);
 
   const activeConditions = conditions.filter((c) => !c.isArchived);
   const archivedConditions = conditions.filter((c) => c.isArchived);
@@ -299,7 +306,7 @@ export const DashboardPage: React.FC = () => {
     [unassignedLogs]
   );
 
-  const recentLogs = logs.filter((l) => Date.now() - new Date(l.date).getTime() <= 7 * 24 * 60 * 60 * 1000);
+  const recentLogs = logs.filter((l) => nowMs - new Date(l.date).getTime() <= 7 * 24 * 60 * 60 * 1000);
   const weeklyAvg = recentLogs.length
     ? (recentLogs.reduce((a, b) => a + b.intensity, 0) / recentLogs.length).toFixed(1)
     : '0';
@@ -308,7 +315,7 @@ export const DashboardPage: React.FC = () => {
     if (!l.medication || l.medication.trim().length === 0) return false;
     if (l.postMedIntensity !== undefined && l.postMedIntensity !== null) return false;
     if (dismissedMedId === l.id) return false;
-    const diffHours = (Date.now() - new Date(l.date).getTime()) / (1000 * 60 * 60);
+    const diffHours = (nowMs - new Date(l.date).getTime()) / (1000 * 60 * 60);
     return diffHours >= 0 && diffHours <= 24;
   });
 
@@ -317,7 +324,7 @@ export const DashboardPage: React.FC = () => {
     : null;
 
   const elapsedMinutes = recentMedLog
-    ? Math.max(0, Math.floor((Date.now() - new Date(recentMedLog.date).getTime()) / (1000 * 60)))
+    ? Math.max(0, Math.floor((nowMs - new Date(recentMedLog.date).getTime()) / (1000 * 60)))
     : 0;
   const isEn = resolvedLanguage === 'en';
   const elapsedBadge =

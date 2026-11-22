@@ -1,6 +1,24 @@
 // Local LLM (Ollama, LM Studio, LocalAI, vLLM, etc.) Integration Utility
 // Connects to local OpenAI-compatible endpoints to generate private clinical summaries
 // with real-time token streaming and interactive clinical Q&A support.
+import { getErrorMessage, isRecord } from './errors';
+
+interface BuiltinLanguageModelSession {
+  promptStreaming: (prompt: string) => AsyncIterable<string>;
+  destroy?: () => void;
+}
+
+interface BuiltinWindowAi {
+  languageModel?: {
+    create?: (options?: { temperature?: number }) => Promise<BuiltinLanguageModelSession>;
+  };
+}
+
+function getWindowAi(): BuiltinWindowAi | undefined {
+  if (typeof window === 'undefined') return undefined;
+  const candidate = (window as Window & { ai?: unknown }).ai;
+  return isRecord(candidate) ? (candidate as BuiltinWindowAi) : undefined;
+}
 
 export interface LocalLlmConfig {
   enabled: boolean;
@@ -169,7 +187,7 @@ export async function testLocalLlmConnection(config: LocalLlmConfig): Promise<Ll
 
   // 1. Built-in On-Device Mobile Edge AI Source (Feedback #4)
   if (isBuiltinEdgeAi(config)) {
-    const hasWindowAi = typeof window !== 'undefined' && Boolean((window as any).ai?.languageModel);
+    const hasWindowAi = Boolean(getWindowAi()?.languageModel);
     return {
       success: true,
       message: hasWindowAi
@@ -242,12 +260,18 @@ export async function testLocalLlmConnection(config: LocalLlmConfig): Promise<Ll
       };
     }
 
-    const data = await res.json();
+    const data: unknown = await res.json();
     let modelNames: string[] = [];
-    if (Array.isArray(data.data)) {
-      modelNames = data.data.map((m: any) => m.id || m.name);
-    } else if (Array.isArray(data.models)) {
-      modelNames = data.models.map((m: any) => m.name || m.model);
+    if (isRecord(data) && Array.isArray(data.data)) {
+      modelNames = data.data
+        .filter(isRecord)
+        .map((m) => (typeof m.id === 'string' ? m.id : typeof m.name === 'string' ? m.name : ''))
+        .filter(Boolean);
+    } else if (isRecord(data) && Array.isArray(data.models)) {
+      modelNames = data.models
+        .filter(isRecord)
+        .map((m) => (typeof m.name === 'string' ? m.name : typeof m.model === 'string' ? m.model : ''))
+        .filter(Boolean);
     }
 
     return {
@@ -257,8 +281,8 @@ export async function testLocalLlmConnection(config: LocalLlmConfig): Promise<Ll
         : `연결 성공! 사용 가능한 로컬 모델: ${modelNames.length}개 감지됨`,
       models: modelNames,
     };
-  } catch (err: any) {
-    if (err.name === 'AbortError') {
+  } catch (err: unknown) {
+    if (err instanceof Error && err.name === 'AbortError') {
       return {
         success: false,
         message: en
@@ -266,11 +290,12 @@ export async function testLocalLlmConnection(config: LocalLlmConfig): Promise<Ll
           : '연결 시간 초과 (4초). 로컬 LLM 서버(Ollama/LM Studio)가 실행 중인지 확인하세요.',
       };
     }
+    const detail = getErrorMessage(err, en ? 'Unreachable' : '서버 도달 불가');
     return {
       success: false,
       message: en
-        ? `Connection failed: ensure your local LLM server is running. (${err.message || 'Unreachable'})`
-        : `연결 실패: 로컬 LLM 서버(Ollama/LM Studio)가 실행 중인지 확인하세요. (${err.message || '서버 도달 불가'})`,
+        ? `Connection failed: ensure your local LLM server is running. (${detail})`
+        : `연결 실패: 로컬 LLM 서버(Ollama/LM Studio)가 실행 중인지 확인하세요. (${detail})`,
     };
   }
 }
@@ -443,7 +468,7 @@ export async function streamChatCompletions(
   // Built-in Mobile Edge AI Source (Feedback #4)
   if (isBuiltinEdgeAi(config)) {
     try {
-      const winAi = typeof window !== 'undefined' ? (window as any).ai : null;
+      const winAi = getWindowAi();
       if (winAi?.languageModel?.create) {
         const session = await winAi.languageModel.create({
           temperature: config.temperature ?? 0.3,
@@ -612,21 +637,25 @@ export async function streamChatCompletions(
     throw new LocalLlmOfflineError(
       en ? 'No valid response tokens received from local LLM server.' : '로컬 LLM 서버에서 유효한 응답 토큰이 수신되지 않았습니다.'
     );
-  } catch (err: any) {
+  } catch (err: unknown) {
     clearTimeout(timeoutId);
     // Explicit offline error mapping - ZERO FAKE FALLBACK TOKENS
-    if (err.name === 'AbortError') {
+    if (err instanceof Error && err.name === 'AbortError') {
       throw new LocalLlmOfflineError(
         en ? 'Connection timed out (4s). Check your local AI server status.' : '연결 시간 초과 (4초). 로컬 AI 서버 상태를 확인하세요.'
       );
     }
-    if (err.name === 'LocalLlmOfflineError' || err instanceof LocalLlmOfflineError) {
+    if ((err instanceof Error && err.name === 'LocalLlmOfflineError') || err instanceof LocalLlmOfflineError) {
       throw err;
     }
+    const detail = getErrorMessage(
+      err,
+      en ? 'Check if the server is running.' : '서버가 실행 중인지 확인하세요.'
+    );
     throw new LocalLlmOfflineError(
       en
-        ? `Cannot reach local AI server (offline): ${err.message || 'Check if the server is running.'}`
-        : `로컬 AI 서버에 도달할 수 없습니다 (오프라인): ${err.message || '서버가 실행 중인지 확인하세요.'}`
+        ? `Cannot reach local AI server (offline): ${detail}`
+        : `로컬 AI 서버에 도달할 수 없습니다 (오프라인): ${detail}`
     );
   }
 }
